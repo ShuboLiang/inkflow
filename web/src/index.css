@@ -1,0 +1,11 @@
+#root {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -1,0 +1,100 @@
+.note-list {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--ink-200);
+  background: var(--paper);
+  font-family: var(--font-ui);
+  min-height: 0;
+}
+
+.note-list-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.note-list-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  color: var(--ink-900);
+}
+
+.note-list-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.note-card:hover {
+  background: var(--qing-50);
+}
+
+.note-card.active {
+  background: var(--qing-50);
+  box-shadow: inset 2px 0 0 var(--qing);
+}
+
+.note-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-card-excerpt {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-500);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.note-card-time {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-500);
+}
+
+.note-list-footer {
+  padding: 12px;
+  border-top: 1px solid var(--ink-200);
+}
+
+.note-list-new {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--qing);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.note-list-new:hover {
+  filter: brightness(1.08);
+}

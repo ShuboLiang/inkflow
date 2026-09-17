@@ -1,0 +1,42 @@
+:root {
+  --paper: #f8f9f7;
+  --ink-900: #1c2128;
+  --ink-500: #5a6472;
+  --ink-200: #d8ddd9;
+  --qing: #1f6f6b;
+  --qing-50: #e8f0ef;
+  --danger: #b54534;
+
+  --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-note: 'LXGW WenKai', serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--qing);
+  outline-offset: 2px;
+}
+
+/* 墨迹晕开：一滴墨扩散成涟漪 */
+@keyframes ink-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.12);
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

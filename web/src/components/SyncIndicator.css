@@ -1,0 +1,20 @@
+.sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.sync-indicator-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-900);
+  flex: none;
+}
+
+.sync-indicator[data-status='editing'] .sync-indicator-dot {
+  background: var(--qing);
+}

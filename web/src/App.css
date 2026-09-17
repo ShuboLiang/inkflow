@@ -1,0 +1,64 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--paper);
+  color: var(--ink-900);
+  font-family: var(--font-ui);
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--ink-200);
+  min-height: 34px;
+}
+
+.app-menu {
+  display: none;
+  border: none;
+  background: none;
+  font-size: 18px;
+  color: var(--ink-900);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.app-menu:hover {
+  background: var(--qing-50);
+}
+
+.app-main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 1023px) {
+  .app-menu {
+    display: block;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-main .note-list {
+    width: 100%;
+    border-right: none;
+  }
+
+  .app-main.view-editor .note-list {
+    display: none;
+  }
+
+  .app-main:not(.view-editor) .editor-pane {
+    display: none;
+  }
+
+  .app-main .sidebar {
+    box-shadow: 4px 0 16px rgba(28, 33, 40, 0.12);
+  }
+}
