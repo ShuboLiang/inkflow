@@ -8,11 +8,14 @@ import { NoteList } from './components/NoteList'
 import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
+import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
+import { setActiveEdit } from './sync/syncEngine'
 import './App.css'
 
 export default function App() {
   const { user, loading, signOut } = useAuth()
+  const { status: syncStatus, requestPush } = useSync(user)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -37,11 +40,23 @@ export default function App() {
   const active = notes?.find((n) => n.id === activeId) ?? null
 
   useEffect(() => {
+    setActiveEdit(activeId)
+    return () => setActiveEdit(null)
+  }, [activeId])
+
+  useEffect(() => {
     if (activeId && focusTitleOn.current === activeId) {
       focusTitleOn.current = null
       titleRef.current?.focus()
     }
   }, [activeId, active])
+
+  useEffect(() => {
+    const el = titleRef.current
+    if (el && active && el.value !== active.title) {
+      el.value = active.title
+    }
+  }, [active])
 
   useEffect(() => {
     return () => {
@@ -58,7 +73,7 @@ export default function App() {
     saveTimer.current = setTimeout(() => {
       const pending = pendingSave.current
       pendingSave.current = null
-      if (pending) void updateNote(pending.id, pending.patch)
+      if (pending) void updateNote(pending.id, pending.patch).then(requestPush)
     }, 500)
   }
 
@@ -69,7 +84,7 @@ export default function App() {
     }
     const pending = pendingSave.current
     pendingSave.current = null
-    if (pending) void updateNote(pending.id, pending.patch)
+    if (pending) void updateNote(pending.id, pending.patch).then(requestPush)
   }
 
   const handleCreate = async () => {
@@ -91,6 +106,7 @@ export default function App() {
     if (!window.confirm('删除这篇笔记？')) return
     flushSave()
     await softDeleteNote(active.id)
+    requestPush()
     setActiveId(null)
     setMobileView('list')
   }
@@ -113,7 +129,7 @@ export default function App() {
           ☰
         </button>
         <span />
-        <SyncIndicator status="synced" />
+        <SyncIndicator status={syncStatus} />
       </header>
       <div className={mobileView === 'editor' ? 'app-main view-editor' : 'app-main'}>
         <Sidebar
@@ -165,3 +181,4 @@ export default function App() {
     </div>
   )
 }
+

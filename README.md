@@ -21,6 +21,8 @@ inkflow/
 │   ├── src/store/             # 笔记本地 CRUD
 │   ├── src/components/        # TipTap 编辑器
 │   └── supabase-migrations/   # 数据库 schema SQL
+├── docs/
+│   └── limitations.md         # 已知限制与后续处理方向
 └── README.md
 ```
 

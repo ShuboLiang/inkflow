@@ -84,3 +84,6 @@ create policy "users own note_tags of their notes" on public.note_tags
 
 create policy "users own their files" on public.files
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 开启 notes 表的 Realtime 订阅（postgres changes）
+alter publication supabase_realtime add table public.notes;

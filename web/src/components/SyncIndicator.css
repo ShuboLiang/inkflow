@@ -18,3 +18,13 @@
 .sync-indicator[data-status='editing'] .sync-indicator-dot {
   background: var(--qing);
 }
+
+.sync-indicator[data-status='syncing'] .sync-indicator-dot {
+  background: var(--qing);
+  animation: ink-breathe 1.6s ease-in-out infinite;
+}
+
+.sync-indicator[data-status='offline'] .sync-indicator-dot {
+  background: var(--ink-500);
+  opacity: 0.5;
+}
