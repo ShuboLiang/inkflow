@@ -1,0 +1,94 @@
+.fmt-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 0 12px;
+}
+
+.fmt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  font-family: var(--font-ui);
+}
+
+.fmt-btn {
+  min-width: 30px;
+  padding: 4px 7px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-size: 13px;
+  color: var(--ink-900);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.fmt-btn:hover {
+  background: var(--qing-50);
+}
+
+.fmt-btn.active {
+  background: var(--qing-50);
+  color: var(--qing);
+  font-weight: 600;
+}
+
+.math-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  font-family: var(--font-ui);
+}
+
+.math-popover-input {
+  width: 320px;
+  padding: 8px 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  background: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-900);
+}
+
+.math-popover-ok,
+.math-popover-cancel {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+
+.math-popover-ok {
+  background: var(--qing);
+  color: #fff;
+}
+
+.math-popover-ok:hover {
+  filter: brightness(1.08);
+}
+
+.math-popover-cancel {
+  background: none;
+  border: 1px solid var(--ink-200);
+  color: var(--ink-500);
+}
+
+.math-popover-cancel:hover {
+  background: var(--qing-50);
+}

@@ -10,6 +10,7 @@ import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
+import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
 import './App.css'
 
@@ -172,6 +173,7 @@ export default function App() {
                   onUpdate={(content) => scheduleSave(active.id, { content })}
                 />
               </div>
+              <div className="editor-footer">{countWords(active.content)} 字</div>
             </>
           ) : (
             <EmptyState />

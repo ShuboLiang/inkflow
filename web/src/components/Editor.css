@@ -88,6 +88,67 @@
   font-family: var(--font-mono);
 }
 
+.editor-body .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-500);
+  opacity: 0.7;
+  font-family: var(--font-note);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.editor-body .ProseMirror a {
+  color: var(--qing);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* KaTeX 公式 */
+.editor-body .ProseMirror .tiptap-mathematics-render {
+  border-radius: 4px;
+}
+
+.editor-body .ProseMirror div[data-type='block-math'],
+.editor-body .ProseMirror .block-math-inner {
+  text-align: center;
+  margin: 0.8em 0;
+  padding: 8px 0;
+}
+
+.editor-body .ProseMirror .inline-math-error,
+.editor-body .ProseMirror .block-math-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.editor-body .ProseMirror blockquote {
+  margin: 0.6em 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--qing);
+  color: var(--ink-500);
+}
+
+.editor-body .ProseMirror h1,
+.editor-body .ProseMirror h2,
+.editor-body .ProseMirror h3 {
+  font-family: var(--font-note);
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.8em 0 0.4em;
+}
+
+.editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 24px 6px;
+  border-top: 1px solid var(--ink-200);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
 @media (max-width: 767px) {
   .editor-back {
     display: block;

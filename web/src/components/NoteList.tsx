@@ -1,4 +1,5 @@
 import type { Note } from '../lib/db'
+import { firstLine } from '../lib/wordCount'
 import './NoteList.css'
 
 interface NoteListProps {
@@ -60,7 +61,7 @@ export function NoteList({ notes, activeId, search, onSearch, onSelect, onCreate
             className={note.id === activeId ? 'note-card active' : 'note-card'}
             onClick={() => onSelect(note.id)}
           >
-            <div className="note-card-title">{note.title || '无标题'}</div>
+            <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
             <div className="note-card-excerpt">{excerptOf(note.content)}</div>
             <div className="note-card-time">{formatTime(note.updatedAt)}</div>
           </button>
