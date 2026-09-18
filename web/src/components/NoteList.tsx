@@ -19,10 +19,11 @@ interface TipTapNode {
 
 function excerptOf(content: unknown): string {
   const paragraphs: string[] = []
-  const textOf = (node: TipTapNode): string =>
-    node.type === 'text'
-      ? (node.text ?? '')
-      : (node.content ?? []).map(textOf).join('')
+  const textOf = (node: TipTapNode): string => {
+    if (node.type === 'text') return node.text ?? ''
+    if (node.type === 'inlineMath' || node.type === 'blockMath') return '[公式]'
+    return (node.content ?? []).map(textOf).join('')
+  }
   const root = content as TipTapNode | null
   for (const child of root?.content ?? []) {
     if (paragraphs.length >= 2) break

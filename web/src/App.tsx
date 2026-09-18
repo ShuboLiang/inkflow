@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
+import { EditorBoundary } from './components/EditorBoundary'
 import { EmptyState } from './components/EmptyState'
 import { NoteList } from './components/NoteList'
 import { Sidebar } from './components/Sidebar'
@@ -11,6 +12,7 @@ import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { countWords } from './lib/wordCount'
+import { getDiagnostics } from './lib/diagnostics'
 import { setActiveEdit } from './sync/syncEngine'
 import './App.css'
 
@@ -130,6 +132,16 @@ export default function App() {
           ☰
         </button>
         <span />
+        <button
+          type="button"
+          className="diag-btn"
+          title="复制诊断信息（卡死/异常时点这里，把内容发给开发者）"
+          onClick={() => {
+            void navigator.clipboard.writeText(getDiagnostics())
+          }}
+        >
+          复制诊断
+        </button>
         <SyncIndicator status={syncStatus} />
       </header>
       <div className={mobileView === 'editor' ? 'app-main view-editor' : 'app-main'}>
@@ -167,11 +179,13 @@ export default function App() {
                   aria-label="笔记标题"
                   onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
                 />
-                <Editor
-                  key={active.id}
-                  content={active.content}
-                  onUpdate={(content) => scheduleSave(active.id, { content })}
-                />
+                <EditorBoundary>
+                  <Editor
+                    key={active.id}
+                    content={active.content}
+                    onUpdate={(content) => scheduleSave(active.id, { content })}
+                  />
+                </EditorBoundary>
               </div>
               <div className="editor-footer">{countWords(active.content)} 字</div>
             </>

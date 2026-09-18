@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
+import { TextSelection } from '@tiptap/pm/state'
 import './Toolbar.css'
 
 interface ToolbarProps {
@@ -79,8 +80,24 @@ function ToolbarInner({ editor }: { editor: Editor }) {
     setMathDraft(null)
     if (!latex.trim()) return
     const chain = editor.chain().focus().deleteRange({ from, to })
-    if (kind === 'inlineMath') chain.insertInlineMath({ latex, pos: from }).run()
-    else chain.insertBlockMath({ latex, pos: from }).run()
+    if (kind === 'inlineMath') {
+      chain.insertInlineMath({ latex, pos: from }).run()
+    } else {
+      chain.insertBlockMath({ latex, pos: from }).run()
+      // Editor 的 onUpdate 已在微任务里补了尾部空段落；此处兜底并把光标落到文末。
+      // 同步 view.focus()，避免 TipTap focus 命令的 rAF 延迟吃掉紧跟的按键。
+      queueMicrotask(() => {
+        if (editor.isDestroyed) return
+        if (editor.state.doc.lastChild?.type.name === 'blockMath') {
+          editor.chain().insertContentAt(editor.state.doc.content.size, { type: 'paragraph' }).run()
+        }
+        editor.view.focus()
+        editor.chain().command(({ tr, dispatch }) => {
+          if (dispatch) tr.setSelection(TextSelection.atEnd(tr.doc))
+          return true
+        }).run()
+      })
+    }
   }
 
   const cancelMath = () => {

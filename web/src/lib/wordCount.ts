@@ -1,12 +1,16 @@
-// 字数统计：每个 CJK 字符计 1，连续英文/数字串计 1 个词
+// 字数统计：每个 CJK 字符计 1，连续英文/数字串计 1 个词；公式按 latex 源码计入
 interface TextNode {
   type?: string
   text?: string
+  attrs?: { latex?: string }
   content?: TextNode[]
 }
 
 function collectText(node: TextNode, out: string[]): void {
   if (node.type === 'text' && node.text) out.push(node.text)
+  if ((node.type === 'inlineMath' || node.type === 'blockMath') && node.attrs?.latex) {
+    out.push(node.attrs.latex)
+  }
   node.content?.forEach((child) => collectText(child, out))
 }
 

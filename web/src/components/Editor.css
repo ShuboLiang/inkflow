@@ -43,18 +43,36 @@
 .editor-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 48px 64px;
+  padding: 32px 0 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-title {
-  width: 100%;
+  width: auto;
+  margin: 0 48px;
   border: none;
   background: none;
   font-family: var(--font-note);
   font-size: 32px;
   color: var(--ink-900);
+  caret-color: var(--ink-900);
   padding: 0 0 16px;
   outline-offset: 4px;
+}
+
+.editor-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 48px 64px;
+  cursor: text;
+  border-radius: 8px;
+  transition: background 0.3s ease;
+}
+
+.editor-shell:focus-within {
+  background: color-mix(in srgb, var(--qing-50) 30%, var(--paper));
 }
 
 .editor-title::placeholder {
@@ -62,13 +80,18 @@
   opacity: 0.6;
 }
 
+.editor-body {
+  flex: 1;
+}
+
 .editor-body .ProseMirror {
   font-family: var(--font-note);
   font-size: 17px;
   line-height: 1.9;
   color: var(--ink-900);
+  caret-color: var(--ink-900);
   outline: none;
-  min-height: 40vh;
+  min-height: 100%;
 }
 
 .editor-body .ProseMirror p {
@@ -109,11 +132,13 @@
   border-radius: 4px;
 }
 
-.editor-body .ProseMirror div[data-type='block-math'],
-.editor-body .ProseMirror .block-math-inner {
+.editor-body .ProseMirror div[data-type='block-math'] {
   text-align: center;
-  margin: 0.8em 0;
-  padding: 8px 0;
+  margin: 1em 0;
+}
+
+.editor-body .ProseMirror .block-math-inner .katex-display {
+  margin: 0;
 }
 
 .editor-body .ProseMirror .inline-math-error,
@@ -155,10 +180,15 @@
   }
 
   .editor-scroll {
-    padding: 20px 20px 48px;
+    padding: 20px 0 0;
   }
 
   .editor-title {
     font-size: 26px;
+    margin: 0 20px;
+  }
+
+  .editor-shell {
+    padding: 0 20px 48px;
   }
 }
