@@ -9,40 +9,63 @@ import { TextSelection } from '@tiptap/pm/state'
 import { cacheImageFromUrl, cachedImageDataUrl, imagePathFromUrl } from '../store/images'
 import { openImageLightbox } from './lightbox'
 
-// 图片节点：src 是 Storage 公共桶 URL。在线直接加载；加载失败（离线/未上传完成）
-// 回退到 Dexie 本地缓存；加载成功后顺手缓存一份供离线用。
+// 图片节点：src 是 Storage 公共桶 URL。在线直接加载；加载失败（离线/未传完）
+// 回退到 Dexie 本地缓存并周期性重试原 URL，恢复后自动切回；加载成功则顺手缓存备离线。
 const ResolvedImage = Image.extend({
   addNodeView() {
     return ({ node }) => {
       const dom = document.createElement('img')
-      dom.src = node.attrs.src as string
-      // 点击看大图（封顶显示后仍能看原图细节）
+      let current = node.attrs.src as string
+      dom.src = current
+      let retryTimer: ReturnType<typeof setTimeout> | null = null
+      let retries = 0
+
+      // 原 URL 暂时不可用（未上传完成/断网）时，稍后重试，最多 3 次
+      const scheduleRetry = () => {
+        if (retries >= 3 || !imagePathFromUrl(current)) return
+        retries++
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          if (dom.isConnected) dom.src = current
+        }, 20000)
+      }
+
       dom.addEventListener('click', () => openImageLightbox(dom.src))
-      let objectUrl: string | null = null
       dom.addEventListener('error', () => {
-        const path = imagePathFromUrl(node.attrs.src as string)
-        if (!path || dom.dataset.fallback === '1') return
-        dom.dataset.fallback = '1'
+        if (dom.dataset.fallback === '1') return // 回退图本身出错不再处理
+        const path = imagePathFromUrl(current)
+        if (!path) return
         void cachedImageDataUrl(path).then((dataUrl) => {
-          if (!dataUrl || dom.isConnected === false) return
-          objectUrl = dataUrl
-          dom.src = dataUrl
+          if (!dom.isConnected) return
+          if (dataUrl) {
+            dom.dataset.fallback = '1'
+            dom.src = dataUrl
+          }
+          scheduleRetry()
         })
       })
       dom.addEventListener('load', () => {
-        if (dom.dataset.fallback !== '1') void cacheImageFromUrl(node.attrs.src as string)
+        if (dom.dataset.fallback === '1' && dom.src === current) {
+          // 重试后原 URL 恢复可用，结束回退
+          delete dom.dataset.fallback
+        } else if (!dom.dataset.fallback) {
+          void cacheImageFromUrl(current)
+        }
       })
       return {
         dom,
         update(updated) {
-          if (updated.attrs.src !== node.attrs.src) {
+          if (updated.attrs.src !== current) {
+            current = updated.attrs.src as string
+            if (retryTimer) clearTimeout(retryTimer)
+            retries = 0
             delete dom.dataset.fallback
-            dom.src = updated.attrs.src as string
+            dom.src = current
           }
           return true
         },
         destroy() {
-          if (objectUrl) URL.revokeObjectURL(objectUrl)
+          if (retryTimer) clearTimeout(retryTimer)
         },
       }
     }
