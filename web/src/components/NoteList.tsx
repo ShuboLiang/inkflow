@@ -6,6 +6,7 @@ import { deleteFile, ensureFileData } from '../store/files'
 import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { confirmDialog } from '../lib/dialog'
+import { matchSnippet } from '../lib/search'
 import './NoteList.css'
 
 interface NoteListProps {
@@ -182,6 +183,22 @@ export function NoteList({
     setMenu({ x: e.clientX, y: e.clientY, kind, id })
   }
 
+  // 搜索时卡片摘要显示「命中词前后片段」；未搜索或仅标题命中则回退普通摘要
+  const excerptFor = (note: Note) => {
+    const q = search.trim()
+    const snip = q ? matchSnippet(note.content, q) : null
+    if (!snip) return <div className="note-card-excerpt">{excerptOf(note.content)}</div>
+    return (
+      <div className="note-card-excerpt">
+        {snip.beforeCut && '…'}
+        {snip.before}
+        <mark className="note-card-hit">{snip.hit}</mark>
+        {snip.after}
+        {snip.afterCut && '…'}
+      </div>
+    )
+  }
+
   // 触屏设备没有右键：卡片右上角的「⋯」按钮打开同一个菜单，锚在按钮下方
   const moreButton = (kind: 'note' | 'file', id: string, label: string) => (
     <button
@@ -294,7 +311,7 @@ export function NoteList({
                   onContextMenu={(e) => openMenu(e, 'note', note.id)}
                 >
                   <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
-                  <div className="note-card-excerpt">{excerptOf(note.content)}</div>
+                  {excerptFor(note)}
                   {(note.tags ?? []).length > 0 && (
                     <div className="note-card-tags">
                       {(note.tags ?? []).slice(0, 3).map((t) => (

@@ -21,6 +21,7 @@ import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
 import { DialogHost } from './components/Dialog'
 import { alertDialog, confirmDialog } from './lib/dialog'
+import { plainTextOf } from './lib/search'
 import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
@@ -90,7 +91,10 @@ export default function App() {
     if (activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     const q = search.trim().toLowerCase()
     if (!q) return scoped
-    return scoped.filter((n) => n.title.toLowerCase().includes(q))
+    // 标题或正文命中都算；正文比较前先提取纯文本（公式/图片占位为空格）
+    return scoped.filter(
+      (n) => n.title.toLowerCase().includes(q) || plainTextOf(n.content).toLowerCase().includes(q),
+    )
   }, [notes, search, activeFolderId, activeTag])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
