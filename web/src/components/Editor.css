@@ -127,6 +127,22 @@
   text-underline-offset: 2px;
 }
 
+/* 粘贴的图片（base64 内联）：居中排版，细线装裱如版画，选中时青色描边 */
+.editor-body .ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.6em auto 1.2em;
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  animation: ink-img-in 240ms ease-out;
+}
+
+.editor-body .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--qing);
+  outline-offset: 2px;
+}
+
 /* KaTeX 公式 */
 .editor-body .ProseMirror .tiptap-mathematics-render {
   border-radius: 4px;

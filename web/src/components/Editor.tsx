@@ -3,11 +3,13 @@ import StarterKit from '@tiptap/starter-kit'
 import Typography from '@tiptap/extension-typography'
 import Placeholder from '@tiptap/extension-placeholder'
 import { InlineMath, BlockMath } from '@tiptap/extension-mathematics'
+import Image from '@tiptap/extension-image'
 import { InputRule } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import 'katex/dist/katex.min.css'
 import { useEffect, useRef } from 'react'
 import { Toolbar } from './Toolbar'
+import { insertPastedImages, pastedImageFiles } from '../lib/pasteImage'
 import './Editor.css'
 
 // 官方扩展 3.31.3 的 input rule 有误（行内规则匹配的是 $$…$$，块级要求 $$$…$$$），
@@ -116,7 +118,21 @@ export function Editor({ content, onUpdate }: EditorProps) {
       Placeholder.configure({ placeholder: '开始书写…' }),
       InlineMathRule,
       BlockMathRule,
+      // 图片以 base64 data URL 内联存储（allowBase64），跟随笔记内容一起
+      // 进 IndexedDB 与云同步，不依赖 Supabase Storage
+      Image.configure({ allowBase64: true, inline: false }),
     ],
+    editorProps: {
+      // 拦截图片粘贴：clipboard 里的文件走自己的插入逻辑（压缩 + data URL），
+      // 不拦截的粘贴（纯文本/HTML）继续走 ProseMirror 默认路径
+      handlePaste: (view, event) => {
+        const images = pastedImageFiles(event)
+        if (!images.length) return false
+        event.preventDefault()
+        void insertPastedImages(view, images)
+        return true
+      },
+    },
     content: content as object | undefined,
     onUpdate: ({ editor: e }) => {
       // 清理空 latex 的公式节点：不可见但占据文档位置，会让选区坐标映射错位

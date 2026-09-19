@@ -45,6 +45,18 @@
   }
 }
 
+/* 图片落墨：新粘贴的图片淡入就位 */
+@keyframes ink-img-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
