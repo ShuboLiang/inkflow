@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import { TextSelection } from '@tiptap/pm/state'
 import './Toolbar.css'
 
@@ -40,6 +41,9 @@ export function Toolbar({ editor, onUpload }: ToolbarProps) {
 
 function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files: File[]) => void }) {
   const [mathDraft, setMathDraft] = useState<MathDraft | null>(null)
+  // 公式浮层打开期间编辑器会失焦（焦点在输入框），用它让气泡菜单保持可见；
+  // 必须走 state：BubbleMenu 的 shouldShow 闭包随 props 更新推给插件
+  const [mathOpen, setMathOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -74,12 +78,14 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
   const openMath = (kind: MathDraft['kind']) => {
     const { from, to } = editor.state.selection
     const selected = editor.state.doc.textBetween(from, to, ' ')
+    setMathOpen(true)
     setMathDraft({ kind, latex: selected, from, to })
   }
 
   const confirmMath = () => {
     if (!mathDraft) return
     const { kind, latex, from, to } = mathDraft
+    setMathOpen(false)
     setMathDraft(null)
     if (!latex.trim()) return
     const chain = editor.chain().focus().deleteRange({ from, to })
@@ -104,6 +110,7 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
   }
 
   const cancelMath = () => {
+    setMathOpen(false)
     setMathDraft(null)
     editor.commands.focus()
   }
@@ -139,7 +146,14 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
   ]
 
   return (
-    <div className="fmt-wrap">
+    <BubbleMenu
+      editor={editor}
+      className="fmt-wrap"
+      options={{ placement: 'top', offset: 8 }}
+      // 只在编辑中显示（光标在编辑区时），阅读/滚动时不挡文字；
+      // 公式浮层打开期间编辑器失焦，靠 mathOpen 保持可见
+      shouldShow={({ editor: e }) => e.isFocused || mathOpen}
+    >
       <div className="fmt-toolbar" role="toolbar" aria-label="格式工具栏">
         {items.map((item) => (
           <button
@@ -210,7 +224,7 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
           </button>
         </div>
       )}
-    </div>
+    </BubbleMenu>
   )
 }
 

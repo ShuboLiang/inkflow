@@ -1,8 +1,7 @@
+/* 气泡容器：定位由 floating-ui 内联控制，这里只管层级 */
 .fmt-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  margin: 0 0 12px;
+  z-index: 20;
+  margin: 0;
 }
 
 .fmt-toolbar {
@@ -10,9 +9,10 @@
   flex-wrap: wrap;
   gap: 2px;
   padding: 6px 8px;
-  background: var(--paper);
+  background: #fff;
   border: 1px solid var(--ink-200);
   border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.14);
   font-family: var(--font-ui);
 }
 
