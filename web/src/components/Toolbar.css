@@ -1,18 +1,16 @@
-/* 气泡容器：定位由 floating-ui 内联控制，这里只管层级 */
+/* 钉在编辑区顶部的固定格式栏：不随正文滚动，也不悬浮遮字 */
 .fmt-wrap {
-  z-index: 20;
-  margin: 0;
+  position: relative;
+  z-index: 5;
+  padding: 6px 48px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-200);
 }
 
 .fmt-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  padding: 6px 8px;
-  background: #fff;
-  border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.14);
   font-family: var(--font-ui);
 }
 

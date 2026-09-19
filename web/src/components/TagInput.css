@@ -4,8 +4,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  /* 与标题（margin 0 48px）和正文（editor-shell padding 48px）对齐 */
-  padding: 0 48px 12px;
+  /* 水平边距由外层的 .editor-head 统一提供 */
+  padding: 0 0 12px;
   font-family: var(--font-ui);
 }
 
@@ -56,7 +56,7 @@
 .tag-suggest {
   position: absolute;
   top: 100%;
-  left: 48px;
+  left: 0;
   z-index: 30;
   margin: 2px 0 0;
   padding: 4px;
@@ -87,12 +87,3 @@
   background: var(--qing-50);
 }
 
-@media (max-width: 767px) {
-  .tag-input {
-    padding: 0 20px 12px;
-  }
-
-  .tag-suggest {
-    left: 20px;
-  }
-}

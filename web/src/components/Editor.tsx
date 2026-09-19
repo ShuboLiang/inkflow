@@ -152,7 +152,7 @@ export function Editor({ content, onUpdate }: EditorProps) {
   }, [editor, content])
 
   return (
-    <div className="editor-shell" onMouseDown={handleShellMouseDown} onClick={handleShellClick}>
+    <>
       <Toolbar
         editor={editor}
         onUpload={(files) => {
@@ -160,10 +160,12 @@ export function Editor({ content, onUpdate }: EditorProps) {
           void importFilesIntoEditor(editor, files)
         }}
       />
-      <div className="editor-body">
-        <EditorContent editor={editor} />
+      <div className="editor-shell" onMouseDown={handleShellMouseDown} onClick={handleShellClick}>
+        <div className="editor-body">
+          <EditorContent editor={editor} />
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

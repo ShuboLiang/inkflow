@@ -493,7 +493,7 @@ export default function App() {
                   删除
                 </button>
               </div>
-              <div className="editor-scroll">
+              <div className="editor-head">
                 <input
                   key={`title-${active.id}`}
                   ref={titleRef}
@@ -509,6 +509,8 @@ export default function App() {
                   suggestions={[...tagCounts.keys()]}
                   onChange={handleNoteTagsChange}
                 />
+              </div>
+              <div className="editor-scroll">
                 <EditorBoundary>
                   <Editor
                     key={active.id}
