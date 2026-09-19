@@ -6,4 +6,6 @@ alter table public.folders add column if not exists deleted_at timestamptz;
 
 create index if not exists folders_updated_at_idx on public.folders (updated_at desc);
 
-alter publication supabase_realtime add table public.folders;
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'folders') THEN
+  alter publication supabase_realtime add table public.folders;
+END IF; END $do$;

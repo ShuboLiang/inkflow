@@ -5,10 +5,14 @@
 -- 按命令拆分的 INSERT/UPDATE 策略会让该语句的 WITH CHECK 失败（已实测），
 -- 必须和 files 桶一样用单条 FOR ALL 策略。
 
-create policy "users manage images" on storage.objects
-  for all using (bucket_id = 'images' and auth.uid() is not null)
-  with check (bucket_id = 'images' and auth.uid() is not null);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users manage images') THEN
+  create policy "users manage images" on storage.objects
+    for all using (bucket_id = 'images' and auth.uid() is not null)
+    with check (bucket_id = 'images' and auth.uid() is not null);
+END IF; END $do$;
 
-create policy "users manage shares" on storage.objects
-  for all using (bucket_id = 'shares' and auth.uid() is not null)
-  with check (bucket_id = 'shares' and auth.uid() is not null);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users manage shares') THEN
+  create policy "users manage shares" on storage.objects
+    for all using (bucket_id = 'shares' and auth.uid() is not null)
+    with check (bucket_id = 'shares' and auth.uid() is not null);
+END IF; END $do$;

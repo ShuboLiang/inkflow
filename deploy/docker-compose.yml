@@ -1,0 +1,18 @@
+name: inkflow
+# InkFlow all-in-one：数据库 + 认证 + REST + 文件存储 + 前端，一个容器全部搞定。
+# 前置：docker load -i inkflow-all-in-one.tar
+# 用法：填好 .env 后 docker compose up -d，访问 http://localhost（或服务器 IP）
+services:
+  inkflow:
+    image: inkflow-all-in-one:latest
+    container_name: inkflow
+    env_file: .env
+    environment:
+      # 对外访问地址，仅用于生成链接/回跳；前端 API 地址自动取浏览器当前来源
+      PUBLIC_ORIGIN: http://localhost
+    ports:
+      - "80:8080"
+    volumes:
+      - ./data/db:/var/lib/postgresql/data # 数据库（笔记、元数据全在这）
+      - ./data/storage:/var/lib/storage    # 文件二进制（PDF、图片）
+    restart: unless-stopped

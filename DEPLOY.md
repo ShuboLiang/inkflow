@@ -94,3 +94,33 @@ docker compose up -d
   产出与 Windows 版一致的单文件 tar.gz；建议加 cron 每日执行，并定期把包拉离 NAS。
 - **数据留在哪**：数据库数据在 `supabase/docker/volumes/db/data`，文件二进制在
   `volumes/storage`——都在你映射的共享文件夹里，NAS 的 RAID/备份套件可直接兜住这两目录。
+
+## 七、极简部署：all-in-one 单容器（推荐 NAS 使用）
+
+一个容器装下全部：PostgreSQL + 认证 + REST + 文件存储 + 前端静态托管。服务器上只有
+三样东西：一个镜像 tar、一个文件夹（compose + .env + 两个数据目录）。
+
+**开发机**（构建并导出，产出约 2GB 的 tar）：
+
+```powershell
+powershell -File scripts/build-all-in-one.ps1
+```
+
+**服务器**：
+
+```bash
+docker load -i inkflow-all-in-one.tar
+mkdir inkflow && cd inkflow
+# 放入 deploy/docker-compose.yml，复制 deploy/.env.example 为 .env 并修改两个密码
+docker compose up -d        # 完事
+```
+
+访问 `http://服务器IP/`，注册账号即用。数据全部在 `./data/db` 和 `./data/storage` 两个目录，
+备份 = 停容器后打包这两个目录（或只对 db 跑 pg_dump + 拷贝 storage）。
+
+特性与取舍：
+- 前端 API 地址取浏览器当前来源、anon 密钥由 JWT_SECRET 启动时派生——**换 IP/域名不用重新打包**
+- 服务互保：任一服务崩溃 3 秒自动拉起；postgres 挂了容器退出，由 restart 策略整体重启
+- **不含 Realtime**：多端同步退化为 5 秒轮询（个人使用几乎无感）；需要秒级同步请用上面的
+  compose 多容器方案
+- 首次启动约 30-60 秒（数据库初始化 + 业务迁移），看日志 `docker logs -f inkflow`

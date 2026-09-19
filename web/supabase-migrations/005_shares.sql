@@ -21,8 +21,10 @@ create unique index if not exists shares_one_active_file_idx
 
 alter table public.shares enable row level security;
 
-create policy "users manage their own shares" on public.shares
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users manage their own shares') THEN
+  create policy "users manage their own shares" on public.shares
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+END IF; END $do$;
 
 -- 匿名/登录用户均可按 token 读取当前内容（revoked 或源被删则返回空）
 create or replace function public.get_shared_note(p_token text)

@@ -59,31 +59,45 @@ alter table public.tags enable row level security;
 alter table public.note_tags enable row level security;
 alter table public.files enable row level security;
 
-create policy "users own their notes" on public.notes
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own their notes') THEN
+  create policy "users own their notes" on public.notes
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+END IF; END $do$;
 
-create policy "users own versions of their notes" on public.note_versions
-  for all using (
-    exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
-  );
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own versions of their notes') THEN
+  create policy "users own versions of their notes" on public.note_versions
+    for all using (
+      exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
+    ) with check (
+      exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
+    );
+END IF; END $do$;
 
-create policy "users own their folders" on public.folders
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own their folders') THEN
+  create policy "users own their folders" on public.folders
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+END IF; END $do$;
 
-create policy "users own their tags" on public.tags
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own their tags') THEN
+  create policy "users own their tags" on public.tags
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+END IF; END $do$;
 
-create policy "users own note_tags of their notes" on public.note_tags
-  for all using (
-    exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
-  );
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own note_tags of their notes') THEN
+  create policy "users own note_tags of their notes" on public.note_tags
+    for all using (
+      exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
+    ) with check (
+      exists (select 1 from public.notes n where n.id = note_id and n.user_id = auth.uid())
+    );
+END IF; END $do$;
 
-create policy "users own their files" on public.files
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_policies WHERE policyname = 'users own their files') THEN
+  create policy "users own their files" on public.files
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+END IF; END $do$;
 
 -- 开启 notes 表的 Realtime 订阅（postgres changes）
-alter publication supabase_realtime add table public.notes;
+DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'notes') THEN
+  alter publication supabase_realtime add table public.notes;
+END IF; END $do$;
