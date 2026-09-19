@@ -63,8 +63,9 @@
 
 .sidebar-item.active .sidebar-count,
 .sidebar-folder.active .sidebar-count {
-  background: rgba(31, 111, 107, 0.14);
+  background: transparent;
   color: var(--qing);
+  font-weight: 600;
 }
 
 /* 拖拽悬停：内嵌青环提示可放入 */
