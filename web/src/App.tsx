@@ -148,6 +148,12 @@ export default function App() {
     setMobileView('editor')
   }
 
+  // 右键菜单「重命名」：选中并聚焦标题输入框
+  const handleRenameNote = (id: string) => {
+    handleSelect(id)
+    focusTitleOn.current = id
+  }
+
   const handleDelete = async () => {
     if (!active) return
     if (!window.confirm('删除这篇笔记？')) return
@@ -291,9 +297,15 @@ export default function App() {
     [files, activeFolderId],
   )
 
-  // 列表页上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）
-  const handleUpload = async (file: File) => {
-    const folderId = activeFolderId === 'all' || activeFolderId === 'none' ? null : activeFolderId
+  // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
+  // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
+  const handleUpload = async (file: File, targetFolderId?: string | null) => {
+    const folderId =
+      targetFolderId !== undefined
+        ? targetFolderId
+        : activeFolderId === 'all' || activeFolderId === 'none'
+          ? null
+          : activeFolderId
     if (kindOfFile(file) === 'binary') {
       await saveFile(file, folderId)
       return
@@ -386,6 +398,9 @@ export default function App() {
           onDeleteTag={(name) => void handleDeleteTag(name)}
           onDropNoteToTag={handleDropNoteToTag}
           onDropFile={handleDropFile}
+          onFilesDrop={(dropped, folderId) => {
+            for (const file of dropped) void handleUpload(file, folderId)
+          }}
           onSignOut={() => void signOut()}
         />
         <NoteList
@@ -393,11 +408,14 @@ export default function App() {
           files={filesInView}
           activeId={activeId}
           search={search}
+          userId={user.id}
           onSearch={setSearch}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
           onSelectFile={handleSelectFile}
           onUpload={(file) => void handleUpload(file)}
+          onRenameNote={handleRenameNote}
+          onRequestPush={requestPush}
           emptyHint={
             activeFolderId === 'all'
               ? '暂无内容'

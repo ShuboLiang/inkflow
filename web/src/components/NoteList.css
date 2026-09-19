@@ -7,6 +7,7 @@
   background: var(--paper);
   font-family: var(--font-ui);
   min-height: 0;
+  position: relative;
 }
 
 .note-list-search {
@@ -204,4 +205,23 @@
   .note-list-toast {
     animation: none;
   }
+}
+
+/* 外部文件拖入时的放置遮罩 */
+.note-list-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--qing);
+  background: rgba(232, 240, 239, 0.92);
+  border: 2px dashed var(--qing);
+  border-radius: 8px;
+  pointer-events: none;
 }

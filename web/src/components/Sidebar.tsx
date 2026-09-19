@@ -23,6 +23,7 @@ interface SidebarProps {
   onDeleteTag: (name: string) => void
   onDropNoteToTag: (noteId: string, tag: string) => void
   onDropFile: (fileId: string, folderId: string | null) => void
+  onFilesDrop: (files: File[], folderId: string | null) => void
   onSignOut: () => void
 }
 
@@ -112,6 +113,7 @@ export function Sidebar({
   onDeleteTag,
   onDropNoteToTag,
   onDropFile,
+  onFilesDrop,
   onSignOut,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
@@ -122,12 +124,14 @@ export function Sidebar({
   // 拖拽悬停的放置目标（'all' / 'none' / 文件夹 id / tag:xxx），用于高亮反馈
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
-  // 列表拖来的放置负载：'note:<id>' / 'file:<id>'，文件夹与未归档两者都收
+  // 列表拖来的放置负载：'note:<id>' / 'file:<id>'，文件夹与未归档两者都收；
+  // 外部拖入的 Files 直接上传到该文件夹
   const dropHandlers = (target: string, folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes('text/plain')) return
+      const hasFiles = e.dataTransfer.types.includes('Files')
+      if (!hasFiles && !e.dataTransfer.types.includes('text/plain')) return
       e.preventDefault()
-      e.dataTransfer.dropEffect = 'move'
+      e.dataTransfer.dropEffect = hasFiles ? 'copy' : 'move'
       setDropTarget(target)
     },
     onDragLeave: (e: React.DragEvent) => {
@@ -138,6 +142,10 @@ export function Sidebar({
     onDrop: (e: React.DragEvent) => {
       e.preventDefault()
       setDropTarget(null)
+      if (e.dataTransfer.files.length > 0) {
+        onFilesDrop(Array.from(e.dataTransfer.files), folderId)
+        return
+      }
       const payload = e.dataTransfer.getData('text/plain')
       if (payload.startsWith('note:')) onDropNote(payload.slice(5), folderId)
       else if (payload.startsWith('file:')) onDropFile(payload.slice(5), folderId)

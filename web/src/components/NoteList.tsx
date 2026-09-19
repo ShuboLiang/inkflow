@@ -92,6 +92,10 @@ export function NoteList({
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 外部文件拖入的进入深度（0 = 未拖入），用于显示放置遮罩
+  const [fileDragDepth, setFileDragDepth] = useState(0)
+
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -162,7 +166,28 @@ export function NoteList({
   }
 
   return (
-    <section className="note-list" aria-label="文件夹内容">
+    <section
+      className="note-list"
+      aria-label="文件夹内容"
+      onDragEnter={(e) => {
+        if (!isFileDrag(e)) return
+        e.preventDefault()
+        setFileDragDepth((d) => d + 1)
+      }}
+      onDragOver={(e) => {
+        if (isFileDrag(e)) e.preventDefault()
+      }}
+      onDragLeave={(e) => {
+        if (!isFileDrag(e)) return
+        setFileDragDepth((d) => Math.max(0, d - 1))
+      }}
+      onDrop={(e) => {
+        if (!isFileDrag(e)) return
+        e.preventDefault()
+        setFileDragDepth(0)
+        for (const file of Array.from(e.dataTransfer.files)) onUpload(file)
+      }}
+    >
       <div className="note-list-search">
         <input
           type="search"
@@ -236,6 +261,9 @@ export function NoteList({
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
+      {fileDragDepth > 0 && (
+        <div className="note-list-drop-overlay">松开以上传到当前文件夹（md/html 新建笔记，pdf 存为文件）</div>
+      )}
       {toast && (
         <div className="note-list-toast" role="status">
           {toast}
