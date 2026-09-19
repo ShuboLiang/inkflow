@@ -203,6 +203,21 @@ export function Sidebar({
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
 
+  // 触屏设备没有右键：行尾「⋯」打开同一个菜单，锚在按钮下方
+  const moreButton = (items: MenuItem[], label: string) => (
+    <button
+      type="button"
+      className="sidebar-more"
+      aria-label={`${label} 更多操作`}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        setMenu({ x: r.left, y: r.bottom + 4, items })
+      }}
+    >
+      ⋯
+    </button>
+  )
+
   const folderMenuItems = (folder: Folder): MenuItem[] => [
     {
       key: 'rename',
@@ -315,6 +330,7 @@ export function Sidebar({
                   <IconCross />
                 </button>
               </span>
+              {moreButton(folderMenuItems(folder), folder.name)}
             </div>
           ),
         )
@@ -372,6 +388,7 @@ export function Sidebar({
                   <IconCross />
                 </button>
               </span>
+              {moreButton(tagMenuItems(name), name)}
             </div>
           ),
         )

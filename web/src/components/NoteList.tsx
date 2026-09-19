@@ -169,6 +169,21 @@ export function NoteList({
     setMenu({ x: e.clientX, y: e.clientY, kind, id })
   }
 
+  // 触屏设备没有右键：卡片右上角的「⋯」按钮打开同一个菜单，锚在按钮下方
+  const moreButton = (kind: 'note' | 'file', id: string, label: string) => (
+    <button
+      type="button"
+      className="card-more"
+      aria-label={`${label} 更多操作`}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        setMenu({ x: r.left, y: r.bottom + 4, kind, id })
+      }}
+    >
+      ⋯
+    </button>
+  )
+
   return (
     <section
       className="note-list"
@@ -225,60 +240,64 @@ export function NoteList({
                   }}
                 />
               ) : (
-                <button
-                  key={file.id}
-                  type="button"
-                  className="note-card file-card"
-                  draggable={DRAG_ENABLED}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', `file:${file.id}`)
-                    e.dataTransfer.effectAllowed = 'move'
-                  }}
-                  onClick={() => onSelectFile(file.id)}
-                  onContextMenu={(e) => openMenu(e, 'file', file.id)}
-                >
-                  <div className="note-card-title file-card-title">
-                    <IconFile />
-                    <span className="file-card-name" title={file.filename}>
-                      {file.filename}
-                    </span>
-                    <span className="file-card-badge">PDF</span>
-                  </div>
-                  <div className="note-card-time">
-                    {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
-                  </div>
-                </button>
+                <div key={file.id} className="card-wrap">
+                  <button
+                    type="button"
+                    className="note-card file-card"
+                    draggable={DRAG_ENABLED}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', `file:${file.id}`)
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onClick={() => onSelectFile(file.id)}
+                    onContextMenu={(e) => openMenu(e, 'file', file.id)}
+                  >
+                    <div className="note-card-title file-card-title">
+                      <IconFile />
+                      <span className="file-card-name" title={file.filename}>
+                        {file.filename}
+                      </span>
+                      <span className="file-card-badge">PDF</span>
+                    </div>
+                    <div className="note-card-time">
+                      {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
+                    </div>
+                  </button>
+                  {moreButton('file', file.id, file.filename)}
+                </div>
               ),
             )}
             {notes.map((note) => (
-              <button
-                key={note.id}
-                type="button"
-                className={note.id === activeId ? 'note-card active' : 'note-card'}
-                draggable={DRAG_ENABLED}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', `note:${note.id}`)
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                onClick={() => onSelect(note.id)}
-                onContextMenu={(e) => openMenu(e, 'note', note.id)}
-              >
-                <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
-                <div className="note-card-excerpt">{excerptOf(note.content)}</div>
-                {(note.tags ?? []).length > 0 && (
-                  <div className="note-card-tags">
-                    {(note.tags ?? []).slice(0, 3).map((t) => (
-                      <span key={t} className="note-card-tag">
-                        # {t}
-                      </span>
-                    ))}
-                    {(note.tags ?? []).length > 3 && (
-                      <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
-                    )}
-                  </div>
-                )}
-                <div className="note-card-time">{formatTime(note.updatedAt)}</div>
-              </button>
+              <div key={note.id} className="card-wrap">
+                <button
+                  type="button"
+                  className={note.id === activeId ? 'note-card active' : 'note-card'}
+                  draggable={DRAG_ENABLED}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', `note:${note.id}`)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onClick={() => onSelect(note.id)}
+                  onContextMenu={(e) => openMenu(e, 'note', note.id)}
+                >
+                  <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
+                  <div className="note-card-excerpt">{excerptOf(note.content)}</div>
+                  {(note.tags ?? []).length > 0 && (
+                    <div className="note-card-tags">
+                      {(note.tags ?? []).slice(0, 3).map((t) => (
+                        <span key={t} className="note-card-tag">
+                          # {t}
+                        </span>
+                      ))}
+                      {(note.tags ?? []).length > 3 && (
+                        <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="note-card-time">{formatTime(note.updatedAt)}</div>
+                </button>
+                {moreButton('note', note.id, note.title || '无标题')}
+              </div>
             ))}
           </>
         )}
