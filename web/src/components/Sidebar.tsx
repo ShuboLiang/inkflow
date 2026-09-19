@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Folder } from '../lib/db'
+import { ContextMenu, type MenuItem } from './ContextMenu'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -116,6 +117,8 @@ export function Sidebar({
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTag, setEditingTag] = useState<string | null>(null)
+  // 右键菜单：目标与屏幕位置
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   // 拖拽悬停的放置目标（'all' / 'none' / 文件夹 id / tag:xxx），用于高亮反馈
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
@@ -189,6 +192,30 @@ export function Sidebar({
       .filter(Boolean)
       .join(' ')
 
+  const openMenu = (e: React.MouseEvent, items: MenuItem[]) => {
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY, items })
+  }
+
+  const folderMenuItems = (folder: Folder): MenuItem[] => [
+    {
+      key: 'rename',
+      label: '重命名',
+      onClick: () => {
+        setCreating(false)
+        setEditingId(folder.id)
+      },
+    },
+    { key: 'd1', label: '', divider: true, onClick: () => {} },
+    { key: 'del', label: '删除', danger: true, onClick: () => onDeleteFolder(folder.id) },
+  ]
+
+  const tagMenuItems = (name: string): MenuItem[] => [
+    { key: 'rename', label: '重命名', onClick: () => setEditingTag(name) },
+    { key: 'd1', label: '', divider: true, onClick: () => {} },
+    { key: 'del', label: '删除', danger: true, onClick: () => onDeleteTag(name) },
+  ]
+
   return (
     <nav className={collapsed ? 'sidebar collapsed' : 'sidebar'} aria-label="侧栏">
       <div className="sidebar-brand">InkFlow</div>
@@ -256,6 +283,7 @@ export function Sidebar({
               key={folder.id}
               className={folderClass(folder.id, folder.id === activeFolderId)}
               {...dropHandlers(folder.id, folder.id)}
+              onContextMenu={(e) => openMenu(e, folderMenuItems(folder))}
             >
               <button
                 type="button"
@@ -315,6 +343,7 @@ export function Sidebar({
               key={`tag-${name}`}
               className={tagClass(name)}
               {...tagDropHandlers(name)}
+              onContextMenu={(e) => openMenu(e, tagMenuItems(name))}
             >
               <button
                 type="button"
@@ -358,6 +387,7 @@ export function Sidebar({
           退出登录
         </button>
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
     </nav>
   )
 }

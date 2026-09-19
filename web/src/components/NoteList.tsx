@@ -1,6 +1,10 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { FileEntry, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
+import { softDeleteNote } from '../store/notes'
+import { deleteFile, ensureFileData } from '../store/files'
+import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
+import { ContextMenu, type MenuItem } from './ContextMenu'
 import './NoteList.css'
 
 interface NoteListProps {
@@ -8,11 +12,14 @@ interface NoteListProps {
   files: FileEntry[]
   activeId: string | null
   search: string
+  userId: string
   onSearch: (value: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
   onSelectFile: (id: string) => void
   onUpload: (file: File) => void
+  onRenameNote: (id: string) => void
+  onRequestPush: () => void
   emptyHint?: string
 }
 
@@ -71,14 +78,88 @@ export function NoteList({
   files,
   activeId,
   search,
+  userId,
   onSearch,
   onSelect,
   onCreate,
   onSelectFile,
   onUpload,
+  onRenameNote,
+  onRequestPush,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+  }
+
+  // 创建（或复用）分享并复制链接；文件需已上云（createFileShare 内部会处理）
+  const copyShareLink = async (kind: 'note' | 'file', id: string) => {
+    try {
+      const share =
+        kind === 'note' ? await createNoteShare(userId, id) : await createFileShare(userId, id)
+      await navigator.clipboard.writeText(shareUrl(share.token))
+      showToast('分享链接已复制')
+    } catch {
+      showToast('创建分享失败（文件需先同步上云）')
+    }
+  }
+
+  const downloadFile = async (id: string) => {
+    const file = files.find((f) => f.id === id)
+    if (!file) return
+    const dataUrl = file.dataUrl ?? (await ensureFileData(id))
+    if (!dataUrl) {
+      showToast('文件内容不可用（可能尚未同步）')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = file.filename
+    a.click()
+  }
+
+  const deleteNoteById = async (id: string) => {
+    const note = notes.find((n) => n.id === id)
+    if (!window.confirm(`删除笔记「${note?.title || '无标题'}」？`)) return
+    await softDeleteNote(id)
+    onRequestPush()
+  }
+
+  const deleteFileById = async (id: string) => {
+    const file = files.find((f) => f.id === id)
+    if (!window.confirm(`删除文件「${file?.filename ?? ''}」？`)) return
+    await deleteFile(id)
+    onRequestPush()
+  }
+
+  const menuItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] =>
+    m.kind === 'note'
+      ? [
+          { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
+          { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
+          { key: 'rename', label: '重命名', onClick: () => onRenameNote(m.id) },
+          { key: 'd1', label: '', divider: true, onClick: () => {} },
+          { key: 'del', label: '删除', danger: true, onClick: () => void deleteNoteById(m.id) },
+        ]
+      : [
+          { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
+          { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
+          { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('file', m.id) },
+          { key: 'd1', label: '', divider: true, onClick: () => {} },
+          { key: 'del', label: '删除', danger: true, onClick: () => void deleteFileById(m.id) },
+        ]
+
+  const openMenu = (e: React.MouseEvent, kind: 'note' | 'file', id: string) => {
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY, kind, id })
+  }
 
   return (
     <section className="note-list" aria-label="文件夹内容">
@@ -107,6 +188,7 @@ export function NoteList({
                   e.dataTransfer.effectAllowed = 'move'
                 }}
                 onClick={() => onSelectFile(file.id)}
+                onContextMenu={(e) => openMenu(e, 'file', file.id)}
               >
                 <div className="note-card-title file-card-title">
                   <IconFile />
@@ -131,6 +213,7 @@ export function NoteList({
                   e.dataTransfer.effectAllowed = 'move'
                 }}
                 onClick={() => onSelect(note.id)}
+                onContextMenu={(e) => openMenu(e, 'note', note.id)}
               >
                 <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
                 <div className="note-card-excerpt">{excerptOf(note.content)}</div>
@@ -152,6 +235,12 @@ export function NoteList({
           </>
         )}
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
+      {toast && (
+        <div className="note-list-toast" role="status">
+          {toast}
+        </div>
+      )}
       <div className="note-list-footer">
         <button type="button" className="note-list-new" onClick={onCreate}>
           新建笔记
