@@ -163,7 +163,10 @@
 }
 
 .sidebar-folder-input {
-  width: 100%;
+  /* box-sizing + 外边距：避免 100% 宽度加内边距溢出侧栏、贴到列表区 */
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  margin: 2px 8px;
   padding: 7px 10px;
   border: 1px solid var(--qing);
   border-radius: 6px;
