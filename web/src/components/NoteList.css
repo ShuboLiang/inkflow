@@ -34,6 +34,29 @@
   gap: 4px;
 }
 
+.note-list-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+.note-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.note-card-tag {
+  font-size: 11px;
+  color: var(--qing);
+  background: var(--qing-50);
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.6;
+}
+
 .note-card {
   display: block;
   width: 100%;
@@ -82,10 +105,12 @@
 .note-list-footer {
   padding: 12px;
   border-top: 1px solid var(--ink-200);
+  display: flex;
+  gap: 8px;
 }
 
 .note-list-new {
-  width: 100%;
+  flex: 1;
   padding: 8px 0;
   border: none;
   border-radius: 6px;
@@ -97,4 +122,52 @@
 
 .note-list-new:hover {
   filter: brightness(1.08);
+}
+
+.note-list-upload {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink-900);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.note-list-upload:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+/* 文件卡片：图标 + 文件名 + 类型徽标 */
+.file-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-900);
+}
+
+.file-card-title svg {
+  flex: none;
+  color: var(--ink-500);
+}
+
+.file-card-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-card-badge {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--qing);
+  background: var(--qing-50);
+  border-radius: 4px;
+  padding: 1px 5px;
 }

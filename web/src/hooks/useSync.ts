@@ -12,11 +12,13 @@ export function useSync(user: User | null): { status: SyncStatus; requestPush: (
   const [syncing, setSyncing] = useState(false)
   const busy = useRef(false)
 
-  const dirtyCount = useLiveQuery(
-    () => db.notes.where('dirty').equals(1).count(),
-    [],
-    0,
-  )
+  const dirtyCount = useLiveQuery(async () => {
+    const [noteCount, folderCount] = await Promise.all([
+      db.notes.where('dirty').equals(1).count(),
+      db.folders.where('dirty').equals(1).count(),
+    ])
+    return noteCount + folderCount
+  }, [], 0)
 
   const push = useCallback(async () => {
     if (!user || !navigator.onLine || busy.current) return
@@ -59,7 +61,7 @@ export function useSync(user: User | null): { status: SyncStatus; requestPush: (
     })()
 
     const timer = setInterval(() => void push(), PUSH_INTERVAL_MS)
-    const unsubscribe = syncEngine.subscribeNotes(user.id, () => void pull())
+    const unsubscribe = syncEngine.subscribeChanges(user.id, () => void pull())
 
     const handleOnline = () => {
       setOnline(true)

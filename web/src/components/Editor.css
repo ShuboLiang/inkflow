@@ -40,6 +40,75 @@
   background: var(--qing-50);
 }
 
+/* 所在文件夹选择：挪到工具栏右侧，与删除相邻 */
+.editor-folder {
+  margin-left: auto;
+  max-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  background: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-900);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-folder + .editor-delete {
+  margin-left: 0;
+}
+
+/* 文件查看器（选中 pdf 后主内容区内嵌显示，与笔记共用 editor-pane） */
+.editor-file-name {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-file-action {
+  flex: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--ink-500);
+  text-decoration: none;
+}
+
+.editor-file-action:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+.file-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--qing-50);
+}
+
+.file-view-frame {
+  flex: 1;
+  border: none;
+  background: var(--paper);
+}
+
+.file-view-fallback {
+  margin: auto;
+  padding: 40px 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-500);
+  font-family: var(--font-ui);
+}
+
 .editor-scroll {
   flex: 1;
   overflow-y: auto;

@@ -5,12 +5,17 @@ export async function listNotes(): Promise<Note[]> {
   return all.filter((n) => n.deletedAt === null)
 }
 
-export async function createNote(title = ''): Promise<Note> {
+export async function createNote(
+  title = '',
+  folderId: string | null = null,
+  content: unknown = { type: 'doc', content: [] },
+): Promise<Note> {
   const note: Note = {
     id: crypto.randomUUID(),
     title,
-    content: {},
-    folderId: null,
+    content,
+    folderId,
+    tags: [],
     version: 1,
     dirty: 1,
     updatedAt: Date.now(),
@@ -23,7 +28,7 @@ export async function createNote(title = ''): Promise<Note> {
 
 export async function updateNote(
   id: string,
-  patch: Partial<Pick<Note, 'title' | 'content' | 'folderId'>>,
+  patch: Partial<Pick<Note, 'title' | 'content' | 'folderId' | 'tags'>>,
 ): Promise<void> {
   const existing = await db.notes.get(id)
   if (!existing) return

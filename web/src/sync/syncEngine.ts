@@ -1,4 +1,4 @@
-import { db, type Note } from '../lib/db'
+import { db, type Folder, type Note } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 export interface SyncResult {
@@ -13,7 +13,17 @@ interface NoteRow {
   title: string
   content: unknown
   folder_id: string | null
+  tags: string[] | null
   version: number
+  updated_at: string
+  deleted_at: string | null
+}
+
+interface FolderRow {
+  id: string
+  user_id: string
+  name: string
+  parent_id: string | null
   updated_at: string
   deleted_at: string | null
 }
@@ -43,6 +53,7 @@ function rowToNote(row: NoteRow): Note {
     title: row.title ?? '',
     content: row.content,
     folderId: row.folder_id ?? null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
     version: row.version,
     dirty: 0,
     updatedAt: new Date(row.updated_at).getTime(),
@@ -58,9 +69,33 @@ function noteToRow(note: Note, userId: string) {
     title: note.title,
     content: note.content,
     folder_id: note.folderId,
+    tags: note.tags ?? [],
     version: note.version,
     updated_at: new Date(note.updatedAt).toISOString(),
     deleted_at: note.deletedAt ? new Date(note.deletedAt).toISOString() : null,
+  }
+}
+
+function rowToFolder(row: FolderRow): Folder {
+  return {
+    id: row.id,
+    name: row.name ?? '',
+    parentId: row.parent_id ?? null,
+    dirty: 0,
+    updatedAt: new Date(row.updated_at).getTime(),
+    syncedAt: Date.now(),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
+  }
+}
+
+function folderToRow(folder: Folder, userId: string) {
+  return {
+    id: folder.id,
+    user_id: userId,
+    name: folder.name,
+    parent_id: folder.parentId,
+    updated_at: new Date(folder.updatedAt).toISOString(),
+    deleted_at: folder.deletedAt ? new Date(folder.deletedAt).toISOString() : null,
   }
 }
 
@@ -78,6 +113,9 @@ function noteToRow(note: Note, userId: string) {
  *   dirty rows, and skips own push echoes (clean local row already at the same
  *   version). Rows with deleted_at set are removed from Dexie entirely.
  * - handleConflict: pure LWW by updatedAt; the loser is discarded.
+ * - folders: 同样按 updated_at 做 LWW，但无版本号和历史归档——纯元数据，
+ *   冲突时服务器较新一方直接获胜；删除是软删除（deleted_at），pull 到后
+ *   从本地 Dexie 物理清除。
  */
 export const syncEngine = {
   async pushChanges(userId: string): Promise<SyncResult> {
@@ -124,6 +162,37 @@ export const syncEngine = {
       }
       pushed++
     }
+
+    const dirtyFolders = await db.folders.where('dirty').equals(1).toArray()
+    for (const snapshot of dirtyFolders) {
+      const folder = await db.folders.get(snapshot.id)
+      if (!folder || folder.dirty === 0) continue
+
+      const { data: server, error: readErr } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('id', folder.id)
+        .maybeSingle()
+      if (readErr) throw readErr
+
+      if (server && new Date((server as FolderRow).updated_at).getTime() > folder.updatedAt) {
+        // 冲突：服务器较新直接获胜（文件夹无历史版本可归档）
+        await db.folders.put({ ...rowToFolder(server as FolderRow), dirty: 0, syncedAt: Date.now() })
+        continue
+      }
+      if (folder.deletedAt && !server) {
+        // 本地已删、服务器从未有过：无需同步，直接清掉本地记录
+        await db.folders.delete(folder.id)
+        continue
+      }
+      const { error } = await supabase.from('folders').upsert(folderToRow(folder, userId))
+      if (error) throw error
+      const cur = await db.folders.get(folder.id)
+      if (cur && cur.updatedAt === folder.updatedAt) {
+        await db.folders.update(folder.id, { dirty: 0, syncedAt: Date.now() })
+      }
+      pushed++
+    }
     return { pushed, pulled: 0, conflicts }
   },
 
@@ -151,6 +220,27 @@ export const syncEngine = {
       await db.notes.put(rowToNote(row))
       pulled++
     }
+
+    const { data: folderData, error: folderErr } = await supabase
+      .from('folders')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('updated_at', new Date(from).toISOString())
+    if (folderErr) throw folderErr
+
+    for (const row of (folderData ?? []) as FolderRow[]) {
+      const local = await db.folders.get(row.id)
+      if (local?.dirty === 1) continue
+      const remoteTs = new Date(row.updated_at).getTime()
+      if (local && local.updatedAt >= remoteTs) continue
+      if (row.deleted_at) {
+        if (local) await db.folders.delete(row.id)
+        pulled++
+        continue
+      }
+      await db.folders.put(rowToFolder(row))
+      pulled++
+    }
     setLastSyncAt(userId, startedAt)
     return { pushed: 0, pulled, conflicts: 0 }
   },
@@ -159,12 +249,17 @@ export const syncEngine = {
     return local.updatedAt >= remote.updatedAt ? local : remote
   },
 
-  subscribeNotes(userId: string, onRemoteChange: () => void): () => void {
+  subscribeChanges(userId: string, onRemoteChange: () => void): () => void {
     const channel = supabase
       .channel(`notes-sync-${userId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${userId}` },
+        () => onRemoteChange(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'folders', filter: `user_id=eq.${userId}` },
         () => onRemoteChange(),
       )
       .subscribe()

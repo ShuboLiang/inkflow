@@ -23,6 +23,7 @@
     "flexsearch": "^0.8.212",
     "katex": "^0.18.7",
     "lxgw-wenkai-webfont": "^1.7.0",
+    "marked": "^12.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

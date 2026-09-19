@@ -5,6 +5,8 @@ import './Toolbar.css'
 
 interface ToolbarProps {
   editor: Editor | null
+  // 上传 .md/.html/.pdf：md/html 由外层解析插入，pdf 交给上层存附件
+  onUpload?: (files: File[]) => void
 }
 
 interface ActiveMap {
@@ -31,14 +33,15 @@ interface MathDraft {
   to: number
 }
 
-export function Toolbar({ editor }: ToolbarProps) {
+export function Toolbar({ editor, onUpload }: ToolbarProps) {
   if (!editor) return null
-  return <ToolbarInner editor={editor} />
+  return <ToolbarInner editor={editor} onUpload={onUpload} />
 }
 
-function ToolbarInner({ editor }: { editor: Editor }) {
+function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files: File[]) => void }) {
   const [mathDraft, setMathDraft] = useState<MathDraft | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const active = useEditorState<ActiveMap>({
     editor,
@@ -151,6 +154,35 @@ function ToolbarInner({ editor }: { editor: Editor }) {
             {item.label}
           </button>
         ))}
+        {onUpload && (
+          <>
+            <button
+              type="button"
+              className="fmt-btn"
+              title="上传 md/html 导入为内容"
+              aria-label="上传文件"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+                <path d="M4 21h16" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              multiple
+              accept=".md,.markdown,.html,.htm"
+              onChange={(e) => {
+                const files = e.target.files ? Array.from(e.target.files) : []
+                e.target.value = ''
+                if (files.length) onUpload(files)
+              }}
+            />
+          </>
+        )}
       </div>
       {mathDraft && (
         <div className="math-popover" role="dialog" aria-label="插入公式">
