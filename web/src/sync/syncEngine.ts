@@ -1,7 +1,7 @@
 import { db, type FileEntry, type Folder, type Note } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { dataUrlToBlob } from '../store/files'
-import { uploadPendingImages } from '../store/images'
+import { uploadPendingImages, imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from '../store/images'
 
 export interface SyncResult {
   pushed: number
@@ -320,7 +320,12 @@ export const syncEngine = {
       if (local?.dirty === 1) continue
       if (local && local.version === row.version) continue
       if (row.deleted_at) {
-        if (local) await db.notes.delete(row.id)
+        if (local) {
+          // 物理删除前收集图片引用，删后清理无引用图片
+          const paths = imagePathsOf(noteImageSrcs(local.content))
+          await db.notes.delete(row.id)
+          if (paths.length) void removeImagesIfUnreferenced(paths)
+        }
         pulled++
         continue
       }

@@ -87,6 +87,35 @@ export async function cacheImageFromUrl(src: string): Promise<void> {
   }
 }
 
+// 删除图片（Storage 对象 + 本地缓存），前提是它未被任何未删除的笔记引用。
+// 复制笔记可能共用同一张图，所以必须全库查一遍引用再删。
+export async function removeImagesIfUnreferenced(paths: string[]): Promise<void> {
+  if (!paths.length) return
+  const allNotes = await db.notes.filter((n) => n.deletedAt === null).toArray()
+  const referenced = new Set<string>()
+  for (const n of allNotes) {
+    for (const src of noteImageSrcs(n.content)) {
+      const p = imagePathFromUrl(src)
+      if (p) referenced.add(p)
+    }
+  }
+  for (const p of paths) {
+    if (referenced.has(p)) continue
+    try {
+      const { error } = await supabase.storage.from(BUCKET).remove([p])
+      if (error) console.error('remove image from storage failed', p, error)
+    } catch (err) {
+      console.error('remove image failed', p, err)
+    }
+    await db.images.delete(p)
+  }
+}
+
+// 从 src 列表筛出本桶路径（data URL 等返回空）
+export function imagePathsOf(srcs: string[]): string[] {
+  return srcs.map(imagePathFromUrl).filter((p): p is string => p !== null)
+}
+
 interface TipTapNode {
   type?: string
   attrs?: { src?: string }
