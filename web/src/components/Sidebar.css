@@ -45,12 +45,25 @@
 
 .sidebar-count {
   flex: none;
-  font-size: 12px;
-  color: var(--ink-500);
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--qing-50);
+  color: var(--qing);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-.sidebar-item.active .sidebar-count {
+.sidebar-folder .sidebar-count {
+  background: transparent;
+  color: var(--ink-500);
+}
+
+.sidebar-item.active .sidebar-count,
+.sidebar-folder.active .sidebar-count {
+  background: rgba(31, 111, 107, 0.14);
   color: var(--qing);
 }
 

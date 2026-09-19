@@ -351,7 +351,9 @@ export function Sidebar({
               >
                 {folder.name}
               </button>
-              <span className="sidebar-count">{counts.get(folder.id) ?? 0}</span>
+              {(counts.get(folder.id) ?? 0) > 0 && (
+                <span className="sidebar-count">{counts.get(folder.id)}</span>
+              )}
               <span className="sidebar-folder-actions">
                 <button
                   type="button"
@@ -472,7 +474,7 @@ export function Sidebar({
               >
                 # {name}
               </button>
-              <span className="sidebar-count">{count}</span>
+              {count > 0 && <span className="sidebar-count">{count}</span>}
               <span className="sidebar-folder-actions">
                 <button
                   type="button"
