@@ -461,7 +461,6 @@ export default function App() {
           activeId={activeId}
           search={search}
           userId={user.id}
-          searchScope={activeTag ? `#${activeTag}` : activeFolderId === 'all' ? null : (folders?.find((f) => f.id === activeFolderId)?.name ?? null)}
           onSearch={setSearch}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
