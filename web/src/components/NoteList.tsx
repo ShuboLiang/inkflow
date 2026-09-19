@@ -12,10 +12,12 @@ import './NoteList.css'
 interface NoteListProps {
   notes: Note[]
   files: FileEntry[]
+  folderHits: { id: string; name: string; path: string }[]
   activeId: string | null
   search: string
   userId: string
   onSearch: (value: string) => void
+  onSelectFolderHit: (id: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
   onSelectFile: (id: string) => void
@@ -79,13 +81,23 @@ function IconFile() {
   )
 }
 
+function IconFolder() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  )
+}
+
 export function NoteList({
   notes,
   files,
+  folderHits,
   activeId,
   search,
   userId,
   onSearch,
+  onSelectFolderHit,
   onSelect,
   onCreate,
   onSelectFile,
@@ -277,12 +289,31 @@ export function NoteList({
         />
       </div>
       <div className="note-list-items">
-        {notes.length === 0 && files.length === 0 ? (
+        {notes.length === 0 && files.length === 0 && folderHits.length === 0 ? (
           <div className="note-list-empty">
             {search.trim() ? `没有找到与「${search.trim()}」相关的内容` : (emptyHint ?? '暂无内容')}
           </div>
         ) : (
           <>
+            {folderHits.length > 0 && (
+              <>
+                <div className="note-list-group-label">文件夹</div>
+                {folderHits.map((hit) => (
+                  <button
+                    key={hit.id}
+                    type="button"
+                    className="note-card folder-hit-card"
+                    onClick={() => onSelectFolderHit(hit.id)}
+                  >
+                    <div className="note-card-title folder-hit-title">
+                      <IconFolder />
+                      <span className="folder-hit-name">{hit.name}</span>
+                    </div>
+                    <div className="note-card-time folder-hit-path">{hit.path}</div>
+                  </button>
+                ))}
+              </>
+            )}
             {files.slice(0, renderLimit).map((file) =>
               renamingFileId === file.id ? (
                 <input

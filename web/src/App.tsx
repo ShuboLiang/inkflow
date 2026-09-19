@@ -133,7 +133,7 @@ export default function App() {
     return set
   }, [activeFolderId, folderChildren])
 
-  // 搜索命中文件夹名时，其整棵子树的内容也进结果
+  // 搜索命中文件夹名时，其整棵子树的内容也进结果；命中的文件夹单独列出供点击跳转
   const folderHitSubtree = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return null
@@ -152,6 +152,18 @@ export default function App() {
     }
     return set.size ? set : null
   }, [search, folders, folderChildren])
+
+  const folderHits = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    return (folders ?? [])
+      .filter((f) => f.name.toLowerCase().includes(q))
+      .map((f) => {
+        const path = folderPathNames(f.id, folders ?? []) ?? f.name
+        return { id: f.id, name: f.name, path }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  }, [search, folders])
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>()
@@ -315,6 +327,14 @@ export default function App() {
   }
 
   const handleSelectFolder = (id: string) => {
+    setActiveFolderId(id)
+    setSidebarOpen(false)
+  }
+
+  // 点击搜索结果里的文件夹：跳转进去并清空搜索/标签筛选
+  const handleSelectFolderHit = (id: string) => {
+    setActiveTag(null)
+    setSearch('')
     setActiveFolderId(id)
     setSidebarOpen(false)
   }
@@ -585,10 +605,12 @@ export default function App() {
         <NoteList
           notes={visibleNotes}
           files={filesInView}
+          folderHits={folderHits}
           activeId={activeId}
           search={search}
           userId={user.id}
           onSearch={setSearch}
+          onSelectFolderHit={handleSelectFolderHit}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
           onSelectFile={handleSelectFile}

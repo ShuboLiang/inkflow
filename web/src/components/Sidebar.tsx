@@ -158,6 +158,29 @@ export function Sidebar({
     })
   }
 
+  // 选中文件夹变化（含搜索跳转）时自动展开它的祖先链，保证目标可见。
+  // 渲染期调整状态（避免 effect 里 setState 触发级联渲染）
+  const [lastActiveFolderId, setLastActiveFolderId] = useState(activeFolderId)
+  if (lastActiveFolderId !== activeFolderId) {
+    setLastActiveFolderId(activeFolderId)
+    if (activeFolderId !== 'all') {
+      const byId = new Map(folders.map((f) => [f.id, f]))
+      const ancestors: string[] = []
+      let cur = byId.get(activeFolderId)
+      while (cur?.parentId) {
+        ancestors.push(cur.parentId)
+        cur = byId.get(cur.parentId)
+      }
+      if (ancestors.length) {
+        setCollapsedFolders((prev) => {
+          const next = new Set(prev)
+          for (const a of ancestors) next.delete(a)
+          return next
+        })
+      }
+    }
+  }
+
   // 列表拖来的放置负载：'note:<id>' / 'file:<id>' / 'dir:<id>'（文件夹移动），
   // 文件夹与「全部笔记」两者都收；外部拖入的 Files 直接上传到该文件夹
   const dropHandlers = (target: string, folderId: string | null) => ({

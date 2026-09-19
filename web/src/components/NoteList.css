@@ -290,3 +290,34 @@
   font-size: 12px;
   color: var(--ink-500);
 }
+
+/* 搜索命中的文件夹区块 */
+.note-list-group-label {
+  padding: 8px 12px 2px;
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.folder-hit-card {
+  cursor: pointer;
+}
+
+.folder-hit-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--qing);
+}
+
+.folder-hit-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-hit-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
