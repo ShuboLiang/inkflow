@@ -9,10 +9,47 @@
 .editor-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 24px;
+  gap: 4px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--ink-200);
   font-family: var(--font-ui);
+  background: var(--paper);
+}
+
+/* 统一的工具栏按钮：图标 + 文字，hover 浮出青色底 */
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-500);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tool-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+.tool-btn.danger {
+  color: var(--danger);
+}
+
+.tool-btn.danger:hover {
+  background: #f9ebe8;
+  color: var(--danger);
+}
+
+.toolbar-spacer {
+  flex: 1;
 }
 
 .editor-back {
@@ -25,40 +62,29 @@
   padding: 4px 8px;
 }
 
-.editor-delete {
-  margin-left: auto;
-  border: none;
-  background: none;
-  font-size: 13px;
-  color: var(--danger);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.editor-delete:hover {
-  background: var(--qing-50);
-}
-
-/* 所在文件夹选择：挪到工具栏右侧，与删除相邻 */
+/* 所在文件夹：药丸下拉，青底白字风格 */
 .editor-folder {
-  margin-left: auto;
-  max-width: 180px;
-  padding: 4px 8px;
-  border: 1px solid var(--ink-200);
-  border-radius: 6px;
-  background: var(--paper);
+  appearance: none;
+  -webkit-appearance: none;
+  max-width: 200px;
+  padding: 6px 26px 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--qing-50);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231f6f6b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
   font-family: var(--font-ui);
   font-size: 13px;
-  color: var(--ink-900);
+  color: var(--qing);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.editor-folder + .editor-delete {
-  margin-left: 0;
+.editor-folder:hover {
+  filter: brightness(0.96);
 }
 
 /* 文件查看器（选中 pdf 后主内容区内嵌显示，与笔记共用 editor-pane） */
@@ -71,20 +97,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.editor-file-action {
-  flex: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 13px;
-  color: var(--ink-500);
-  text-decoration: none;
-}
-
-.editor-file-action:hover {
-  background: var(--qing-50);
-  color: var(--qing);
 }
 
 .file-view {

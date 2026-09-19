@@ -2,15 +2,6 @@
   position: relative;
 }
 
-.share-btn {
-  background: none;
-  border: none;
-  font: inherit;
-  cursor: pointer;
-  color: var(--qing);
-  padding: 4px 8px;
-}
-
 .share-card {
   position: absolute;
   top: calc(100% + 8px);

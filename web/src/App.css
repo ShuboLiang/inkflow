@@ -16,6 +16,19 @@
   min-height: 34px;
 }
 
+/* 顶栏中间的当前位置（全部笔记 / 文件夹名 / #标签） */
+.app-view-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-menu {
   display: none;
   border: none;

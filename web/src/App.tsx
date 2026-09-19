@@ -23,6 +23,23 @@ import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
 
+function IconTrash() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" />
+    </svg>
+  )
+}
+
+function IconDownload() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14M5 12l7 7 7-7" />
+      <path d="M4 21h16" />
+    </svg>
+  )
+}
+
 export default function App() {
   const { user, loading, signOut } = useAuth()
   const { status: syncStatus, requestPush } = useSync(user)
@@ -362,7 +379,13 @@ export default function App() {
         >
           ☰
         </button>
-        <span />
+        <span className="app-view-title">
+          {activeTag
+            ? `# ${activeTag}`
+            : activeFolderId === 'all'
+              ? '全部笔记'
+              : (folders?.find((f) => f.id === activeFolderId)?.name ?? '全部笔记')}
+        </span>
         <SyncIndicator status={syncStatus} />
       </header>
       <div className={mobileView === 'editor' ? 'app-main view-editor' : 'app-main'}>
@@ -419,18 +442,20 @@ export default function App() {
                 <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
                 {activeFile.dataUrl && (
                   <a
-                    className="editor-file-action"
+                    className="tool-btn"
                     href={activeFile.dataUrl}
                     download={activeFile.filename}
                   >
+                    <IconDownload />
                     下载
                   </a>
                 )}
                 <button
                   type="button"
-                  className="editor-delete"
+                  className="tool-btn danger"
                   onClick={() => void handleDeleteFile()}
                 >
+                  <IconTrash />
                   删除
                 </button>
               </div>
@@ -461,8 +486,10 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                <span className="toolbar-spacer" />
                 <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
-                <button type="button" className="editor-delete" onClick={() => void handleDelete()}>
+                <button type="button" className="tool-btn danger" onClick={() => void handleDelete()}>
+                  <IconTrash />
                   删除
                 </button>
               </div>
