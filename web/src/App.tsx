@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './lib/db'
+import { db, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
 import { EditorBoundary } from './components/EditorBoundary'
@@ -11,7 +11,7 @@ import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
-import { createFolder, deleteFolder, renameFolder } from './store/folders'
+import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { deleteFile, ensureFileData, moveFile, renameFile, saveFile } from './store/files'
 import { ShareMenu } from './components/ShareMenu'
@@ -42,6 +42,19 @@ function IconDownload() {
       <path d="M4 21h16" />
     </svg>
   )
+}
+
+// 文件夹的祖先路径名（如「课程 / 数学」），找不到返回 null
+function folderPathNames(id: string, folders: { id: string; name: string; parentId: string | null }[]): string | null {
+  const byId = new Map(folders.map((f) => [f.id, f]))
+  const names: string[] = []
+  let cur = byId.get(id) ?? null
+  let guard = 0
+  while (cur && guard++ < 20) {
+    names.unshift(cur.name)
+    cur = cur.parentId ? (byId.get(cur.parentId) ?? null) : null
+  }
+  return names.length ? names.join(' / ') : null
 }
 
 export default function App() {
@@ -78,6 +91,68 @@ export default function App() {
     return m
   }, [notes])
 
+  // 子文件夹树：按父级分组（每层内按中文拼音排序）
+  const folderChildren = useMemo(() => {
+    const m = new Map<string | null, Folder[]>()
+    for (const f of folders ?? []) {
+      const key = f.parentId ?? null
+      const list = m.get(key) ?? []
+      list.push(f)
+      m.set(key, list)
+    }
+    for (const list of m.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+    }
+    return m
+  }, [folders])
+
+  // 每个文件夹的子树笔记总数（含所有后代文件夹，不含文件）
+  const subtreeCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    const dfs = (id: string): number => {
+      let c = folderCounts.get(id) ?? 0
+      for (const ch of folderChildren.get(id) ?? []) c += dfs(ch.id)
+      counts.set(id, c)
+      return c
+    }
+    for (const f of folders ?? []) dfs(f.id)
+    return counts
+  }, [folders, folderChildren, folderCounts])
+
+  // 当前选中文件夹的子树 id 集合（null = 全部笔记，不过滤）
+  const activeFolderSubtree = useMemo(() => {
+    if (activeFolderId === 'all') return null
+    const set = new Set<string>([activeFolderId])
+    const walk = (id: string) => {
+      for (const ch of folderChildren.get(id) ?? []) {
+        set.add(ch.id)
+        walk(ch.id)
+      }
+    }
+    walk(activeFolderId)
+    return set
+  }, [activeFolderId, folderChildren])
+
+  // 搜索命中文件夹名时，其整棵子树的内容也进结果
+  const folderHitSubtree = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return null
+    const set = new Set<string>()
+    const collect = (id: string) => {
+      for (const ch of folderChildren.get(id) ?? []) {
+        set.add(ch.id)
+        collect(ch.id)
+      }
+    }
+    for (const f of folders ?? []) {
+      if (f.name.toLowerCase().includes(q)) {
+        set.add(f.id)
+        collect(f.id)
+      }
+    }
+    return set.size ? set : null
+  }, [search, folders, folderChildren])
+
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const n of notes ?? []) {
@@ -89,15 +164,20 @@ export default function App() {
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
     const q = search.trim().toLowerCase()
-    // 有搜索词时跨全部文件夹/标签搜索；无搜索词按当前文件夹/标签浏览
-    let scoped = q ? all : activeFolderId === 'all' ? all : all.filter((n) => n.folderId === activeFolderId)
+    // 有搜索词时跨全部范围搜索；无搜索词按当前文件夹（含子树）/标签浏览
+    const inScope = (n: (typeof all)[number]) =>
+      activeFolderSubtree === null || (n.folderId !== null && activeFolderSubtree.has(n.folderId))
+    let scoped = q ? all : all.filter(inScope)
     if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     if (!q) return scoped
-    // 标题或正文命中都算；正文比较前先提取纯文本（公式/图片占位为空格）
+    // 标题/正文命中，或所属文件夹（含子树）名命中
     return scoped.filter(
-      (n) => n.title.toLowerCase().includes(q) || plainTextOf(n.content).toLowerCase().includes(q),
+      (n) =>
+        n.title.toLowerCase().includes(q) ||
+        plainTextOf(n.content).toLowerCase().includes(q) ||
+        (n.folderId !== null && folderHitSubtree !== null && folderHitSubtree.has(n.folderId)),
     )
-  }, [notes, search, activeFolderId, activeTag])
+  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
 
@@ -239,10 +319,25 @@ export default function App() {
     setSidebarOpen(false)
   }
 
-  const handleCreateFolder = async (name: string) => {
-    const folder = await createFolder(name)
+  const handleCreateFolder = async (name: string, parentId: string | null = null) => {
+    const folder = await createFolder(name, parentId)
     requestPush()
     setActiveFolderId(folder.id)
+  }
+
+  // 文件夹拖到另一个文件夹上 = 变成其子文件夹；拖到「全部笔记」= 移回顶层。
+  // 禁止移进自己或自己的后代（会形成环）。
+  const handleDropFolder = (folderId: string, targetParentId: string | null) => {
+    if (folderId === targetParentId) return
+    const isSelfOrDescendant = (pid: string | null): boolean => {
+      if (!pid) return false
+      if (pid === folderId) return true
+      const parent = folders?.find((f) => f.id === pid)
+      return parent ? isSelfOrDescendant(parent.parentId ?? null) : false
+    }
+    if (isSelfOrDescendant(targetParentId)) return
+    void moveFolder(folderId, targetParentId)
+    requestPush()
   }
 
   const handleRenameFolder = async (id: string, name: string) => {
@@ -254,13 +349,13 @@ export default function App() {
     const folder = folders?.find((f) => f.id === id)
     const ok = await confirmDialog({
       title: '删除文件夹',
-      message: `删除文件夹「${folder?.name ?? ''}」？其中的笔记会保留在全部笔记里。`,
+      message: `删除文件夹「${folder?.name ?? ''}」？其中的笔记会保留在全部笔记，子文件夹会上移到上一层。`,
       confirmText: '删除',
       danger: true,
     })
     if (!ok) return
     await deleteFolder(id)
-    if (activeFolderId === id) setActiveFolderId('all')
+    if (activeFolderSubtree?.has(id)) setActiveFolderId('all')
     requestPush()
   }
 
@@ -367,15 +462,22 @@ export default function App() {
     }
   }
   // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
-  // 有搜索词时跨全部文件夹按文件名搜
+  // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const inScope = (folderId: string | null) =>
+      activeFolderSubtree === null || (folderId !== null && activeFolderSubtree.has(folderId))
     return (files ?? [])
       .filter((f) => !f.deletedAt)
-      .filter((f) => q || activeFolderId === 'all' || (f.folderId ?? null) === activeFolderId)
-      .filter((f) => !q || f.filename.toLowerCase().includes(q))
+      .filter((f) => (q ? true : inScope(f.folderId ?? null)))
+      .filter(
+        (f) =>
+          !q ||
+          f.filename.toLowerCase().includes(q) ||
+          ((f.folderId ?? null) !== null && folderHitSubtree !== null && folderHitSubtree.has(f.folderId as string)),
+      )
       .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [files, activeFolderId, search])
+  }, [files, activeFolderSubtree, search, folderHitSubtree])
 
   // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
@@ -450,7 +552,7 @@ export default function App() {
             ? `# ${activeTag}`
             : activeFolderId === 'all'
               ? '全部笔记'
-              : (folders?.find((f) => f.id === activeFolderId)?.name ?? '全部笔记')}
+              : (folderPathNames(activeFolderId, folders ?? []) ?? '全部笔记')}
         </span>
         <SyncIndicator status={syncStatus} />
       </header>
@@ -459,16 +561,17 @@ export default function App() {
           email={user.email ?? ''}
           collapsed={!sidebarOpen}
           folders={folders ?? []}
-          counts={folderCounts}
+          counts={subtreeCounts}
           allCount={notes?.length ?? 0}
           tags={tagCounts}
           activeFolderId={activeFolderId}
           activeTag={activeTag}
           onSelectFolder={handleSelectFolder}
           onDropNote={handleDropNote}
-          onCreateFolder={(name) => void handleCreateFolder(name)}
+          onCreateFolder={(name, parentId) => void handleCreateFolder(name, parentId)}
           onRenameFolder={(id, name) => void handleRenameFolder(id, name)}
           onDeleteFolder={(id) => void handleDeleteFolder(id)}
+          onDropFolder={handleDropFolder}
           onToggleTag={handleToggleTag}
           onRenameTag={(oldName, newName) => void handleRenameTag(oldName, newName)}
           onDeleteTag={(name) => void handleDeleteTag(name)}

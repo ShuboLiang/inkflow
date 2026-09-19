@@ -7,11 +7,11 @@ export async function listFolders(): Promise<Folder[]> {
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
 }
 
-export async function createFolder(name: string): Promise<Folder> {
+export async function createFolder(name: string, parentId: string | null = null): Promise<Folder> {
   const folder: Folder = {
     id: crypto.randomUUID(),
     name,
-    parentId: null,
+    parentId,
     dirty: 1,
     updatedAt: Date.now(),
     syncedAt: null,
@@ -27,8 +27,15 @@ export async function renameFolder(id: string, name: string): Promise<void> {
   await db.folders.update(id, { name, dirty: 1, updatedAt: Date.now() })
 }
 
+// 移动文件夹（改挂到其他父级，null = 顶层）。调用方负责校验不能移进自己/后代。
+export async function moveFolder(id: string, parentId: string | null): Promise<void> {
+  const existing = await db.folders.get(id)
+  if (!existing || (existing.parentId ?? null) === parentId) return
+  await db.folders.update(id, { parentId, dirty: 1, updatedAt: Date.now() })
+}
+
 // 软删除文件夹，并把其中的笔记移出文件夹（逐个 bump version 走正常同步）。
-// 笔记不跟随删除，避免误删内容。
+// 笔记不跟随删除，避免误删内容；子文件夹上移到被删文件夹的父级，不级联删除。
 export async function deleteFolder(id: string): Promise<void> {
   const existing = await db.folders.get(id)
   if (!existing) return
@@ -39,6 +46,14 @@ export async function deleteFolder(id: string): Promise<void> {
     await db.notes.update(note.id, {
       folderId: null,
       version: note.version + 1,
+      dirty: 1,
+      updatedAt: Date.now(),
+    })
+  }
+  const children = await db.folders.where('parentId').equals(id).toArray()
+  for (const child of children) {
+    await db.folders.update(child.id, {
+      parentId: existing.parentId,
       dirty: 1,
       updatedAt: Date.now(),
     })

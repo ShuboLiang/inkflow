@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Folder } from '../lib/db'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import './Sidebar.css'
+
+// 文件夹拖拽移动仅在精确指针设备启用
+const DRAG_FINE = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 
 interface SidebarProps {
   email: string
@@ -14,9 +17,10 @@ interface SidebarProps {
   activeTag: string | null
   onSelectFolder: (id: string) => void
   onDropNote: (noteId: string, folderId: string | null) => void
-  onCreateFolder: (name: string) => void
+  onCreateFolder: (name: string, parentId: string | null) => void
   onRenameFolder: (id: string, name: string) => void
   onDeleteFolder: (id: string) => void
+  onDropFolder: (folderId: string, parentId: string | null) => void
   onToggleTag: (name: string) => void
   onRenameTag: (oldName: string, newName: string) => void
   onDeleteTag: (name: string) => void
@@ -50,17 +54,20 @@ function IconPlus() {
   )
 }
 
-// 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消
+// 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消。
+// indent = 在树中的深度（子文件夹新建/重命名时对齐父级行）
 function InlineNameInput({
   defaultValue,
   onSubmit,
   onCancel,
   ariaLabel,
+  indent = 0,
 }: {
   defaultValue: string
   onSubmit: (name: string) => void
   onCancel: () => void
   ariaLabel: string
+  indent?: number
 }) {
   const [value, setValue] = useState(defaultValue)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -79,6 +86,7 @@ function InlineNameInput({
     <input
       ref={inputRef}
       className="sidebar-folder-input"
+      style={indent > 0 ? { marginLeft: 8 + indent * 16, width: `calc(100% - ${16 + indent * 16}px)` } : undefined}
       value={value}
       aria-label={ariaLabel}
       placeholder="文件夹名称"
@@ -106,6 +114,7 @@ export function Sidebar({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onDropFolder,
   onToggleTag,
   onRenameTag,
   onDeleteTag,
@@ -115,15 +124,42 @@ export function Sidebar({
   onSignOut,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
+  const [creatingChildOf, setCreatingChildOf] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTag, setEditingTag] = useState<string | null>(null)
+  // 树形收起状态（默认全部展开）
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
   // 右键菜单：目标与屏幕位置
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   // 拖拽悬停的放置目标（'all' / 文件夹 id / tag:xxx），用于高亮反馈
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
-  // 列表拖来的放置负载：'note:<id>' / 'file:<id>'，文件夹与「全部笔记」两者都收；
-  // 外部拖入的 Files 直接上传到该文件夹
+  // 按父级分组的树（每层内已按中文拼音排序）
+  const childrenByParent = useMemo(() => {
+    const m = new Map<string | null, Folder[]>()
+    for (const f of folders) {
+      const key = f.parentId ?? null
+      const list = m.get(key) ?? []
+      list.push(f)
+      m.set(key, list)
+    }
+    for (const list of m.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+    }
+    return m
+  }, [folders])
+
+  const toggleCollapse = (id: string) => {
+    setCollapsedFolders((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // 列表拖来的放置负载：'note:<id>' / 'file:<id>' / 'dir:<id>'（文件夹移动），
+  // 文件夹与「全部笔记」两者都收；外部拖入的 Files 直接上传到该文件夹
   const dropHandlers = (target: string, folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
       const hasFiles = e.dataTransfer.types.includes('Files')
@@ -147,6 +183,7 @@ export function Sidebar({
       const payload = e.dataTransfer.getData('text/plain')
       if (payload.startsWith('note:')) onDropNote(payload.slice(5), folderId)
       else if (payload.startsWith('file:')) onDropFile(payload.slice(5), folderId)
+      else if (payload.startsWith('dir:')) onDropFolder(payload.slice(4), folderId)
     },
   })
 
@@ -220,10 +257,20 @@ export function Sidebar({
 
   const folderMenuItems = (folder: Folder): MenuItem[] => [
     {
+      key: 'sub',
+      label: '新建子文件夹',
+      onClick: () => {
+        setCreating(false)
+        setEditingId(null)
+        setCreatingChildOf(folder.id)
+      },
+    },
+    {
       key: 'rename',
       label: '重命名',
       onClick: () => {
         setCreating(false)
+        setCreatingChildOf(null)
         setEditingId(folder.id)
       },
     },
@@ -236,6 +283,119 @@ export function Sidebar({
     { key: 'd1', label: '', divider: true, onClick: () => {} },
     { key: 'del', label: '删除', danger: true, onClick: () => onDeleteTag(name) },
   ]
+
+  // 递归渲染文件夹树：缩进 + 展开箭头；行可拖拽（移动层级）、可放置笔记/文件/子文件夹
+  const renderFolderTree = (parentId: string | null, depth: number): ReactNode =>
+    (childrenByParent.get(parentId) ?? []).map((folder) => {
+      const children = childrenByParent.get(folder.id) ?? []
+      const isCollapsed = collapsedFolders.has(folder.id)
+      return (
+        <div key={folder.id}>
+          {editingId === folder.id ? (
+            <InlineNameInput
+              ariaLabel="重命名文件夹"
+              defaultValue={folder.name}
+              indent={depth}
+              onSubmit={(name) => {
+                onRenameFolder(folder.id, name)
+                setEditingId(null)
+              }}
+              onCancel={() => setEditingId(null)}
+            />
+          ) : creatingChildOf === folder.id ? (
+            <InlineNameInput
+              ariaLabel="新子文件夹名称"
+              defaultValue=""
+              indent={depth + 1}
+              onSubmit={(name) => {
+                onCreateFolder(name, folder.id)
+                setCreatingChildOf(null)
+              }}
+              onCancel={() => setCreatingChildOf(null)}
+            />
+          ) : (
+            <div
+              className={folderClass(folder.id, folder.id === activeFolderId)}
+              style={{ paddingLeft: 10 + depth * 16 }}
+              {...dropHandlers(folder.id, folder.id)}
+              onContextMenu={(e) => openMenu(e, folderMenuItems(folder))}
+              draggable={DRAG_FINE}
+              onDragStart={(e) => {
+                e.stopPropagation()
+                e.dataTransfer.setData('text/plain', `dir:${folder.id}`)
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+            >
+              {children.length > 0 ? (
+                <button
+                  type="button"
+                  className="sidebar-tree-toggle"
+                  title={isCollapsed ? '展开' : '收起'}
+                  aria-label={isCollapsed ? `展开 ${folder.name}` : `收起 ${folder.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleCollapse(folder.id)
+                  }}
+                >
+                  {isCollapsed ? '▸' : '▾'}
+                </button>
+              ) : (
+                <span className="sidebar-tree-toggle-placeholder" aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                className="sidebar-folder-name"
+                title={folder.name}
+                onClick={() => onSelectFolder(folder.id)}
+                onDoubleClick={() => setEditingId(folder.id)}
+              >
+                {folder.name}
+              </button>
+              <span className="sidebar-count">{counts.get(folder.id) ?? 0}</span>
+              <span className="sidebar-folder-actions">
+                <button
+                  type="button"
+                  className="sidebar-folder-action"
+                  title="新建子文件夹"
+                  aria-label={`在 ${folder.name} 下新建子文件夹`}
+                  onClick={() => {
+                    setCreating(false)
+                    setEditingId(null)
+                    setCreatingChildOf(folder.id)
+                  }}
+                >
+                  <IconPlus />
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-folder-action"
+                  title="重命名"
+                  aria-label={`重命名 ${folder.name}`}
+                  onClick={() => {
+                    setCreating(false)
+                    setCreatingChildOf(null)
+                    setEditingId(folder.id)
+                  }}
+                >
+                  <IconPencil />
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-folder-action"
+                  title="删除"
+                  aria-label={`删除 ${folder.name}`}
+                  onClick={() => onDeleteFolder(folder.id)}
+                >
+                  <IconCross />
+                </button>
+              </span>
+              {moreButton(folderMenuItems(folder), folder.name)}
+            </div>
+          )}
+          {!isCollapsed && renderFolderTree(folder.id, depth + 1)}
+        </div>
+      )
+    })
 
   return (
     <nav className={collapsed ? 'sidebar collapsed' : 'sidebar'} aria-label="侧栏">
@@ -269,7 +429,7 @@ export function Sidebar({
           ariaLabel="新文件夹名称"
           defaultValue=""
           onSubmit={(name) => {
-            onCreateFolder(name)
+            onCreateFolder(name, null)
             setCreating(false)
           }}
           onCancel={() => setCreating(false)}
@@ -278,62 +438,7 @@ export function Sidebar({
       {folders.length === 0 && !creating ? (
         <div className="sidebar-empty">暂无文件夹</div>
       ) : (
-        folders.map((folder) =>
-          editingId === folder.id ? (
-            <InlineNameInput
-              key={folder.id}
-              ariaLabel="重命名文件夹"
-              defaultValue={folder.name}
-              onSubmit={(name) => {
-                onRenameFolder(folder.id, name)
-                setEditingId(null)
-              }}
-              onCancel={() => setEditingId(null)}
-            />
-          ) : (
-            <div
-              key={folder.id}
-              className={folderClass(folder.id, folder.id === activeFolderId)}
-              {...dropHandlers(folder.id, folder.id)}
-              onContextMenu={(e) => openMenu(e, folderMenuItems(folder))}
-            >
-              <button
-                type="button"
-                className="sidebar-folder-name"
-                title={folder.name}
-                onClick={() => onSelectFolder(folder.id)}
-                onDoubleClick={() => setEditingId(folder.id)}
-              >
-                {folder.name}
-              </button>
-              <span className="sidebar-count">{counts.get(folder.id) ?? 0}</span>
-              <span className="sidebar-folder-actions">
-                <button
-                  type="button"
-                  className="sidebar-folder-action"
-                  title="重命名"
-                  aria-label={`重命名 ${folder.name}`}
-                  onClick={() => {
-                    setCreating(false)
-                    setEditingId(folder.id)
-                  }}
-                >
-                  <IconPencil />
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-folder-action"
-                  title="删除"
-                  aria-label={`删除 ${folder.name}`}
-                  onClick={() => onDeleteFolder(folder.id)}
-                >
-                  <IconCross />
-                </button>
-              </span>
-              {moreButton(folderMenuItems(folder), folder.name)}
-            </div>
-          ),
-        )
+        renderFolderTree(null, 0)
       )}
       <div className="sidebar-section">标签</div>
       {tags.size === 0 ? (
