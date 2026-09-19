@@ -15,6 +15,8 @@ interface NoteListProps {
   activeId: string | null
   search: string
   userId: string
+  /** 当前搜索范围（文件夹名 / #标签），显示在搜索框占位里 */
+  searchScope: string | null
   onSearch: (value: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
@@ -82,6 +84,7 @@ export function NoteList({
   activeId,
   search,
   userId,
+  searchScope,
   onSearch,
   onSelect,
   onCreate,
@@ -239,8 +242,9 @@ export function NoteList({
     >
       <div className="note-list-search">
         <input
+          id="note-search"
           type="search"
-          placeholder="搜索笔记"
+          placeholder={searchScope ? `在 ${searchScope} 内搜索` : '搜索笔记'}
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           aria-label="搜索笔记"
@@ -248,7 +252,9 @@ export function NoteList({
       </div>
       <div className="note-list-items">
         {notes.length === 0 && files.length === 0 ? (
-          <div className="note-list-empty">{emptyHint ?? '暂无内容'}</div>
+          <div className="note-list-empty">
+            {search.trim() ? `没有找到与「${search.trim()}」相关的内容` : (emptyHint ?? '暂无内容')}
+          </div>
         ) : (
           <>
             {files.map((file) =>

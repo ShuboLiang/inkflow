@@ -136,6 +136,18 @@ export default function App() {
     }
   }, [])
 
+  // Ctrl/Cmd + F 聚焦笔记搜索（全局，编辑中也能用）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        document.getElementById('note-search')?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const scheduleSave = (id: string, patch: { title?: string; content?: unknown }) => {
     pendingSave.current =
       pendingSave.current && pendingSave.current.id === id
@@ -330,14 +342,14 @@ export default function App() {
     }
   }
   // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
-  const filesInView = useMemo(
-    () =>
-      (files ?? [])
-        .filter((f) => !f.deletedAt)
-        .filter((f) => (activeFolderId === 'all' ? true : (f.folderId ?? null) === activeFolderId))
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-    [files, activeFolderId],
-  )
+  const filesInView = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (files ?? [])
+      .filter((f) => !f.deletedAt)
+      .filter((f) => (activeFolderId === 'all' ? true : (f.folderId ?? null) === activeFolderId))
+      .filter((f) => !q || f.filename.toLowerCase().includes(q))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  }, [files, activeFolderId, search])
 
   // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
@@ -447,6 +459,7 @@ export default function App() {
           activeId={activeId}
           search={search}
           userId={user.id}
+          searchScope={activeTag ? `#${activeTag}` : activeFolderId === 'all' ? null : (folders?.find((f) => f.id === activeFolderId)?.name ?? null)}
           onSearch={setSearch}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
