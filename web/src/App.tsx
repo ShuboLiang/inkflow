@@ -339,6 +339,14 @@ export default function App() {
     setSidebarOpen(false)
   }
 
+  // 跳到笔记/文件所在文件夹（保留打开的内容，只切换列表上下文）
+  const handleGotoFolder = (folderId: string) => {
+    setActiveTag(null)
+    setSearch('')
+    setActiveFolderId(folderId)
+    setSidebarOpen(false)
+  }
+
   const handleCreateFolder = async (name: string, parentId: string | null = null) => {
     const folder = await createFolder(name, parentId)
     requestPush()
@@ -611,6 +619,8 @@ export default function App() {
           userId={user.id}
           onSearch={setSearch}
           onSelectFolderHit={handleSelectFolderHit}
+          folderPathOf={(id) => folderPathNames(id, folders ?? [])}
+          onGotoFolder={handleGotoFolder}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
           onSelectFile={handleSelectFile}

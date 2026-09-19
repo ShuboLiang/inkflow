@@ -321,3 +321,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 搜索结果卡片上的所在文件夹位置（点击跳转，不影响卡片本身的点击选中） */
+.note-card-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-500);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-card-loc:hover {
+  color: var(--qing);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

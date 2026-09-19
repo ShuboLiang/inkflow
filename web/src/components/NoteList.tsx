@@ -18,6 +18,9 @@ interface NoteListProps {
   userId: string
   onSearch: (value: string) => void
   onSelectFolderHit: (id: string) => void
+  /** 文件夹 id → 路径名（如 课程 / 数学），找不到返回 null */
+  folderPathOf: (folderId: string) => string | null
+  onGotoFolder: (folderId: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
   onSelectFile: (id: string) => void
@@ -89,6 +92,14 @@ function IconFolder() {
   )
 }
 
+function IconFolderSmall() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  )
+}
+
 export function NoteList({
   notes,
   files,
@@ -98,6 +109,8 @@ export function NoteList({
   userId,
   onSearch,
   onSelectFolderHit,
+  folderPathOf,
+  onGotoFolder,
   onSelect,
   onCreate,
   onSelectFile,
@@ -201,10 +214,21 @@ export function NoteList({
     onRequestPush()
   }
 
-  const menuItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] =>
-    m.kind === 'note'
+  const menuItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] => {
+    const target =
+      m.kind === 'note' ? notes.find((n) => n.id === m.id) : files.find((f) => f.id === m.id)
+    const gotoFolderItem: MenuItem | null =
+      target?.folderId
+        ? {
+            key: 'goto',
+            label: '跳到所在文件夹',
+            onClick: () => onGotoFolder(target.folderId as string),
+          }
+        : null
+    return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
+          ...(gotoFolderItem ? [gotoFolderItem] : []),
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
           { key: 'rename', label: '重命名', onClick: () => onRenameNote(m.id) },
           { key: 'd1', label: '', divider: true, onClick: () => {} },
@@ -212,12 +236,14 @@ export function NoteList({
         ]
       : [
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
+          ...(gotoFolderItem ? [gotoFolderItem] : []),
           { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
           { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('file', m.id) },
           { key: 'd1', label: '', divider: true, onClick: () => {} },
           { key: 'del', label: '删除', danger: true, onClick: () => void deleteFileById(m.id) },
         ]
+  }
 
   const openMenu = (e: React.MouseEvent, kind: 'note' | 'file', id: string) => {
     e.preventDefault()
@@ -355,6 +381,19 @@ export function NoteList({
                     <div className="note-card-time">
                       {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
                     </div>
+                    {search.trim() && file.folderId && (
+                      <span
+                        className="note-card-loc"
+                        title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onGotoFolder(file.folderId as string)
+                        }}
+                      >
+                        <IconFolderSmall />
+                        {folderPathOf(file.folderId)}
+                      </span>
+                    )}
                   </button>
                   {moreButton('file', file.id, file.filename)}
                 </div>
@@ -375,6 +414,19 @@ export function NoteList({
                 >
                   <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
                   {excerptFor(note)}
+                  {search.trim() && note.folderId && (
+                    <span
+                      className="note-card-loc"
+                      title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onGotoFolder(note.folderId as string)
+                      }}
+                    >
+                      <IconFolderSmall />
+                      {folderPathOf(note.folderId)}
+                    </span>
+                  )}
                   {(note.tags ?? []).length > 0 && (
                     <div className="note-card-tags">
                       {(note.tags ?? []).slice(0, 3).map((t) => (
