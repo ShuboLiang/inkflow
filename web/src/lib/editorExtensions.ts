@@ -7,6 +7,7 @@ import { InputRule, type Extensions } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { cacheImageFromUrl, cachedImageDataUrl, imagePathFromUrl } from '../store/images'
+import { openImageLightbox } from './lightbox'
 
 // 图片节点：src 是 Storage 公共桶 URL。在线直接加载；加载失败（离线/未上传完成）
 // 回退到 Dexie 本地缓存；加载成功后顺手缓存一份供离线用。
@@ -15,6 +16,8 @@ const ResolvedImage = Image.extend({
     return ({ node }) => {
       const dom = document.createElement('img')
       dom.src = node.attrs.src as string
+      // 点击看大图（封顶显示后仍能看原图细节）
+      dom.addEventListener('click', () => openImageLightbox(dom.src))
       let objectUrl: string | null = null
       dom.addEventListener('error', () => {
         const path = imagePathFromUrl(node.attrs.src as string)

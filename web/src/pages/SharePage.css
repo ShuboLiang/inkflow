@@ -75,11 +75,12 @@
 
 .share-doc-body .ProseMirror img {
   display: block;
-  max-width: 100%;
+  max-width: min(100%, 640px);
   height: auto;
   margin: 0.6em auto 1.2em;
   border: 1px solid var(--ink-200);
   border-radius: 8px;
+  cursor: zoom-in;
 }
 
 .share-doc-body .ProseMirror div[data-type='block-math'] {
