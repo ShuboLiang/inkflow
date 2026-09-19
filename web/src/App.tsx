@@ -22,6 +22,7 @@ import { setActiveEdit } from './sync/syncEngine'
 import { DialogHost } from './components/Dialog'
 import { alertDialog, confirmDialog } from './lib/dialog'
 import { plainTextOf } from './lib/search'
+import { migrateInlineImages, noteImageSrcs } from './store/images'
 import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
@@ -148,6 +149,29 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // 存量图片迁移（每次启动跑一次）：正文里的 data URL 图片上传到 Storage 并替换为
+  // 公共 URL，笔记标脏走正常同步。后台分批进行，不阻塞界面；失败的笔记下次启动再试。
+  const migratedRef = useRef(false)
+  useEffect(() => {
+    if (!user || migratedRef.current || notes === undefined) return
+    migratedRef.current = true
+    const targets = notes.filter((n) => noteImageSrcs(n.content).some((s) => s.startsWith('data:')))
+    void (async () => {
+      for (const note of targets) {
+        try {
+          const next = await migrateInlineImages(note.content)
+          if (next !== note.content) {
+            await updateNote(note.id, { content: next })
+            requestPush()
+          }
+        } catch (err) {
+          console.error('migrate note images failed', note.id, err)
+        }
+        await new Promise((r) => setTimeout(r, 50))
+      }
+    })()
+  }, [user, notes, requestPush])
 
   const scheduleSave = (id: string, patch: { title?: string; content?: unknown }) => {
     pendingSave.current =

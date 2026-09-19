@@ -6,6 +6,45 @@ import Image from '@tiptap/extension-image'
 import { InputRule, type Extensions } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
+import { cacheImageFromUrl, cachedImageDataUrl, imagePathFromUrl } from '../store/images'
+
+// 图片节点：src 是 Storage 公共桶 URL。在线直接加载；加载失败（离线/未上传完成）
+// 回退到 Dexie 本地缓存；加载成功后顺手缓存一份供离线用。
+const ResolvedImage = Image.extend({
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('img')
+      dom.src = node.attrs.src as string
+      let objectUrl: string | null = null
+      dom.addEventListener('error', () => {
+        const path = imagePathFromUrl(node.attrs.src as string)
+        if (!path || dom.dataset.fallback === '1') return
+        dom.dataset.fallback = '1'
+        void cachedImageDataUrl(path).then((dataUrl) => {
+          if (!dataUrl || dom.isConnected === false) return
+          objectUrl = dataUrl
+          dom.src = dataUrl
+        })
+      })
+      dom.addEventListener('load', () => {
+        if (dom.dataset.fallback !== '1') void cacheImageFromUrl(node.attrs.src as string)
+      })
+      return {
+        dom,
+        update(updated) {
+          if (updated.attrs.src !== node.attrs.src) {
+            delete dom.dataset.fallback
+            dom.src = updated.attrs.src as string
+          }
+          return true
+        },
+        destroy() {
+          if (objectUrl) URL.revokeObjectURL(objectUrl)
+        },
+      }
+    }
+  },
+})
 
 // 点击已有公式 → 广播编辑事件（携带节点区间与现有 LaTeX），
 // 由 Toolbar 的公式浮层接管：预填内容、确认后原地替换。事件挂在 window 上，
@@ -116,8 +155,8 @@ export function buildExtensions(): Extensions {
     Placeholder.configure({ placeholder: '开始书写…' }),
     InlineMathRule,
     BlockMathRule,
-    // 图片以 base64 data URL 内联存储（allowBase64），跟随笔记内容一起
-    // 进 IndexedDB 与云同步，不依赖 Supabase Storage
-    Image.configure({ allowBase64: true, inline: false }),
+    // 图片以 Storage 公共 URL 存储（ResolvedImage 的 NodeView 负责离线回退与缓存），
+    // 仍保留 allowBase64 以兼容迁移前的 data URL 内容
+    ResolvedImage.configure({ allowBase64: true, inline: false }),
   ]
 }

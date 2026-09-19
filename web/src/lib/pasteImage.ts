@@ -1,7 +1,9 @@
 import type { EditorView } from '@tiptap/pm/view'
+import { newImagePath, stageImage, uploadPendingImages } from '../store/images'
 
-// 粘贴图片内联进文档（以 data URL 存进 JSON 内容，跟随 Dexie 本地库和云同步走，
-// 无需 Storage 服务）。截图常见尺寸很大，这里按最长边压缩，避免单篇笔记膨胀。
+// 粘贴图片：压缩后进 Storage 公共桶（正文只存 URL），本地 Dexie 同步写缓存，
+// 离线也能立刻显示；上传由同步引擎的 uploadPendingImages 在联网时补齐。
+// 截图常见尺寸很大，这里按最长边压缩，避免单篇笔记膨胀。
 const MAX_EDGE = 1600
 // 小于该体积且无需缩放的文件直接嵌入原始数据，避免无意义的重压缩
 const ORIGINAL_LIMIT = 400 * 1024
@@ -57,9 +59,13 @@ export async function insertPastedImages(view: EditorView, files: File[]): Promi
   if (!type) return
   for (const file of files) {
     try {
-      const src = await fileToDataUrl(file)
+      const dataUrl = await fileToDataUrl(file)
+      const path = newImagePath(file.type === 'image/png' ? 'image/png' : 'image/jpeg')
+      const src = await stageImage(path, dataUrl)
       const node = type.create({ src })
       view.dispatch(view.state.tr.replaceSelectionWith(node))
+      // 联网则立即上传，失败留给同步引擎下一轮重试
+      void uploadPendingImages()
     } catch (err) {
       console.error('insert pasted image failed', err)
     }

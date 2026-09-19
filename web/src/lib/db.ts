@@ -52,6 +52,7 @@ export const db = new Dexie('inkflow') as Dexie & {
   folders: EntityTable<Folder, 'id'>
   tags: EntityTable<Tag, 'id'>
   files: EntityTable<FileEntry, 'id'>
+  images: EntityTable<ImageCache, 'path'>
 }
 
 db.version(1).stores({
@@ -81,3 +82,17 @@ db.version(3)
         if (f.deletedAt === null && f.syncedAt === null && f.dirty === 0) f.dirty = 1
       }),
   )
+
+// v4: 图片本地缓存（图片本体在 Storage 公共桶 images，这里缓存 data URL 供离线/未下载时显示）
+export interface ImageCache {
+  // 桶内路径：{uuid}.{ext}
+  path: string
+  dataUrl: string
+  // 1 = 待上传（离线粘贴等场景），0 = 已上传
+  dirty: 0 | 1
+  createdAt: number
+}
+
+db.version(4).stores({
+  images: 'path, dirty',
+})

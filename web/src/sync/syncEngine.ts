@@ -1,6 +1,7 @@
 import { db, type FileEntry, type Folder, type Note } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { dataUrlToBlob } from '../store/files'
+import { uploadPendingImages } from '../store/images'
 
 export interface SyncResult {
   pushed: number
@@ -162,6 +163,9 @@ function fileToRow(file: FileEntry, userId: string) {
  */
 export const syncEngine = {
   async pushChanges(userId: string): Promise<SyncResult> {
+    // 先补齐待传的图片：笔记内容里引用的公共 URL 需要对象真实存在
+    await uploadPendingImages()
+
     const dirtyNotes = await db.notes.where('dirty').equals(1).toArray()
     let pushed = 0
     let conflicts = 0
