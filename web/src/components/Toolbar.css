@@ -1,6 +1,7 @@
-/* 钉在编辑区顶部的固定格式栏：不随正文滚动，也不悬浮遮字 */
+/* 跟随式格式栏：在顶部时原位，向下滚动时钉在可视区顶部（sticky 不占悬浮层，也不滚丢） */
 .fmt-wrap {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 5;
   padding: 6px 48px;
   background: var(--paper);
