@@ -1,0 +1,19 @@
+# 本地开发修复（与 docker-compose.yml 一起使用，两个 -f 都要带）：
+# 1. 给 supavisor 设置可解析的 hostname，修复其反复重启的问题
+# 2. 移除宿主机 5432 端口映射，避免与残留端口代理冲突（前端走 8000 网关，用不到它）
+services:
+  supavisor:
+    hostname: supabase-pooler
+    ports: !override
+      - ${POOLER_PROXY_PORT_TRANSACTION}:6543
+  # InkFlow 前端：静态构建产物由 nginx 托管（hash 路由无需服务端回退）。
+  # web/dist 相对 compose 文件解析（../../web/dist = 仓库根/web/dist）。
+  # 打包/部署见仓库根 DEPLOY.md；端口被占就改映射，如 "8080:80"。
+  web:
+    image: nginx:alpine
+    container_name: inkflow-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ../../web/dist:/usr/share/nginx/html:ro

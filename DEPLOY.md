@@ -42,15 +42,12 @@ done
 
 ## 三、服务器：托管前端
 
-`web/dist` 是静态文件，VITE_SUPABASE_URL 已在打包时写入。最简单用 nginx 容器：
-
-```bash
-cd /opt/inkflow
-docker run -d --name inkflow-web --restart unless-stopped \
-  -p 80:80 -v "$PWD/web/dist:/usr/share/nginx/html:ro" nginx:alpine
-```
+前端已并入 compose（`docker-compose.override.yml` 里的 `web` 服务，nginx 托管 `web/dist`，
+VITE_SUPABASE_URL 打包时已写入），`docker compose up -d` 会连同前端一起起，无需单独操作。
 
 浏览器访问 `http://服务器IP/` 即可，首次打开注册新账号（Auth 页面）。
+端口被占用就改 `supabase/docker/docker-compose.override.yml` 里的映射（如 `"8080:80"`），
+改完重新 `docker compose up -d` 生效。
 
 > 防火墙：需要开放 **80**（前端）和 **8000**（Supabase API，浏览器要直连）。不想暴露 8000 的话，在 nginx 里加 `/supabase` 反代并改前端构建地址，属于进阶配置。
 

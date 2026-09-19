@@ -11,6 +11,7 @@ volumes/functions/hello/**
 !volumes/functions/hello/index.ts
 .env
 test.http
-docker-compose.override.yml
+# docker-compose.override.yml 由仓库管理（含 InkFlow 前端服务），不再忽略
+!docker-compose.override.yml
 .supabase-version
 backups
