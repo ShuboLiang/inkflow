@@ -13,7 +13,8 @@ import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { deleteFile, moveFile, saveFile } from './store/files'
+import { deleteFile, ensureFileData, moveFile, saveFile } from './store/files'
+import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile } from './lib/importFile'
 import { TagInput } from './components/TagInput'
 import { countWords } from './lib/wordCount'
@@ -226,10 +227,19 @@ export default function App() {
 
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const activeFile = files?.find((f) => f.id === activeFileId) ?? null
+  // 新设备上拉到的文件只有云端元数据：打开查看器时按需下载内容并缓存进 Dexie
+  const activeFileIdForEffect = activeFile?.id ?? null
+  const activeFileHasData = !!activeFile?.dataUrl
+  useEffect(() => {
+    if (user && activeFileIdForEffect && !activeFileHasData) {
+      void ensureFileData(activeFileIdForEffect)
+    }
+  }, [user, activeFileIdForEffect, activeFileHasData])
   // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
   const filesInView = useMemo(
     () =>
       (files ?? [])
+        .filter((f) => !f.deletedAt)
         .filter((f) =>
           activeFolderId === 'all'
             ? true
@@ -366,6 +376,7 @@ export default function App() {
                 <span className="editor-file-name" title={activeFile.filename}>
                   {activeFile.filename}
                 </span>
+                <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
                 {activeFile.dataUrl && (
                   <a
                     className="editor-file-action"
@@ -387,7 +398,7 @@ export default function App() {
                 {activeFile.dataUrl ? (
                   <iframe title={activeFile.filename} src={activeFile.dataUrl} className="file-view-frame" />
                 ) : (
-                  <p className="file-view-fallback">该文件没有本地内容（可能创建于其他设备），暂不支持同步。</p>
+                  <p className="file-view-fallback">正在从云端加载文件…</p>
                 )}
               </div>
             </>
@@ -410,6 +421,7 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
                 <button type="button" className="editor-delete" onClick={() => void handleDelete()}>
                   删除
                 </button>

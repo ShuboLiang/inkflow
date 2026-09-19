@@ -1,5 +1,6 @@
-import { db, type Folder, type Note } from '../lib/db'
+import { db, type FileEntry, type Folder, type Note } from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { dataUrlToBlob } from '../store/files'
 
 export interface SyncResult {
   pushed: number
@@ -24,6 +25,18 @@ interface FolderRow {
   user_id: string
   name: string
   parent_id: string | null
+  updated_at: string
+  deleted_at: string | null
+}
+
+interface FileRow {
+  id: string
+  user_id: string
+  folder_id: string | null
+  filename: string
+  mime_type: string | null
+  size: number | null
+  storage_path: string | null
   updated_at: string
   deleted_at: string | null
 }
@@ -96,6 +109,36 @@ function folderToRow(folder: Folder, userId: string) {
     parent_id: folder.parentId,
     updated_at: new Date(folder.updatedAt).toISOString(),
     deleted_at: folder.deletedAt ? new Date(folder.deletedAt).toISOString() : null,
+  }
+}
+
+function rowToFile(row: FileRow): FileEntry {
+  return {
+    id: row.id,
+    folderId: row.folder_id ?? null,
+    filename: row.filename ?? '',
+    mimeType: row.mime_type,
+    size: row.size,
+    storagePath: row.storage_path,
+    dataUrl: null, // 内容按需从 Storage 拉取（pull 时保留本地已有缓存）
+    dirty: 0,
+    updatedAt: new Date(row.updated_at).getTime(),
+    syncedAt: Date.now(),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
+  }
+}
+
+function fileToRow(file: FileEntry, userId: string) {
+  return {
+    id: file.id,
+    user_id: userId,
+    folder_id: file.folderId,
+    filename: file.filename,
+    mime_type: file.mimeType,
+    size: file.size,
+    storage_path: file.storagePath,
+    updated_at: new Date(file.updatedAt).toISOString(),
+    deleted_at: file.deletedAt ? new Date(file.deletedAt).toISOString() : null,
   }
 }
 
@@ -193,6 +236,66 @@ export const syncEngine = {
       }
       pushed++
     }
+
+    // 文件：先按需把本地内容上传到 Storage，再同步元数据行；软删除则删对象+删行
+    const dirtyFiles = await db.files.where('dirty').equals(1).toArray()
+    for (const snapshot of dirtyFiles) {
+      const file = await db.files.get(snapshot.id)
+      if (!file || file.dirty === 0) continue
+
+      if (file.deletedAt) {
+        if (file.storagePath) {
+          const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
+          if (rmErr) console.error('remove storage object failed', rmErr)
+        }
+        const { error: delErr } = await supabase.from('files').delete().eq('id', file.id)
+        if (delErr) throw delErr
+        await db.files.delete(file.id)
+        pushed++
+        continue
+      }
+
+      if (file.dataUrl && !file.storagePath) {
+        const path = `${userId}/${file.id}`
+        const { error: upErr } = await supabase.storage
+          .from('files')
+          .upload(path, dataUrlToBlob(file.dataUrl, file.mimeType), {
+            contentType: file.mimeType ?? 'application/octet-stream',
+            upsert: true,
+          })
+        if (upErr) throw upErr
+        await db.files.update(file.id, { storagePath: path })
+        file.storagePath = path
+      }
+
+      const { data: server, error: readErr } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', file.id)
+        .maybeSingle()
+      if (readErr) throw readErr
+      // 本地只有元数据（内容尚未下载）时，沿用服务器上的 storage_path，别把 null 覆盖上去
+      if (!file.storagePath && server?.storage_path) {
+        file.storagePath = (server as FileRow).storage_path
+      }
+      if (
+        server &&
+        !file.storagePath &&
+        new Date((server as FileRow).updated_at).getTime() > file.updatedAt
+      ) {
+        // 本地还没上传内容、服务器元数据又更新过：以服务器为准，下轮 pull 拉详情
+        await db.files.put({ ...rowToFile(server as FileRow), dataUrl: file.dataUrl })
+        continue
+      }
+
+      const { error } = await supabase.from('files').upsert(fileToRow(file, userId))
+      if (error) throw error
+      const cur = await db.files.get(file.id)
+      if (cur && cur.updatedAt === file.updatedAt) {
+        await db.files.update(file.id, { dirty: 0, syncedAt: Date.now() })
+      }
+      pushed++
+    }
     return { pushed, pulled: 0, conflicts }
   },
 
@@ -241,6 +344,28 @@ export const syncEngine = {
       await db.folders.put(rowToFolder(row))
       pulled++
     }
+
+    const { data: fileData, error: fileErr } = await supabase
+      .from('files')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('updated_at', new Date(from).toISOString())
+    if (fileErr) throw fileErr
+
+    for (const row of (fileData ?? []) as FileRow[]) {
+      const local = await db.files.get(row.id)
+      if (local?.dirty === 1) continue
+      const remoteTs = new Date(row.updated_at).getTime()
+      if (row.deleted_at) {
+        if (local) await db.files.delete(row.id)
+        pulled++
+        continue
+      }
+      if (local && local.updatedAt >= remoteTs) continue
+      // 只更新元数据；本地已有内容缓存则保留，没有则等预览时按需下载
+      await db.files.put({ ...rowToFile(row), dataUrl: local?.dataUrl ?? null })
+      pulled++
+    }
     setLastSyncAt(userId, startedAt)
     return { pushed: 0, pulled, conflicts: 0 }
   },
@@ -260,6 +385,11 @@ export const syncEngine = {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'folders', filter: `user_id=eq.${userId}` },
+        () => onRemoteChange(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'files', filter: `user_id=eq.${userId}` },
         () => onRemoteChange(),
       )
       .subscribe()

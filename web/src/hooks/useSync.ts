@@ -13,11 +13,12 @@ export function useSync(user: User | null): { status: SyncStatus; requestPush: (
   const busy = useRef(false)
 
   const dirtyCount = useLiveQuery(async () => {
-    const [noteCount, folderCount] = await Promise.all([
+    const [noteCount, folderCount, fileCount] = await Promise.all([
       db.notes.where('dirty').equals(1).count(),
       db.folders.where('dirty').equals(1).count(),
+      db.files.where('dirty').equals(1).count(),
     ])
-    return noteCount + folderCount
+    return noteCount + folderCount + fileCount
   }, [], 0)
 
   const push = useCallback(async () => {
