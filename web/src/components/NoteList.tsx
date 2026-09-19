@@ -244,7 +244,7 @@ export function NoteList({
         <input
           id="note-search"
           type="search"
-          placeholder={searchScope ? `在 ${searchScope} 内搜索` : '搜索笔记'}
+          placeholder={search.trim() ? '搜索全部笔记' : searchScope ? `在 ${searchScope} 内搜索` : '搜索笔记'}
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           aria-label="搜索笔记"

@@ -87,9 +87,10 @@ export default function App() {
 
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
-    let scoped = activeFolderId === 'all' ? all : all.filter((n) => n.folderId === activeFolderId)
-    if (activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     const q = search.trim().toLowerCase()
+    // 有搜索词时跨全部文件夹/标签搜索；无搜索词按当前文件夹/标签浏览
+    let scoped = q ? all : activeFolderId === 'all' ? all : all.filter((n) => n.folderId === activeFolderId)
+    if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     if (!q) return scoped
     // 标题或正文命中都算；正文比较前先提取纯文本（公式/图片占位为空格）
     return scoped.filter(
@@ -342,11 +343,12 @@ export default function App() {
     }
   }
   // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
+  // 有搜索词时跨全部文件夹按文件名搜
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (files ?? [])
       .filter((f) => !f.deletedAt)
-      .filter((f) => (activeFolderId === 'all' ? true : (f.folderId ?? null) === activeFolderId))
+      .filter((f) => q || activeFolderId === 'all' || (f.folderId ?? null) === activeFolderId)
       .filter((f) => !q || f.filename.toLowerCase().includes(q))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }, [files, activeFolderId, search])
