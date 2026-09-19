@@ -295,7 +295,7 @@ export function Sidebar({
             <InlineNameInput
               ariaLabel="重命名文件夹"
               defaultValue={folder.name}
-              indent={depth}
+              indent={Math.min(depth, 3)}
               onSubmit={(name) => {
                 onRenameFolder(folder.id, name)
                 setEditingId(null)
@@ -306,7 +306,7 @@ export function Sidebar({
             <InlineNameInput
               ariaLabel="新子文件夹名称"
               defaultValue=""
-              indent={depth + 1}
+              indent={Math.min(depth + 1, 3)}
               onSubmit={(name) => {
                 onCreateFolder(name, folder.id)
                 setCreatingChildOf(null)
@@ -316,7 +316,7 @@ export function Sidebar({
           ) : (
             <div
               className={folderClass(folder.id, folder.id === activeFolderId)}
-              style={{ paddingLeft: 10 + depth * 16 }}
+              style={{ paddingLeft: 10 + Math.min(depth, 3) * 16 }}
               {...dropHandlers(folder.id, folder.id)}
               onContextMenu={(e) => openMenu(e, folderMenuItems(folder))}
               draggable={DRAG_FINE}

@@ -112,9 +112,11 @@
 
 /* 文件夹行：名字按钮占满剩余宽度，操作按钮默认隐藏、悬停/聚焦时浮现 */
 .sidebar-folder {
+  position: relative;
   display: flex;
   align-items: center;
   border-radius: 6px;
+  overflow: hidden;
 }
 
 .sidebar-folder:hover,
@@ -146,12 +148,17 @@
   font-weight: 600;
 }
 
+/* 悬停操作（铅笔/叉）：右侧浮层渐变出现，不占布局宽度，深层嵌套也不挤爆计数 */
 .sidebar-folder-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
   display: none;
-  flex: none;
   align-items: center;
   gap: 2px;
-  padding-right: 6px;
+  padding: 0 6px 0 18px;
+  background: linear-gradient(to right, rgba(232, 240, 239, 0), var(--qing-50) 45%);
 }
 
 .sidebar-folder:hover .sidebar-folder-actions,
