@@ -5,6 +5,7 @@ import { softDeleteNote } from '../store/notes'
 import { deleteFile, ensureFileData } from '../store/files'
 import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { confirmDialog } from '../lib/dialog'
 import './NoteList.css'
 
 interface NoteListProps {
@@ -134,14 +135,26 @@ export function NoteList({
 
   const deleteNoteById = async (id: string) => {
     const note = notes.find((n) => n.id === id)
-    if (!window.confirm(`删除笔记「${note?.title || '无标题'}」？`)) return
+    const ok = await confirmDialog({
+      title: '删除笔记',
+      message: `删除笔记「${note?.title || '无标题'}」？`,
+      confirmText: '删除',
+      danger: true,
+    })
+    if (!ok) return
     await softDeleteNote(id)
     onRequestPush()
   }
 
   const deleteFileById = async (id: string) => {
     const file = files.find((f) => f.id === id)
-    if (!window.confirm(`删除文件「${file?.filename ?? ''}」？`)) return
+    const ok = await confirmDialog({
+      title: '删除文件',
+      message: `删除文件「${file?.filename ?? ''}」？`,
+      confirmText: '删除',
+      danger: true,
+    })
+    if (!ok) return
     await deleteFile(id)
     onRequestPush()
   }

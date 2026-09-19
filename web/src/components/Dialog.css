@@ -1,0 +1,119 @@
+.dlg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 33, 40, 0.42);
+  animation: dlg-fade-in 160ms ease-out;
+}
+
+.dlg-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(28, 33, 40, 0.22);
+  font-family: var(--font-ui);
+  animation: dlg-pop-in 180ms ease-out;
+}
+
+.dlg-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.dlg-message {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-500);
+  word-break: break-word;
+}
+
+.dlg-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+  padding: 8px 12px;
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  background: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-900);
+}
+
+.dlg-input:focus-visible {
+  outline: none;
+  border-color: var(--qing);
+}
+
+.dlg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dlg-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+
+.dlg-btn:hover {
+  background: var(--qing-50);
+}
+
+.dlg-btn.primary {
+  border-color: var(--qing);
+  background: var(--qing);
+  color: #fff;
+}
+
+.dlg-btn.primary:hover {
+  filter: brightness(1.08);
+  background: var(--qing);
+}
+
+.dlg-btn.primary.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+@keyframes dlg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dlg-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dlg-overlay,
+  .dlg-card {
+    animation: none;
+  }
+}

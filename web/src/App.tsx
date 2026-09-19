@@ -19,6 +19,8 @@ import { fileToDocJson, kindOfFile } from './lib/importFile'
 import { TagInput } from './components/TagInput'
 import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
+import { DialogHost } from './components/Dialog'
+import { alertDialog, confirmDialog } from './lib/dialog'
 import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
@@ -182,7 +184,8 @@ export default function App() {
 
   const handleDelete = async () => {
     if (!active) return
-    if (!window.confirm('删除这篇笔记？')) return
+    const ok = await confirmDialog({ title: '删除笔记', message: '删除这篇笔记？', confirmText: '删除', danger: true })
+    if (!ok) return
     flushSave()
     await softDeleteNote(active.id)
     requestPush()
@@ -208,7 +211,13 @@ export default function App() {
 
   const handleDeleteFolder = async (id: string) => {
     const folder = folders?.find((f) => f.id === id)
-    if (!window.confirm(`删除文件夹「${folder?.name ?? ''}」？其中的笔记会保留在全部笔记里。`)) return
+    const ok = await confirmDialog({
+      title: '删除文件夹',
+      message: `删除文件夹「${folder?.name ?? ''}」？其中的笔记会保留在全部笔记里。`,
+      confirmText: '删除',
+      danger: true,
+    })
+    if (!ok) return
     await deleteFolder(id)
     if (activeFolderId === id) setActiveFolderId('all')
     requestPush()
@@ -232,17 +241,26 @@ export default function App() {
 
   const handleRenameTag = async (oldName: string, newName: string) => {
     const merged = tagCounts.has(newName)
-    const msg = merged
-      ? `把标签「${oldName}」改名为「${newName}」？两个标签会合并。`
-      : `把标签「${oldName}」改名为「${newName}」？所有相关笔记都会更新。`
-    if (!window.confirm(msg)) return
+    const ok = await confirmDialog({
+      title: merged ? '合并标签' : '重命名标签',
+      message: merged
+        ? `把标签「${oldName}」改名为「${newName}」？两个标签会合并。`
+        : `把标签「${oldName}」改名为「${newName}」？所有相关笔记都会更新。`,
+    })
+    if (!ok) return
     await renameTag(oldName, newName)
     if (activeTag === oldName) setActiveTag(newName)
     requestPush()
   }
 
   const handleDeleteTag = async (name: string) => {
-    if (!window.confirm(`删除标签「${name}」？它会从所有笔记上移除，笔记本身不受影响。`)) return
+    const ok = await confirmDialog({
+      title: '删除标签',
+      message: `删除标签「${name}」？它会从所有笔记上移除，笔记本身不受影响。`,
+      confirmText: '删除',
+      danger: true,
+    })
+    if (!ok) return
     await deleteTag(name)
     if (activeTag === name) setActiveTag(null)
     requestPush()
@@ -336,7 +354,7 @@ export default function App() {
       setActiveId(note.id)
       setMobileView('editor')
     } catch {
-      window.alert(`导入 ${file.name} 失败：无法解析内容`)
+      await alertDialog({ title: '导入失败', message: `导入 ${file.name} 失败：无法解析内容` })
     }
   }
 
@@ -357,7 +375,13 @@ export default function App() {
 
   const handleDeleteFile = async () => {
     if (!activeFile) return
-    if (!window.confirm(`删除文件「${activeFile.filename}」？`)) return
+    const ok = await confirmDialog({
+      title: '删除文件',
+      message: `删除文件「${activeFile.filename}」？`,
+      confirmText: '删除',
+      danger: true,
+    })
+    if (!ok) return
     await deleteFile(activeFile.id)
     setActiveFileId(null)
   }
@@ -526,6 +550,7 @@ export default function App() {
           )}
         </main>
       </div>
+      <DialogHost />
     </div>
   )
 }

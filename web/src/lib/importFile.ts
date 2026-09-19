@@ -1,6 +1,7 @@
 import { Editor as HeadlessEditor, type Editor } from '@tiptap/core'
 import { marked } from 'marked'
 import { buildExtensions } from './editorExtensions'
+import { alertDialog } from './dialog'
 
 // 文件导入管线：md/html → 转成 TipTap 文档插入当前光标处。
 // 转换用无头 TipTap 实例（与编辑器同一组扩展）：HTML 里 schema 不认识的标签、
@@ -163,7 +164,7 @@ export async function fileToDocJson(file: File): Promise<object> {
 export async function importFilesIntoEditor(editor: Editor, files: File[]): Promise<void> {
   for (const file of files) {
     if (kindOfFile(file) === 'binary') {
-      window.alert('PDF 等文件请从侧栏「文件」处上传，可在侧栏直接预览')
+      await alertDialog({ title: '无法导入', message: 'PDF 等文件请从列表页「上传文件」处上传，可在侧栏直接预览' })
       continue
     }
     try {
@@ -171,7 +172,7 @@ export async function importFilesIntoEditor(editor: Editor, files: File[]): Prom
       editor.chain().focus().insertContent(json).run()
     } catch (err) {
       console.error('import file failed', file.name, err)
-      window.alert(`导入 ${file.name} 失败：无法解析内容`)
+      await alertDialog({ title: '导入失败', message: `导入 ${file.name} 失败：无法解析内容` })
     }
   }
 }

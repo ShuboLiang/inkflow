@@ -8,6 +8,7 @@ import {
   shareUrl,
   type Share,
 } from '../store/shares'
+import { alertDialog, confirmDialog, promptDialog } from '../lib/dialog'
 import './ShareMenu.css'
 
 // 「分享」按钮 + 弹出卡片：创建/复制/撤销外链。一个对象最多一条有效分享。
@@ -65,7 +66,7 @@ export function ShareMenu({
       await copy(s.token)
     } catch (err) {
       console.error('create share failed', err)
-      window.alert('创建分享链接失败（文件需要先同步上云才能分享）')
+      await alertDialog({ title: '创建失败', message: '创建分享链接失败（文件需要先同步上云才能分享）' })
     } finally {
       setLoading(false)
     }
@@ -77,13 +78,23 @@ export function ShareMenu({
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      window.prompt('复制链接：', shareUrl(token))
+      await promptDialog({
+        title: '复制链接',
+        message: '自动复制失败，请手动复制：',
+        input: { defaultValue: shareUrl(token) },
+      })
     }
   }
 
   const revoke = async () => {
     if (!share) return
-    if (!window.confirm('撤销后链接立即失效，确定？')) return
+    const ok = await confirmDialog({
+      title: '撤销分享',
+      message: '撤销后链接立即失效，确定？',
+      confirmText: '撤销',
+      danger: true,
+    })
+    if (!ok) return
     setLoading(true)
     try {
       await revokeShare(share)

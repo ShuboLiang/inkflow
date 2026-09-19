@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { promptDialog } from '../lib/dialog'
 import './Toolbar.css'
 
 interface ToolbarProps {
@@ -146,9 +147,15 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
           editor.chain().focus().unsetLink().run()
           return
         }
-        const url = window.prompt('链接地址')
-        if (!url) return
-        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+        void (async () => {
+          const url = await promptDialog({
+            title: '插入链接',
+            message: '链接地址',
+            input: { placeholder: 'https://…' },
+          })
+          if (!url) return
+          editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+        })()
       },
     },
   ]
