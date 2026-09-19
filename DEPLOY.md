@@ -76,3 +76,24 @@ docker compose up -d
 - **备份**：在服务器上同样跑 `scripts/backup.ps1`（PowerShell）或手工 `pg_dump` + 拷贝 `volumes/storage`；定期把 zip 拉离服务器
 - **升级**：开发机重新打包 → 服务器解包覆盖 → `docker compose up -d`（会自动重建有变化的容器）；数据库结构变化会随包里的迁移文件递增
 - **注意**：`docker-compose.override.yml`、`.env` 属于环境配置，换机器时保持和打包时一致
+
+## 六、极空间 NAS 部署要点
+
+- **机型要求**：必须是 **x86 机型**（Z4 / Z4S / Z423 等）。ARM 机型（Z2S）跑不了 Supabase
+  官方镜像（只有 amd64）。SSH 上去 `uname -m` 确认输出 `x86_64`。
+- **内存**：整套 Supabase 约需 4GB 空闲内存，笔记多再加一点。
+- **传文件**：tar 包通过 SMB 拷到共享文件夹（如 `个人空间/inkflow`），在「文件管理」里解压
+  或 SSH 解压均可。
+- **起服务**（二选一）：
+  1. 新版极空间「Docker」应用支持导入 compose 项目：指向 `supabase/docker/docker-compose.yml`
+     （同目录的 `.env` 会被自动读取）；
+  2. 更稳的方式是开 SSH：`cd` 到解压后的 `supabase/docker`，`docker compose up -d`。
+- **前端**：Docker 应用里新建容器，`nginx:alpine`，文件夹映射 `web/dist` →
+  `/usr/share/nginx/html`（只读），端口映射如 `8080 → 80`（避开 NAS 面板占用的端口）。
+- **打包地址**：开发机打包时 `-ServerUrl` 填 NAS 的访问地址。内网用 `http://<NAS内网IP>:8000`；
+  要通过极空间外网/域名访问，就填那个外网地址重新打包（地址是构建期写死的）。
+- **防火墙/端口**：需要开放 **8000**（Supabase API，浏览器直连）和前端端口。
+- **备份**：NAS 上没有 PowerShell，用 `bash scripts/backup.sh`（SSH 或计划任务），
+  产出与 Windows 版一致的单文件 tar.gz；建议加 cron 每日执行，并定期把包拉离 NAS。
+- **数据留在哪**：数据库数据在 `supabase/docker/volumes/db/data`，文件二进制在
+  `volumes/storage`——都在你映射的共享文件夹里，NAS 的 RAID/备份套件可直接兜住这两目录。
