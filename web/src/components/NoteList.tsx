@@ -19,6 +19,7 @@ interface NoteListProps {
   onSelectFile: (id: string) => void
   onUpload: (file: File) => void
   onRenameNote: (id: string) => void
+  onRenameFile: (id: string, filename: string) => void
   onRequestPush: () => void
   emptyHint?: string
 }
@@ -85,11 +86,13 @@ export function NoteList({
   onSelectFile,
   onUpload,
   onRenameNote,
+  onRenameFile,
   onRequestPush,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 外部文件拖入的进入深度（0 = 未拖入），用于显示放置遮罩
@@ -154,6 +157,7 @@ export function NoteList({
         ]
       : [
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
+          { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
           { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('file', m.id) },
           { key: 'd1', label: '', divider: true, onClick: () => {} },
@@ -202,31 +206,50 @@ export function NoteList({
           <div className="note-list-empty">{emptyHint ?? '暂无内容'}</div>
         ) : (
           <>
-            {files.map((file) => (
-              <button
-                key={file.id}
-                type="button"
-                className="note-card file-card"
-                draggable={DRAG_ENABLED}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', `file:${file.id}`)
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                onClick={() => onSelectFile(file.id)}
-                onContextMenu={(e) => openMenu(e, 'file', file.id)}
-              >
-                <div className="note-card-title file-card-title">
-                  <IconFile />
-                  <span className="file-card-name" title={file.filename}>
-                    {file.filename}
-                  </span>
-                  <span className="file-card-badge">PDF</span>
-                </div>
-                <div className="note-card-time">
-                  {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
-                </div>
-              </button>
-            ))}
+            {files.map((file) =>
+              renamingFileId === file.id ? (
+                <input
+                  key={file.id}
+                  className="note-card file-rename-input"
+                  defaultValue={file.filename}
+                  aria-label="重命名文件"
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                  onBlur={(e) => {
+                    setRenamingFileId(null)
+                    onRenameFile(file.id, e.target.value)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                    if (e.key === 'Escape') setRenamingFileId(null)
+                  }}
+                />
+              ) : (
+                <button
+                  key={file.id}
+                  type="button"
+                  className="note-card file-card"
+                  draggable={DRAG_ENABLED}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', `file:${file.id}`)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onClick={() => onSelectFile(file.id)}
+                  onContextMenu={(e) => openMenu(e, 'file', file.id)}
+                >
+                  <div className="note-card-title file-card-title">
+                    <IconFile />
+                    <span className="file-card-name" title={file.filename}>
+                      {file.filename}
+                    </span>
+                    <span className="file-card-badge">PDF</span>
+                  </div>
+                  <div className="note-card-time">
+                    {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
+                  </div>
+                </button>
+              ),
+            )}
             {notes.map((note) => (
               <button
                 key={note.id}

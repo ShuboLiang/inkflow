@@ -51,6 +51,15 @@ export async function moveFile(id: string, folderId: string | null): Promise<voi
   await db.files.update(id, { folderId, dirty: 1, updatedAt: Date.now() })
 }
 
+// 重命名：只改 filename，走文件 LWW 同步推上云；分享链接里的文件名也是实时查表，随之更新
+export async function renameFile(id: string, filename: string): Promise<void> {
+  const name = filename.trim()
+  if (!name) return
+  const existing = await db.files.get(id)
+  if (!existing || existing.deletedAt || existing.filename === name) return
+  await db.files.update(id, { filename: name, dirty: 1, updatedAt: Date.now() })
+}
+
 // 预览前确保本地有内容：新设备上 dataUrl 为空，按需从 Storage 下载并缓存进 Dexie。
 // storagePath 本身已含 userId 前缀，无需再传用户 id。
 export async function ensureFileData(id: string): Promise<string | null> {

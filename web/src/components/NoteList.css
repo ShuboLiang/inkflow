@@ -225,3 +225,15 @@
   border-radius: 8px;
   pointer-events: none;
 }
+
+/* 文件卡片行内重命名输入框 */
+.file-rename-input {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-900);
+  background: #fff;
+  border: 1px solid var(--qing);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: text;
+}

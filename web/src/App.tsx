@@ -13,7 +13,7 @@ import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { deleteFile, ensureFileData, moveFile, saveFile } from './store/files'
+import { deleteFile, ensureFileData, moveFile, renameFile, saveFile } from './store/files'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile } from './lib/importFile'
 import { TagInput } from './components/TagInput'
@@ -34,7 +34,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
   const titleRef = useRef<HTMLInputElement>(null)
-  const focusTitleOn = useRef<string | null>(null)
+  const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingSave = useRef<{ id: string; patch: { title?: string; content?: unknown } } | null>(null)
 
@@ -89,12 +89,24 @@ export default function App() {
     return () => setActiveEdit(null)
   }, [activeId])
 
+  // 标题聚焦请求：新建/重命名时置为目标 id，等该笔记渲染出来后聚焦并全选。
+  // 必须用 state 而非 ref——重命名「当前已打开的笔记」时 activeId 不变，
+  // 纯 ref 方案依赖的 effect 不会重跑，聚焦永远不触发。
+  // n 是递增序号，appliedFocusN 保证一次请求只聚焦一次（切换走再切回不重复聚焦）
+  const [titleFocusReq, setTitleFocusReq] = useState<{ id: string; n: number } | null>(null)
+  const appliedFocusN = useRef(0)
   useEffect(() => {
-    if (activeId && focusTitleOn.current === activeId) {
-      focusTitleOn.current = null
+    if (
+      titleFocusReq &&
+      titleFocusReq.n !== appliedFocusN.current &&
+      activeId === titleFocusReq.id &&
+      active
+    ) {
+      appliedFocusN.current = titleFocusReq.n
       titleRef.current?.focus()
+      titleRef.current?.select()
     }
-  }, [activeId, active])
+  }, [titleFocusReq, activeId, active])
 
   useEffect(() => {
     const el = titleRef.current
@@ -135,7 +147,7 @@ export default function App() {
   const handleCreate = async () => {
     flushSave()
     const note = await createNote('', activeFolderId === 'all' ? null : activeFolderId)
-    focusTitleOn.current = note.id
+    setTitleFocusReq({ id: note.id, n: ++titleFocusSeq.current })
     setActiveFileId(null)
     setActiveId(note.id)
     setMobileView('editor')
@@ -151,7 +163,12 @@ export default function App() {
   // 右键菜单「重命名」：选中并聚焦标题输入框
   const handleRenameNote = (id: string) => {
     handleSelect(id)
-    focusTitleOn.current = id
+    setTitleFocusReq({ id, n: ++titleFocusSeq.current })
+  }
+
+  // 右键菜单「重命名」PDF 文件
+  const handleRenameFile = (id: string, filename: string) => {
+    void renameFile(id, filename).then(requestPush)
   }
 
   const handleDelete = async () => {
@@ -415,6 +432,7 @@ export default function App() {
           onSelectFile={handleSelectFile}
           onUpload={(file) => void handleUpload(file)}
           onRenameNote={handleRenameNote}
+          onRenameFile={handleRenameFile}
           onRequestPush={requestPush}
           emptyHint={
             activeFolderId === 'all'
