@@ -222,7 +222,7 @@
   margin: 0.6em auto 1.2em;
   border: 1px solid var(--ink-200);
   border-radius: 8px;
-  cursor: zoom-in;
+  cursor: default;
   animation: ink-img-in 240ms ease-out;
 }
 

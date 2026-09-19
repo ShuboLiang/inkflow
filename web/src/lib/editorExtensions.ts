@@ -30,7 +30,9 @@ const ResolvedImage = Image.extend({
         }, 20000)
       }
 
-      dom.addEventListener('click', () => openImageLightbox(dom.src))
+      // 单击选中图片（ProseMirror 默认行为，便于删除/剪切）；双击看大图
+      dom.addEventListener('dblclick', () => openImageLightbox(dom.src))
+      dom.setAttribute('title', '双击看大图')
       dom.addEventListener('error', () => {
         if (dom.dataset.fallback === '1') return // 回退图本身出错不再处理
         const path = imagePathFromUrl(current)
