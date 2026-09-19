@@ -72,6 +72,22 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
     if (mathDraft) inputRef.current?.focus()
   }, [mathDraft])
 
+  // 点击已有公式：打开预填现有 LaTeX 的编辑浮层，确认后原地替换节点
+  useEffect(() => {
+    const onEditMath = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        kind: MathDraft['kind']
+        latex: string
+        from: number
+        to: number
+      }
+      setMathOpen(true)
+      setMathDraft(detail)
+    }
+    window.addEventListener('inkflow:edit-math', onEditMath)
+    return () => window.removeEventListener('inkflow:edit-math', onEditMath)
+  }, [])
+
   if (!active) return null
 
   // 打开公式浮层时记录当前选区：选中文本作为初始 LaTeX，插入时替换选区

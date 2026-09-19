@@ -4,7 +4,21 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { InlineMath, BlockMath } from '@tiptap/extension-mathematics'
 import Image from '@tiptap/extension-image'
 import { InputRule, type Extensions } from '@tiptap/core'
+import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
+
+// 点击已有公式 → 广播编辑事件（携带节点区间与现有 LaTeX），
+// 由 Toolbar 的公式浮层接管：预填内容、确认后原地替换。事件挂在 window 上，
+// 因为 onClick 回调拿不到 React 里的编辑器实例，用事件解耦。
+function mathEditHandler(kind: 'inlineMath' | 'blockMath') {
+  return (node: PMNode, pos: number) => {
+    window.dispatchEvent(
+      new CustomEvent('inkflow:edit-math', {
+        detail: { kind, latex: node.attrs.latex as string, from: pos, to: pos + node.nodeSize },
+      }),
+    )
+  }
+}
 
 // 官方扩展 3.31.3 的 input rule 有误（行内规则匹配的是 $$…$$，块级要求 $$$…$$$），
 // 这里用 extend 覆盖为常见的 $…$ 行内、$$…$$ 块级语法。
@@ -25,7 +39,7 @@ const InlineMathRule = InlineMath.extend({
       }),
     ]
   },
-}).configure({ katexOptions: { throwOnError: false } })
+}).configure({ katexOptions: { throwOnError: false }, onClick: mathEditHandler('inlineMath') })
 
 const BlockMathRule = BlockMath.extend({
   draggable: false,
@@ -77,7 +91,7 @@ const BlockMathRule = BlockMath.extend({
       }),
     ]
   },
-}).configure({ katexOptions: { throwOnError: false, displayMode: true } })
+}).configure({ katexOptions: { throwOnError: false, displayMode: true }, onClick: mathEditHandler('blockMath') })
 
 // 编辑器实例和文件导入管线共用同一组扩展，保证导入生成的文档和手动编辑的一致。
 // Typography 里与 LaTeX 语法冲突的规则全部禁用：^2 ^3（上下标）、1/2 1/4 3/4（分数）、
