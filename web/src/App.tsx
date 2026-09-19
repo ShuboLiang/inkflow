@@ -176,9 +176,9 @@ export default function App() {
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
     const q = search.trim().toLowerCase()
-    // 有搜索词时跨全部范围搜索；无搜索词按当前文件夹（含子树）/标签浏览
+    // 「默认」= 未归入任何文件夹的笔记；文件夹视图 = 该文件夹（含子树）
     const inScope = (n: (typeof all)[number]) =>
-      activeFolderSubtree === null || (n.folderId !== null && activeFolderSubtree.has(n.folderId))
+      activeFolderSubtree === null ? n.folderId === null : activeFolderSubtree.has(n.folderId ?? '')
     let scoped = q ? all : all.filter(inScope)
     if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     if (!q) return scoped
@@ -489,12 +489,12 @@ export default function App() {
       // 本地记录损坏则忽略，保持默认空状态
     }
   }
-  // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
+  // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
   // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
     const inScope = (folderId: string | null) =>
-      activeFolderSubtree === null || (folderId !== null && activeFolderSubtree.has(folderId))
+      activeFolderSubtree === null ? folderId === null : folderId !== null && activeFolderSubtree.has(folderId)
     return (files ?? [])
       .filter((f) => !f.deletedAt)
       .filter((f) => (q ? true : inScope(f.folderId ?? null)))
@@ -579,8 +579,8 @@ export default function App() {
           {activeTag
             ? `# ${activeTag}`
             : activeFolderId === 'all'
-              ? '全部笔记'
-              : (folderPathNames(activeFolderId, folders ?? []) ?? '全部笔记')}
+              ? '默认'
+              : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
         </span>
         <SyncIndicator status={syncStatus} />
       </header>
@@ -590,7 +590,7 @@ export default function App() {
           collapsed={!sidebarOpen}
           folders={folders ?? []}
           counts={subtreeCounts}
-          allCount={notes?.length ?? 0}
+          allCount={(notes ?? []).filter((n) => n.folderId === null).length}
           tags={tagCounts}
           activeFolderId={activeFolderId}
           activeTag={activeTag}

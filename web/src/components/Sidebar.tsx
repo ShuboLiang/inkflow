@@ -431,7 +431,7 @@ export function Sidebar({
         onClick={() => onSelectFolder('all')}
         {...dropHandlers('all', null)}
       >
-        <span>全部笔记</span>
+        <span>默认</span>
         <span className="sidebar-count">{allCount}</span>
       </button>
       <div className="sidebar-section">
