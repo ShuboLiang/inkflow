@@ -18,7 +18,6 @@ import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile } from './lib/importFile'
 import { TagInput } from './components/TagInput'
 import { countWords } from './lib/wordCount'
-import { getDiagnostics } from './lib/diagnostics'
 import { setActiveEdit } from './sync/syncEngine'
 import './App.css'
 
@@ -58,8 +57,6 @@ export default function App() {
     return m
   }, [notes])
 
-  const unfiledCount = useMemo(() => (notes ?? []).filter((n) => n.folderId === null).length, [notes])
-
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const n of notes ?? []) {
@@ -70,12 +67,7 @@ export default function App() {
 
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
-    let scoped =
-      activeFolderId === 'all'
-        ? all
-        : activeFolderId === 'none'
-          ? all.filter((n) => n.folderId === null)
-          : all.filter((n) => n.folderId === activeFolderId)
+    let scoped = activeFolderId === 'all' ? all : all.filter((n) => n.folderId === activeFolderId)
     if (activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     const q = search.trim().toLowerCase()
     if (!q) return scoped
@@ -199,7 +191,7 @@ export default function App() {
 
   const handleDeleteFolder = async (id: string) => {
     const folder = folders?.find((f) => f.id === id)
-    if (!window.confirm(`删除文件夹「${folder?.name ?? ''}」？其中的笔记会移回全部笔记。`)) return
+    if (!window.confirm(`删除文件夹「${folder?.name ?? ''}」？其中的笔记会保留在全部笔记里。`)) return
     await deleteFolder(id)
     if (activeFolderId === id) setActiveFolderId('all')
     requestPush()
@@ -303,13 +295,7 @@ export default function App() {
     () =>
       (files ?? [])
         .filter((f) => !f.deletedAt)
-        .filter((f) =>
-          activeFolderId === 'all'
-            ? true
-            : activeFolderId === 'none'
-              ? (f.folderId ?? null) === null
-              : (f.folderId ?? null) === activeFolderId,
-        )
+        .filter((f) => (activeFolderId === 'all' ? true : (f.folderId ?? null) === activeFolderId))
         .sort((a, b) => b.updatedAt - a.updatedAt),
     [files, activeFolderId],
   )
@@ -317,12 +303,7 @@ export default function App() {
   // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
   const handleUpload = async (file: File, targetFolderId?: string | null) => {
-    const folderId =
-      targetFolderId !== undefined
-        ? targetFolderId
-        : activeFolderId === 'all' || activeFolderId === 'none'
-          ? null
-          : activeFolderId
+    const folderId = targetFolderId !== undefined ? targetFolderId : activeFolderId === 'all' ? null : activeFolderId
     if (kindOfFile(file) === 'binary') {
       await saveFile(file, folderId)
       return
@@ -342,7 +323,7 @@ export default function App() {
     }
   }
 
-  // 文件拖到侧栏文件夹/未归档上移动（笔记拖放走 handleDropNote）
+  // 文件拖到侧栏文件夹/「全部笔记」上移动（笔记拖放走 handleDropNote）
   const handleDropFile = (fileId: string, folderId: string | null) => {
     const file = files?.find((f) => f.id === fileId)
     if (!file || (file.folderId ?? null) === folderId) return
@@ -382,16 +363,6 @@ export default function App() {
           ☰
         </button>
         <span />
-        <button
-          type="button"
-          className="diag-btn"
-          title="复制诊断信息（卡死/异常时点这里，把内容发给开发者）"
-          onClick={() => {
-            void navigator.clipboard.writeText(getDiagnostics())
-          }}
-        >
-          复制诊断
-        </button>
         <SyncIndicator status={syncStatus} />
       </header>
       <div className={mobileView === 'editor' ? 'app-main view-editor' : 'app-main'}>
@@ -401,7 +372,6 @@ export default function App() {
           folders={folders ?? []}
           counts={folderCounts}
           allCount={notes?.length ?? 0}
-          unfiledCount={unfiledCount}
           tags={tagCounts}
           activeFolderId={activeFolderId}
           activeTag={activeTag}
@@ -434,13 +404,7 @@ export default function App() {
           onRenameNote={handleRenameNote}
           onRenameFile={handleRenameFile}
           onRequestPush={requestPush}
-          emptyHint={
-            activeFolderId === 'all'
-              ? '暂无内容'
-              : activeFolderId === 'none'
-                ? '未归档里还没有内容'
-                : '此文件夹还没有内容'
-          }
+          emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
         <main className="editor-pane">
           {activeFile ? (
@@ -490,7 +454,7 @@ export default function App() {
                   aria-label="所在文件夹"
                   onChange={(e) => handleMoveNote(e.target.value || null)}
                 >
-                  <option value="">未归档</option>
+                  <option value="">无文件夹</option>
                   {(folders ?? []).map((folder) => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}

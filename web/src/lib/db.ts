@@ -33,7 +33,7 @@ export interface Tag {
 
 export interface FileEntry {
   id: string
-  // 文件归属的文件夹（与笔记的 folderId 同规则，null = 未归档）
+  // 文件归属的文件夹（与笔记的 folderId 同规则，null = 无文件夹）
   folderId: string | null
   filename: string
   mimeType: string | null

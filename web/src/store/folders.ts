@@ -27,7 +27,7 @@ export async function renameFolder(id: string, name: string): Promise<void> {
   await db.folders.update(id, { name, dirty: 1, updatedAt: Date.now() })
 }
 
-// 软删除文件夹，并把其中的笔记移回未归档（逐个 bump version 走正常同步）。
+// 软删除文件夹，并把其中的笔记移出文件夹（逐个 bump version 走正常同步）。
 // 笔记不跟随删除，避免误删内容。
 export async function deleteFolder(id: string): Promise<void> {
   const existing = await db.folders.get(id)

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 
 // 文件存 Dexie files 表，内容以 data URL 内联；同步时二进制上传到 Supabase Storage
 // 私有桶 files（路径 {userId}/{fileId}），元数据走 files 表 LWW 同步。
-// 文件是文件夹的内容：folderId 与笔记同规则（null = 未归档），可拖到侧栏文件夹间移动。
+// 文件是文件夹的内容：folderId 与笔记同规则（null = 无文件夹），可拖到侧栏文件夹间移动。
 
 export async function saveFile(file: File, folderId: string | null): Promise<FileEntry> {
   const dataUrl = await new Promise<string>((resolve, reject) => {

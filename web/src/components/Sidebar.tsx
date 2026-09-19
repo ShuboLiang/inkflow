@@ -9,9 +9,8 @@ interface SidebarProps {
   folders: Folder[]
   counts: Map<string, number>
   allCount: number
-  unfiledCount: number
   tags: Map<string, number>
-  activeFolderId: string // 'all' / 'none' 表示全部/未归档，否则为文件夹 id
+  activeFolderId: string // 'all' 表示全部，否则为文件夹 id
   activeTag: string | null
   onSelectFolder: (id: string) => void
   onDropNote: (noteId: string, folderId: string | null) => void
@@ -99,7 +98,6 @@ export function Sidebar({
   folders,
   counts,
   allCount,
-  unfiledCount,
   tags,
   activeFolderId,
   activeTag,
@@ -121,10 +119,10 @@ export function Sidebar({
   const [editingTag, setEditingTag] = useState<string | null>(null)
   // 右键菜单：目标与屏幕位置
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
-  // 拖拽悬停的放置目标（'all' / 'none' / 文件夹 id / tag:xxx），用于高亮反馈
+  // 拖拽悬停的放置目标（'all' / 文件夹 id / tag:xxx），用于高亮反馈
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
-  // 列表拖来的放置负载：'note:<id>' / 'file:<id>'，文件夹与未归档两者都收；
+  // 列表拖来的放置负载：'note:<id>' / 'file:<id>'，文件夹与「全部笔记」两者都收；
   // 外部拖入的 Files 直接上传到该文件夹
   const dropHandlers = (target: string, folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
@@ -235,15 +233,6 @@ export function Sidebar({
       >
         <span>全部笔记</span>
         <span className="sidebar-count">{allCount}</span>
-      </button>
-      <button
-        type="button"
-        className={itemClass('none', activeFolderId === 'none')}
-        onClick={() => onSelectFolder('none')}
-        {...dropHandlers('none', null)}
-      >
-        <span>未归档</span>
-        <span className="sidebar-count">{unfiledCount}</span>
       </button>
       <div className="sidebar-section">
         <span>文件夹</span>
