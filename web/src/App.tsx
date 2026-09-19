@@ -22,6 +22,8 @@ import { getDiagnostics } from './lib/diagnostics'
 import { setActiveEdit } from './sync/syncEngine'
 import './App.css'
 
+const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
+
 export default function App() {
   const { user, loading, signOut } = useAuth()
   const { status: syncStatus, requestPush } = useSync(user)
@@ -235,6 +237,44 @@ export default function App() {
       void ensureFileData(activeFileIdForEffect)
     }
   }, [user, activeFileIdForEffect, activeFileHasData])
+
+  // 记住最后打开的笔记/文件，下次启动直接恢复（按用户分开存）
+  useEffect(() => {
+    if (!user) return
+    if (activeFileId) {
+      localStorage.setItem(lastOpenKey(user.id), JSON.stringify({ kind: 'file', id: activeFileId }))
+    } else if (activeId) {
+      localStorage.setItem(lastOpenKey(user.id), JSON.stringify({ kind: 'note', id: activeId }))
+    }
+  }, [user, activeId, activeFileId])
+
+  // 启动时恢复上次打开的笔记/文件（localStorage + Dexie 都是渲染期外部数据，
+  // 用「渲染期调整状态」模式一次性恢复，避免 effect 里 setState 触发额外渲染）
+  const [restored, setRestored] = useState(false)
+  if (!restored && user && notes !== undefined && files !== undefined) {
+    setRestored(true)
+    try {
+      const raw = localStorage.getItem(lastOpenKey(user.id))
+      if (raw) {
+        const saved = JSON.parse(raw) as { kind: string; id: string }
+        if (saved.kind === 'file') {
+          const f = files.find((x) => x.id === saved.id && !x.deletedAt)
+          if (f) {
+            setActiveFileId(f.id)
+            if (f.folderId) setActiveFolderId(f.folderId)
+          }
+        } else {
+          const n = notes.find((x) => x.id === saved.id && x.deletedAt === null)
+          if (n) {
+            setActiveId(n.id)
+            if (n.folderId) setActiveFolderId(n.folderId)
+          }
+        }
+      }
+    } catch {
+      // 本地记录损坏则忽略，保持默认空状态
+    }
+  }
   // 当前视图里的文件（文件夹内容：md/html 上传会变成笔记，pdf 以文件卡片出现）
   const filesInView = useMemo(
     () =>
