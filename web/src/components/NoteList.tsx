@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FileEntry, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
@@ -28,6 +28,9 @@ interface NoteListProps {
 
 // 只有精确指针（鼠标）设备启用卡片拖拽：触屏上 draggable 会干扰列表滚动
 const DRAG_ENABLED = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+
+// 列表增量渲染的每批条数
+const RENDER_PAGE = 60
 
 interface TipTapNode {
   type?: string
@@ -95,6 +98,9 @@ export function NoteList({
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
+  // 增量渲染：一次只渲染前 RENDER_PAGE 条，滚近底部再追加，避免大列表全量挂 DOM
+  const [renderLimit, setRenderLimit] = useState(RENDER_PAGE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 外部文件拖入的进入深度（0 = 未拖入），用于显示放置遮罩
@@ -107,6 +113,29 @@ export function NoteList({
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 2200)
   }
+
+  // 换搜索词时回到第一批（渲染期调整状态，避免 effect 级联渲染）
+  const [lastSearch, setLastSearch] = useState(search)
+  if (lastSearch !== search) {
+    setLastSearch(search)
+    setRenderLimit(RENDER_PAGE)
+  }
+
+  // 哨兵进入视口（提前 300px）就追加下一批
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setRenderLimit((l) => l + RENDER_PAGE)
+        }
+      },
+      { rootMargin: '300px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   // 创建（或复用）分享并复制链接；文件需已上云（createFileShare 内部会处理）
   const copyShareLink = async (kind: 'note' | 'file', id: string) => {
@@ -254,7 +283,7 @@ export function NoteList({
           </div>
         ) : (
           <>
-            {files.map((file) =>
+            {files.slice(0, renderLimit).map((file) =>
               renamingFileId === file.id ? (
                 <input
                   key={file.id}
@@ -300,7 +329,7 @@ export function NoteList({
                 </div>
               ),
             )}
-            {notes.map((note) => (
+            {notes.slice(0, renderLimit).map((note) => (
               <div key={note.id} className="card-wrap">
                 <button
                   type="button"
@@ -332,6 +361,11 @@ export function NoteList({
                 {moreButton('note', note.id, note.title || '无标题')}
               </div>
             ))}
+            {files.length + notes.length > renderLimit && (
+              <div ref={sentinelRef} className="note-list-more">
+                加载更多（已显示 {Math.min(renderLimit, files.length + notes.length)} / {files.length + notes.length}）
+              </div>
+            )}
           </>
         )}
       </div>
