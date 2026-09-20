@@ -80,7 +80,12 @@ export function PdfViewer({ src }: { src: string }) {
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
+    // 取内容区宽度（剔除 .pdf-view 的 padding），渲染比例才恰好等于 dpr
+    const measure = () => {
+      const cs = getComputedStyle(el)
+      setWidth(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight))
+    }
+    const ro = new ResizeObserver(measure)
     ro.observe(el) // observe 会立即回调一次，初始宽度也有了
     return () => ro.disconnect()
   }, [])
@@ -149,7 +154,8 @@ function PdfPage({ doc, pageNumber, width }: { doc: PDFDocumentProxy; pageNumber
       .then((page) => {
         if (cancelled) return
         const base = page.getViewport({ scale: 1 })
-        const dpr = Math.min(window.devicePixelRatio || 1, 2)
+        // 上限 3：iPhone 是 3x 屏，封顶 2 会导致文字发虚；再高内存/渲染耗时平方级上涨
+        const dpr = Math.min(window.devicePixelRatio || 1, 3)
         const viewport = page.getViewport({ scale: (width / base.width) * dpr })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
