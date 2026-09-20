@@ -236,8 +236,15 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
                 className={`outline-item lv${h.level}`}
                 title={h.text}
                 onClick={() => {
-                  // pos 是节点起点，+1 落到标题文本内；滚动定位后聚焦
-                  editor?.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run()
+                  // pos 是节点起点，+1 落到标题文本内。触屏设备不抢焦点：
+                  // focus() 会拉起输入法键盘挡住半屏，只定位选区并滚动即可；
+                  // 精确指针（桌面）保留滚动后聚焦，跳完可立即续写
+                  if (!editor) return
+                  const precise = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+                  const chain = editor.chain().setTextSelection(h.pos + 1).scrollIntoView()
+                  if (precise) chain.focus()
+                  chain.run()
+                  if (!precise) setOutlineOpen(false)
                 }}
               >
                 {h.text || '（空标题）'}
