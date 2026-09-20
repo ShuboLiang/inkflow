@@ -3,6 +3,10 @@ import Typography from '@tiptap/extension-typography'
 import Placeholder from '@tiptap/extension-placeholder'
 import { InlineMath, BlockMath } from '@tiptap/extension-mathematics'
 import Image from '@tiptap/extension-image'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
 import { InputRule, type Extensions } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
@@ -186,5 +190,11 @@ export function buildExtensions(): Extensions {
     // 图片以 Storage 公共 URL 存储（ResolvedImage 的 NodeView 负责离线回退与缓存），
     // 仍保留 allowBase64 以兼容迁移前的 data URL 内容
     ResolvedImage.configure({ allowBase64: true, inline: false }),
+    // 表格：md 导入（marked 生成 <table>）与粘贴的 markdown 表格都靠这组扩展解析；
+    // resizable 提供拖拽调列宽（移动端点选表格后也可用）
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
   ]
 }

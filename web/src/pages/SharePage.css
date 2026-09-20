@@ -106,6 +106,38 @@
   color: var(--ink-500);
 }
 
+/* 表格（与编辑器内样式一致，分享页只读展示） */
+.share-doc-body .ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.share-doc-body .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+}
+
+.share-doc-body .ProseMirror th,
+.share-doc-body .ProseMirror td {
+  border: 1px solid var(--ink-200);
+  box-sizing: border-box;
+  min-width: 3em;
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+.share-doc-body .ProseMirror th {
+  font-weight: 600;
+  text-align: left;
+  background: var(--qing-50);
+}
+
+.share-doc-body .ProseMirror table p {
+  margin: 0;
+}
+
 .share-doc-body .ProseMirror h1,
 .share-doc-body .ProseMirror h2,
 .share-doc-body .ProseMirror h3 {

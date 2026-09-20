@@ -1,5 +1,6 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, type Editor as TipTapEditor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { marked } from 'marked'
 import 'katex/dist/katex.min.css'
 import { useEffect, useRef } from 'react'
 import { Toolbar } from './Toolbar'
@@ -26,6 +27,20 @@ export function Editor({ content, onUpdate }: EditorProps) {
   // 此时绝不能用旧 prop setContent 回滚（打开浮层/切换焦点导致 blur 时会触发）。
   const lastEmitted = useRef<string | null>(null)
   const unsaved = useRef(false)
+  // handlePaste 配置先于 useEditor 创建执行，粘贴时通过 ref 拿到实例
+  const editorRef = useRef<TipTapEditor | null>(null)
+
+  // 剪贴板纯文本是否像 GFM 表格：≥2 行含 |，且有一行是 --- 分隔行（无 HTML 时才转换）
+  const isMdTable = (text: string) => {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+    if (lines.length < 2) return false
+    const rows = lines.filter((l) => l.includes('|'))
+    const sep = lines.some((l) => l.includes('-') && /^\|?[\s\-:|]+\|?$/.test(l))
+    return sep && rows.length >= 2
+  }
 
   const editor = useEditor({
     extensions: buildExtensions(),
@@ -34,7 +49,19 @@ export function Editor({ content, onUpdate }: EditorProps) {
       // 不拦截的粘贴（纯文本/HTML）继续走 ProseMirror 默认路径
       handlePaste: (view, event) => {
         const images = pastedImageFiles(event)
-        if (!images.length) return false
+        if (!images.length) {
+          const text = event.clipboardData?.getData('text/plain') ?? ''
+          const hasHtml = !!event.clipboardData?.getData('text/html')
+          if (text && !hasHtml && isMdTable(text)) {
+            const html = marked.parse(text, { async: false }) as string
+            if (html.includes('<table')) {
+              event.preventDefault()
+              editorRef.current?.chain().focus().insertContent(html).run()
+              return true
+            }
+          }
+          return false
+        }
         event.preventDefault()
         void insertPastedImages(view, images)
         return true
@@ -89,6 +116,13 @@ export function Editor({ content, onUpdate }: EditorProps) {
       onUpdate(e.getJSON())
     },
   })
+
+  useEffect(() => {
+    editorRef.current = editor
+    return () => {
+      editorRef.current = null
+    }
+  }, [editor])
 
   // 点击编辑区空白（内容下方、行左侧）时聚焦并定位光标到最近合理位置。
   // 注意不用 chain().focus()：它把 DOM 聚焦推迟到下一帧，期间按键会丢；
