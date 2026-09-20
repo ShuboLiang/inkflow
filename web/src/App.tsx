@@ -647,7 +647,18 @@ export default function App() {
           onRequestPush={requestPush}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
-        <main className="editor-pane">
+        <main
+          className="editor-pane"
+          onDragOver={(e) => {
+            // 外部文件拖入整个内容区都允许放置（浏览器默认会拦截导航）
+            if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+          }}
+          onDrop={(e) => {
+            if (!e.dataTransfer.files.length) return
+            e.preventDefault()
+            for (const f of Array.from(e.dataTransfer.files)) void handleUpload(f)
+          }}
+        >
           {activeFile ? (
             <>
               <div className="editor-toolbar">
