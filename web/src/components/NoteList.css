@@ -69,10 +69,6 @@
   cursor: pointer;
 }
 
-.note-card:hover {
-  background: var(--qing-50);
-}
-
 .note-card.active {
   background: var(--qing-50);
   box-shadow: inset 2px 0 0 var(--qing);
@@ -121,9 +117,6 @@
   cursor: pointer;
 }
 
-.note-list-new:hover {
-  filter: brightness(1.08);
-}
 
 .note-list-upload {
   flex: 1;
@@ -136,10 +129,6 @@
   cursor: pointer;
 }
 
-.note-list-upload:hover {
-  background: var(--qing-50);
-  color: var(--qing);
-}
 
 /* 文件卡片：图标 + 文件名 + 类型徽标 */
 .file-card-title {
@@ -263,11 +252,6 @@
   cursor: pointer;
 }
 
-.card-more:hover {
-  background: var(--qing-50);
-  color: var(--qing);
-}
-
 @media (pointer: coarse) {
   .card-more {
     display: inline-flex;
@@ -347,8 +331,29 @@
   white-space: nowrap;
 }
 
-.note-card-loc:hover {
-  color: var(--qing);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停，导致点按两下才触发 */
+@media (hover: hover) {
+  .note-card:hover {
+    background: var(--qing-50);
+  }
+
+  .note-list-new:hover {
+    filter: brightness(1.08);
+  }
+
+  .note-list-upload:hover {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .card-more:hover {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .note-card-loc:hover {
+    color: var(--qing);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }

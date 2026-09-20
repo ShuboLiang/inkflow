@@ -48,11 +48,6 @@
   opacity: 0.6;
 }
 
-.tag-chip button:hover {
-  opacity: 1;
-  background: rgba(31, 111, 107, 0.15);
-}
-
 .tag-suggest {
   position: absolute;
   top: 100%;
@@ -83,7 +78,15 @@
   cursor: pointer;
 }
 
-.tag-suggest button:hover {
-  background: var(--qing-50);
-}
 
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停 */
+@media (hover: hover) {
+  .tag-chip button:hover {
+    opacity: 1;
+    background: rgba(31, 111, 107, 0.15);
+  }
+
+  .tag-suggest button:hover {
+    background: var(--qing-50);
+  }
+}

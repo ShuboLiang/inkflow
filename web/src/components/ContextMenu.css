@@ -25,10 +25,6 @@
   cursor: pointer;
 }
 
-.context-menu-item:hover {
-  background: var(--qing-50);
-}
-
 .context-menu-item.danger {
   color: var(--danger);
 }
@@ -37,4 +33,11 @@
   height: 1px;
   margin: 4px 8px;
   background: var(--ink-200);
+}
+
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停 */
+@media (hover: hover) {
+  .context-menu-item:hover {
+    background: var(--qing-50);
+  }
 }

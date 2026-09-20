@@ -27,10 +27,6 @@
   line-height: 1.4;
 }
 
-.fmt-btn:hover {
-  background: var(--qing-50);
-}
-
 .fmt-btn.active {
   background: var(--qing-50);
   color: var(--qing);
@@ -78,18 +74,10 @@
   color: #fff;
 }
 
-.math-popover-ok:hover {
-  filter: brightness(1.08);
-}
-
 .math-popover-cancel {
   background: none;
   border: 1px solid var(--ink-200);
   color: var(--ink-500);
-}
-
-.math-popover-cancel:hover {
-  background: var(--qing-50);
 }
 
 /* 插入表格的规格选择网格：悬停预览 行×列，点击插入（首行为表头） */
@@ -173,6 +161,21 @@
   background: #fff;
 }
 
-.palette-swatch:hover {
-  transform: scale(1.12);
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停，导致点按两下才触发 */
+@media (hover: hover) {
+  .fmt-btn:hover {
+    background: var(--qing-50);
+  }
+
+  .math-popover-ok:hover {
+    filter: brightness(1.08);
+  }
+
+  .math-popover-cancel:hover {
+    background: var(--qing-50);
+  }
+
+  .palette-swatch:hover {
+    transform: scale(1.12);
+  }
 }

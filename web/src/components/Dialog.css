@@ -71,19 +71,10 @@
   cursor: pointer;
 }
 
-.dlg-btn:hover {
-  background: var(--qing-50);
-}
-
 .dlg-btn.primary {
   border-color: var(--qing);
   background: var(--qing);
   color: #fff;
-}
-
-.dlg-btn.primary:hover {
-  filter: brightness(1.08);
-  background: var(--qing);
 }
 
 .dlg-btn.primary.danger {
@@ -115,5 +106,17 @@
   .dlg-overlay,
   .dlg-card {
     animation: none;
+  }
+}
+
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停 */
+@media (hover: hover) {
+  .dlg-btn:hover {
+    background: var(--qing-50);
+  }
+
+  .dlg-btn.primary:hover {
+    filter: brightness(1.08);
+    background: var(--qing);
   }
 }

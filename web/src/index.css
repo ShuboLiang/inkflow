@@ -11,8 +11,26 @@ html {
 body {
   margin: 0;
   overflow: hidden; /* SPA 全屏布局：窗口本身永不出现滚动条，滚动只发生在设计的内层容器 */
+  /* position: fixed 是 body-scroll-lock 的标准做法（WebKit bug 153852）：
+     仅 overflow:hidden 在 iOS Safari 上锁不死视窗，仍可能左右拖出滚动条 */
+  position: fixed;
+  inset: 0;
   background: var(--paper);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 触屏设备（hover: none，如 iOS Safari）没有悬停态，用 :active 给点按瞬间的底色反馈 */
+@media (hover: none) {
+  .sidebar-item:active,
+  .sidebar-folder-name:active,
+  .note-card:active,
+  .tool-btn:active,
+  .note-list-new:active,
+  .note-list-upload:active,
+  .card-more:active,
+  .sidebar-more:active {
+    background: var(--qing-50);
+  }
 }

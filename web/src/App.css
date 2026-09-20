@@ -40,10 +40,6 @@
   border-radius: 4px;
 }
 
-.app-menu:hover {
-  background: var(--qing-50);
-}
-
 
 
 .app-main {
@@ -75,5 +71,12 @@
 
   .app-main .sidebar {
     box-shadow: 4px 0 16px rgba(28, 33, 40, 0.12);
+  }
+}
+
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停 */
+@media (hover: hover) {
+  .app-menu:hover {
+    background: var(--qing-50);
   }
 }
