@@ -27,34 +27,6 @@
   padding: 20px 24px;
 }
 
-/* HTML 分享全屏：小游戏/页面类内容占满整个视口，去掉卡片式容器、文件名与页脚 */
-.share-page-full {
-  padding: 0;
-}
-
-.share-page-full .share-sheet {
-  max-width: none;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.share-page-full .share-file {
-  height: 100vh;
-  height: 100dvh;
-}
-
-.share-page-full .share-file-name,
-.share-page-full .share-footer {
-  display: none;
-}
-
-.share-page-full .share-html-frame {
-  border: none;
-  border-radius: 0;
-}
-
 @media (max-width: 767px) {
   .share-sheet,
   .share-sheet-file {
@@ -201,16 +173,6 @@
   border: 1px solid var(--ink-200);
   border-radius: 8px;
   background: var(--paper);
-}
-
-/* HTML 分享：原生渲染容器 */
-.share-file .share-html-frame {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  background: #fff;
 }
 
 .share-file-name {

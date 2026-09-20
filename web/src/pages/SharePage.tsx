@@ -11,35 +11,6 @@ const PdfViewer = lazy(() =>
   import('../components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
 )
 
-// HTML 分享渲染：storage 可能按 text/plain 提供（xattr 元数据不可靠），
-// 自己拉字节包成 text/html 的 blob 再交给 iframe，渲染行为与服务器 Content-Type 解耦
-function ShareHtmlFrame({ url }: { url: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    let blobUrl: string | null = null
-    void (async () => {
-      try {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(String(r.status))
-        const buf = await r.arrayBuffer()
-        blobUrl = URL.createObjectURL(new Blob([buf], { type: 'text/html' }))
-        if (!cancelled) setSrc(blobUrl)
-      } catch {
-        if (!cancelled) setFailed(true)
-      }
-    })()
-    return () => {
-      cancelled = true
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
-    }
-  }, [url])
-  if (failed) return <p className="share-status">HTML 加载失败，请下载后查看。</p>
-  if (!src) return <p className="share-status">正在加载…</p>
-  return <iframe className="share-html-frame" src={src} title="HTML 预览" sandbox="allow-scripts" />
-}
-
 // 公开分享页：无需登录，按 token 拉取当前最新内容。
 // 笔记 → 只读 TipTap 渲染；PDF → pdf.js 逐页渲染（宽度自适应、可触摸滚动）。
 
@@ -86,8 +57,14 @@ export function SharePage({ token }: { token: string }) {
 
   const isHtmlShare = state.status === 'file' && kindOfName(state.filename) === 'html'
 
+  // HTML 分享不用 iframe（微信内置浏览器等环境不支持）：校验分享有效后直接顶层跳转，
+  // 网关 /share-raw/<token> 代取字节并强制 text/html + CSP sandbox
+  useEffect(() => {
+    if (isHtmlShare) window.location.replace(`/share-raw/${encodeURIComponent(token)}`)
+  }, [isHtmlShare, token])
+
   return (
-    <div className={isHtmlShare ? 'share-page share-page-full' : 'share-page'}>
+    <div className="share-page">
       <div className={state.status === 'file' ? 'share-sheet share-sheet-file' : 'share-sheet'}>
         {state.status === 'loading' && <p className="share-status">载入中…</p>}
         {state.status === 'missing' && (
@@ -103,7 +80,7 @@ export function SharePage({ token }: { token: string }) {
           <div className="share-file">
             <h1 className="share-file-name">{state.filename}</h1>
             {kindOfName(state.filename) === 'html' ? (
-              <ShareHtmlFrame url={state.url} />
+              <p className="share-status">正在打开…</p>
             ) : (
               <Suspense fallback={<p className="share-status">正在加载 PDF…</p>}>
                 <PdfViewer src={state.url} />

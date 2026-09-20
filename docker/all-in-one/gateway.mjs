@@ -129,8 +129,43 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://internal')
   const route = findRoute(url.pathname)
   if (route) return proxy(req, res, route)
+  // 分享的 HTML 顶层直出：iframe 在微信内置浏览器等环境不可用，
+  // 由网关代取 storage 字节，强制 text/html，并用 CSP sandbox 隔离（脚本可运行、无应用同源权限）
+  if (url.pathname.startsWith('/share-raw/')) {
+    return serveSharedHtml(req, res, url.pathname.slice('/share-raw/'.length))
+  }
   return serveStatic(req, res, url)
 })
+
+function serveSharedHtml(req, res, key) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405)
+    return res.end()
+  }
+  const up = http.request(
+    { host: '127.0.0.1', port: 5000, path: `/object/public/shares/${key}`, method: 'GET' },
+    (ur) => {
+      if (ur.statusCode !== 200) {
+        res.writeHead(ur.statusCode ?? 502, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ error: 'shared content unavailable' }))
+      }
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-security-policy': 'sandbox allow-scripts',
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'no-cache',
+        'content-length': ur.headers['content-length'] ?? 0,
+      })
+      if (req.method === 'HEAD') return res.end()
+      ur.pipe(res)
+    },
+  )
+  up.on('error', () => {
+    if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ error: 'shared content unavailable' }))
+  })
+  up.end()
+}
 
 // WebSocket：升级请求按原始字节管道转发到对应上游
 server.on('upgrade', (req, socket, head) => {
