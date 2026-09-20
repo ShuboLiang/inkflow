@@ -96,7 +96,7 @@ function serveStatic(req, res, url) {
   }
   const ext = path.extname(file).toLowerCase()
   const headers = { 'content-type': MIME[ext] || 'application/octet-stream' }
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/pdfjs/')) {
     headers['cache-control'] = 'public, max-age=31536000, immutable'
   } else {
     headers['cache-control'] = 'no-cache'

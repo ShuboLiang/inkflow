@@ -61,24 +61,32 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mime })
 }
 
+// src(data: URL) → blob: URL 会话级缓存，避免重复打开同一 PDF 时重复 base64 解码
+const blobUrlCache = new Map<string, string>()
+
 export function PdfViewer({ src }: { src: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [blobUrl, setBlobUrl] = useState<{ src: string; url: string } | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
   // data: URL 太长，不能直接塞进 viewer.html?file=，转成 blob: URL；
+  // data: URL 太长，不能直接塞进 viewer.html?file=，转成 blob: URL。
+  // 同一文件重复打开时复用已转换的 blob（base64 解码只做一次，会话内常驻）；
   // http(s) 地址（分享页）直接交给 viewer 自己拉取
   useEffect(() => {
     if (!src.startsWith('data:')) return
+    const cached = blobUrlCache.get(src)
+    if (cached) {
+      setBlobUrl({ src, url: cached })
+      return
+    }
     let url: string | null = null
     try {
       url = URL.createObjectURL(dataUrlToBlob(src))
+      blobUrlCache.set(src, url)
       setBlobUrl({ src, url })
     } catch {
       setFailed(src)
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url)
     }
   }, [src])
 
