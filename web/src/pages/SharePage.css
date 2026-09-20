@@ -175,6 +175,16 @@
   background: var(--paper);
 }
 
+/* HTML 分享：原生渲染容器 */
+.share-file .share-html-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  background: #fff;
+}
+
 .share-file-name {
   font-family: var(--font-note);
   font-size: 20px;

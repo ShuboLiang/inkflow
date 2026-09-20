@@ -11,6 +11,7 @@ import { NoteList } from './components/NoteList'
 const PdfViewer = lazy(() =>
   import('./components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
 )
+import { HtmlViewer } from './components/HtmlViewer'
 import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
@@ -20,7 +21,7 @@ import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/fo
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { deleteFile, ensureFileData, moveFile, renameFile, saveFile } from './store/files'
 import { ShareMenu } from './components/ShareMenu'
-import { fileToDocJson, kindOfFile } from './lib/importFile'
+import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
 import { TagInput } from './components/TagInput'
 import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
@@ -519,11 +520,12 @@ export default function App() {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag])
 
-  // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
+  // 上传：pdf/html 存为当前文件夹的文件（原生预览）；md 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
   const handleUpload = async (file: File, targetFolderId?: string | null) => {
     const folderId = targetFolderId !== undefined ? targetFolderId : activeFolderId === 'all' ? null : activeFolderId
-    if (kindOfFile(file) === 'binary') {
+    const kind = kindOfFile(file)
+    if (kind === 'binary' || kind === 'html') {
       await saveFile(file, folderId)
       return
     }
@@ -677,9 +679,13 @@ export default function App() {
               </div>
               <div className="file-view">
                 {activeFile.dataUrl ? (
-                  <Suspense fallback={<p className="file-view-fallback">正在加载 PDF…</p>}>
-                    <PdfViewer src={activeFile.dataUrl} />
-                  </Suspense>
+                  kindOfName(activeFile.filename) === 'html' ? (
+                    <HtmlViewer src={activeFile.dataUrl} />
+                  ) : (
+                    <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
+                      <PdfViewer src={activeFile.dataUrl} />
+                    </Suspense>
+                  )
                 ) : (
                   <p className="file-view-fallback">正在从云端加载文件…</p>
                 )}

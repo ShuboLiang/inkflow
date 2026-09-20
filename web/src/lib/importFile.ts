@@ -10,15 +10,18 @@ import { alertDialog } from './dialog'
 
 export type DocKind = 'markdown' | 'html' | 'binary'
 
-export function kindOfFile(file: File): DocKind {
-  const name = file.name.toLowerCase()
-  if (name.endsWith('.md') || name.endsWith('.markdown') || file.type === 'text/markdown') {
-    return 'markdown'
-  }
-  if (name.endsWith('.html') || name.endsWith('.htm') || file.type === 'text/html') {
-    return 'html'
-  }
+// 按文件名判断内容类型（列表里已有的文件没有 File 对象，只有 filename/mimeType）
+export function kindOfName(name: string): DocKind {
+  const n = name.toLowerCase()
+  if (n.endsWith('.md') || n.endsWith('.markdown')) return 'markdown'
+  if (n.endsWith('.html') || n.endsWith('.htm')) return 'html'
   return 'binary'
+}
+
+export function kindOfFile(file: File): DocKind {
+  if (file.type === 'text/markdown') return 'markdown'
+  if (file.type === 'text/html') return 'html'
+  return kindOfName(file.name)
 }
 
 function readAsText(file: File): Promise<string> {

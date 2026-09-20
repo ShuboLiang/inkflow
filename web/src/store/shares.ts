@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/db'
 import { dataUrlToBlob, ensureFileData } from './files'
+import { kindOfName } from '../lib/importFile'
 
 // 分享外链：shares 表只存映射（token → note/file）与撤销状态。
 // 笔记内容实时读 notes 表（RPC 绕 RLS）；PDF 字节不可变，分享时复制到公共桶 shares。
@@ -74,6 +75,7 @@ export async function createNoteShare(userId: string, noteId: string): Promise<S
 
 // PDF 字节不可变：从本地缓存（或私有桶）取内容上传到公共桶 shares/{token}，
 // 之后打开链接实时查的是 files 表的文件名/删除状态。
+// 部分环境（Windows/拖放）File.type 为空，按扩展名兜底 MIME，否则分享出去会被当纯文本展示
 export async function createFileShare(userId: string, fileId: string): Promise<Share> {
   const existing = await getShareForFile(fileId)
   if (existing) return existing
@@ -83,11 +85,15 @@ export async function createFileShare(userId: string, fileId: string): Promise<S
   const dataUrl = file.dataUrl ?? (await ensureFileData(fileId))
   if (!dataUrl) throw new Error('file content unavailable')
 
+  const mime =
+    file.mimeType ?? (kindOfName(file.filename) === 'html' ? 'text/html' : 'application/octet-stream')
   const token = crypto.randomUUID()
+  // 注意必须传 ArrayBuffer：storage-js 对 Blob 会走 FormData 分支，
+  // storage-api 从 multipart 里取不到 content-type，分享出去的 HTML 会被当 text/plain 展示
   const { error: upErr } = await supabase.storage
     .from('shares')
-    .upload(token, dataUrlToBlob(dataUrl, file.mimeType), {
-      contentType: file.mimeType ?? 'application/octet-stream',
+    .upload(token, await dataUrlToBlob(dataUrl, mime).arrayBuffer(), {
+      contentType: mime,
       upsert: true,
     })
   if (upErr) throw upErr
