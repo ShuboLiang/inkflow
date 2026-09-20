@@ -722,28 +722,26 @@ export default function App() {
                   删除
                 </button>
               </div>
-              <div className="file-scroll">
-                <div className="editor-head">
-                  <TagInput
-                    key={`file-tags-${activeFile.id}`}
-                    tags={activeFile.tags ?? []}
-                    suggestions={[...tagCounts.keys()]}
-                    onChange={handleFileTagsChange}
-                  />
-                </div>
-                <div className="file-view">
-                  {activeFile.dataUrl ? (
-                    kindOfName(activeFile.filename) === 'html' ? (
-                      <HtmlViewer src={activeFile.dataUrl} />
-                    ) : (
-                      <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                        <PdfViewer src={activeFile.dataUrl} />
-                      </Suspense>
-                    )
+              <div className="editor-head">
+                <TagInput
+                  key={`file-tags-${activeFile.id}`}
+                  tags={activeFile.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleFileTagsChange}
+                />
+              </div>
+              <div className="file-view">
+                {activeFile.dataUrl ? (
+                  kindOfName(activeFile.filename) === 'html' ? (
+                    <HtmlViewer src={activeFile.dataUrl} />
                   ) : (
-                    <p className="file-view-fallback">正在从云端加载文件…</p>
-                  )}
-                </div>
+                    <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
+                      <PdfViewer src={activeFile.dataUrl} />
+                    </Suspense>
+                  )
+                ) : (
+                  <p className="file-view-fallback">正在从云端加载文件…</p>
+                )}
               </div>
             </>
           ) : active ? (
@@ -782,24 +780,24 @@ export default function App() {
                   删除
                 </button>
               </div>
+              <div className="editor-head">
+                <input
+                  key={`title-${active.id}`}
+                  ref={titleRef}
+                  className="editor-title"
+                  defaultValue={active.title}
+                  placeholder="无标题"
+                  aria-label="笔记标题"
+                  onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
+                />
+                <TagInput
+                  key={`tags-${active.id}`}
+                  tags={active.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleNoteTagsChange}
+                />
+              </div>
               <div className="editor-scroll">
-                <div className="editor-head">
-                  <input
-                    key={`title-${active.id}`}
-                    ref={titleRef}
-                    className="editor-title"
-                    defaultValue={active.title}
-                    placeholder="无标题"
-                    aria-label="笔记标题"
-                    onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
-                  />
-                  <TagInput
-                    key={`tags-${active.id}`}
-                    tags={active.tags ?? []}
-                    suggestions={[...tagCounts.keys()]}
-                    onChange={handleNoteTagsChange}
-                  />
-                </div>
                 <EditorBoundary>
                   <Editor
                     key={active.id}
