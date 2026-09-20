@@ -51,10 +51,13 @@ async function registerFontAliases() {
 }
 
 const MIN_ZOOM = 1
-const MAX_ZOOM = 5
+const MAX_ZOOM = 4
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 // 桌面端页宽上限；放大时同比例放宽
 const PAGE_MAX_WIDTH = 900
+// 单页 canvas 像素上限：iOS Safari 单张 canvas 约 1670 万像素封顶，
+// 且多页常驻内存易 OOM（渲染进程被杀 = “无法打开此页”），留足余量
+const MAX_CANVAS_PIXELS = 12_000_000
 
 // PDF 查看器：逐页渲染到 canvas，宽度自适应容器，纵向触摸滚动。
 // 替换原先的 <iframe dataUrl> 方案——浏览器内建查看器在手机上不缩放、不滚动。
@@ -110,7 +113,10 @@ export function PdfViewer({ src }: { src: string }) {
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => setRenderZoom(zoom), 180)
+    // 手势进行中只改布局不触发重绘（手上有指针时跳过，捏合结束由 endPointer 立即触发）
+    const t = setTimeout(() => {
+      if (pointers.current.size === 0) setRenderZoom(zoomRef.current)
+    }, 220)
     return () => clearTimeout(t)
   }, [zoom])
 
@@ -185,7 +191,11 @@ export function PdfViewer({ src }: { src: string }) {
   const endPointer = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinch.current = null
-    if (pointers.current.size === 0) pan.current = null
+    if (pointers.current.size === 0) {
+      pan.current = null
+      // 捏合/平移结束：立即按最终尺寸重绘，不等防抖
+      setRenderZoom(zoomRef.current)
+    }
   }
 
   // 双击/双击触控：1x ↔ 2.5x，缩向点击处；iOS 双触可靠性差，用双 tap 间隔兜底
@@ -273,10 +283,10 @@ function PdfPage({
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    const io = new IntersectionObserver(
-      (entries) => entries.some((e) => e.isIntersecting) && setVisible(true),
-      { rootMargin: '200px' },
-    )
+    // 进出视口都更新：离开的页要释放位图，否则放大后所有页常驻内存直接 OOM
+    const io = new IntersectionObserver((entries) => setVisible(entries.some((e) => e.isIntersecting)), {
+      rootMargin: '100px',
+    })
     io.observe(el)
     return () => io.disconnect()
   }, [])
@@ -298,11 +308,17 @@ function PdfPage({
     }
   }, [visible, doc, pageNumber])
 
-  // renderWidth 变化（容器宽度 / 缩放 settle）即重绘，保证任意倍率下文字清晰
+  // renderWidth 变化（容器宽度 / 缩放 settle）即重绘，保证任意倍率下文字清晰；
+  // 像素总量超限（高倍放大）时按比例降 scale，超出的部分拉伸显示——宁微虚不崩溃。
+  // 页离开视口时把 canvas 清零释放位图（aspect-ratio 样式占位不变，回视口会重绘）。
   useEffect(() => {
-    if (!visible || !renderWidth || !aspect) return
     const canvas = canvasRef.current
     if (!canvas) return
+    if (!visible || !renderWidth || !aspect) {
+      canvas.width = 0
+      canvas.height = 0
+      return
+    }
     let cancelled = false
     let renderTask: ReturnType<PDFPageProxy['render']> | null = null
     doc
@@ -312,7 +328,9 @@ function PdfPage({
         const base = page.getViewport({ scale: 1 })
         // 上限 3：iPhone 是 3x 屏，封顶 2 会导致文字发虚；再高内存/渲染耗时平方级上涨
         const dpr = Math.min(window.devicePixelRatio || 1, 3)
-        const viewport = page.getViewport({ scale: (renderWidth / base.width) * dpr })
+        let scale = (renderWidth / base.width) * dpr
+        scale = Math.min(scale, Math.sqrt(MAX_CANVAS_PIXELS / (base.width * base.height)))
+        const viewport = page.getViewport({ scale })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
         renderTask = page.render({ canvas, viewport })
