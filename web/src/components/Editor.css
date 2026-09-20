@@ -197,7 +197,65 @@
   border-radius: 6px;
   padding: 12px 16px;
   overflow-x: auto;
-  overflow-wrap: normal; /* 代码不折行，靠自身横向滚动 */
+  /* ProseMirror 根节点注入的 white-space 会让 pre 继承成折行（pre-wrap），
+     代码跟着空格换行、永远撑不宽，内部横滚就永远不出现。恢复 pre：
+     一行代码一行显示，超宽交给自身横向滚动 */
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.editor-body .ProseMirror .tableWrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0.8em 0;
+}
+
+/* 内部横滚容器（代码块/表格/公式）的可见线索：
+   1) 细滚动条（桌面常驻显示；触屏为 overlay 滚动时才浮现）
+   2) 手机上右缘内容渐隐——用双层背景实现：渐隐层默认钉在元素可视边缘
+      （背景不随内容滚动），内容从渐隐层下方滚过，纯 CSS、零 DOM 写入。
+      注意：不能用 JS 往这些元素上写 class/attribute 当开关——它们是
+      ProseMirror 管理的 DOM，外部写属性会触发 PM 的 DOMObserver 重建
+      节点视图，和观察器互踢成每秒上百次的重建循环 */
+.editor-body .ProseMirror pre,
+.editor-body .ProseMirror .tableWrapper,
+.editor-body .ProseMirror .katex-display {
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--qing) 40%, transparent) transparent;
+}
+
+.editor-body .ProseMirror pre::-webkit-scrollbar,
+.editor-body .ProseMirror .tableWrapper::-webkit-scrollbar,
+.editor-body .ProseMirror .katex-display::-webkit-scrollbar {
+  height: 6px;
+}
+
+.editor-body .ProseMirror pre::-webkit-scrollbar-thumb,
+.editor-body .ProseMirror .tableWrapper::-webkit-scrollbar-thumb,
+.editor-body .ProseMirror .katex-display::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--qing) 40%, transparent);
+  border-radius: 3px;
+}
+
+.editor-body .ProseMirror pre::-webkit-scrollbar-track,
+.editor-body .ProseMirror .tableWrapper::-webkit-scrollbar-track,
+.editor-body .ProseMirror .katex-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 767px) {
+  /* 代码块：底色之上叠一层右缘渐隐（第一层钉在可视右缘，第二层实底色） */
+  .editor-body .ProseMirror pre {
+    background-image: linear-gradient(to left, var(--qing-50) 0, transparent 26px),
+      linear-gradient(var(--qing-50), var(--qing-50));
+  }
+
+  /* 表格外壳 / 公式：背景是纸色，直接一层右缘渐隐 */
+  .editor-body .ProseMirror .tableWrapper,
+  .editor-body .ProseMirror .katex-display {
+    background-image: linear-gradient(to left, var(--paper) 0, transparent 26px);
+  }
 }
 
 .editor-body .ProseMirror code {
@@ -271,16 +329,13 @@
   color: var(--ink-500);
 }
 
-/* 表格：整表横向可滚（窄屏/宽表），纵向不滚——列宽拖拽手柄不再撑出滚动条 */
-.editor-body .ProseMirror .tableWrapper {
-  overflow-x: auto;
-  overflow-y: hidden;
-  margin: 0.8em 0;
-}
-
+/* 表格：整表横向可滚（窄屏/宽表），纵向不滚。auto 布局按内容撑宽——
+   fixed 布局会忽略单元格 min-width，多列表在窄屏被硬压进容器宽，
+   既读不了也永远不触发内滚；auto 下列宽不够就自然超出，交给内滚。
+   拖拽调宽的列（colgroup）在 auto 布局下同样生效。 */
 .editor-body .ProseMirror table {
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   margin: 0;
 }
@@ -362,6 +417,12 @@
 
   .editor-shell {
     padding: 0 20px 48px;
+  }
+
+  /* 手机上表格列别挤成一条：给列宽兜个底（6em），宽表直接触发内部横滚 */
+  .editor-body .ProseMirror th,
+  .editor-body .ProseMirror td {
+    min-width: 6em;
   }
 }
 
