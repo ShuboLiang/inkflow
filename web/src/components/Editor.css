@@ -114,6 +114,14 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  /* 隐藏自身滚动条：视觉上只能看到 PDF 阅读器内部那一条。
+     外层仍可通过触摸滑动（先滚走标签，见 App.tsx 的触摸接管） */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.file-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .file-view {

@@ -21356,3 +21356,47 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions };
 
 //# sourceMappingURL=viewer.mjs.map
+// ---- InkFlow 滚动桥接（本地定制，非 Mozilla 原版内容） ----
+// 应用侧把 PDF 查看器放在 .file-scroll 滚动区里（标签行可随滚动消失，外层滚动条已隐藏）。
+// 触摸/滚轮事件发生在本 document 内，父页面收不到，这里代父页面消费：
+// 外层还有滚动余地时先滚外层（标签滚走），滚到头再交给 viewer 自己。
+;(function () {
+  if (window.__inkflowScrollBridge) return;
+  window.__inkflowScrollBridge = true;
+  const outer = () => {
+    try {
+      return window.parent && window.parent.document
+        ? window.parent.document.querySelector('.file-scroll')
+        : null;
+    } catch {
+      return null; // 跨域（如分享页）无 .file-scroll，桥接自然失效
+    }
+  };
+  let lastY = 0;
+  window.addEventListener('touchstart', (e) => {
+    lastY = e.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    const sc = outer();
+    if (!sc) return;
+    const y = e.touches[0].clientY;
+    const delta = lastY - y;
+    lastY = y;
+    const max = sc.scrollHeight - sc.clientHeight;
+    const next = Math.min(max, Math.max(0, sc.scrollTop + delta));
+    if (next !== sc.scrollTop) {
+      e.preventDefault();
+      sc.scrollTop = next;
+    }
+  }, { passive: false });
+  window.addEventListener('wheel', (e) => {
+    const sc = outer();
+    if (!sc) return;
+    const max = sc.scrollHeight - sc.clientHeight;
+    const next = Math.min(max, Math.max(0, sc.scrollTop + e.deltaY));
+    if (next !== sc.scrollTop) {
+      e.preventDefault();
+      sc.scrollTop = next;
+    }
+  }, { passive: false });
+})();

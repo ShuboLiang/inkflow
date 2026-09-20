@@ -484,6 +484,7 @@ export default function App() {
 
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const activeFile = files?.find((f) => f.id === activeFileId) ?? null
+
   // 新设备上拉到的文件只有云端元数据：打开查看器时按需下载内容并缓存进 Dexie
   const activeFileIdForEffect = activeFile?.id ?? null
   const activeFileHasData = !!activeFile?.dataUrl
