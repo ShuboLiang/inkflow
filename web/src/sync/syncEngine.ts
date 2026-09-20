@@ -38,6 +38,7 @@ interface FileRow {
   mime_type: string | null
   size: number | null
   storage_path: string | null
+  tags: string[] | null
   updated_at: string
   deleted_at: string | null
 }
@@ -121,6 +122,7 @@ function rowToFile(row: FileRow): FileEntry {
     mimeType: row.mime_type,
     size: row.size,
     storagePath: row.storage_path,
+    tags: Array.isArray(row.tags) ? row.tags : [],
     dataUrl: null, // 内容按需从 Storage 拉取（pull 时保留本地已有缓存）
     dirty: 0,
     updatedAt: new Date(row.updated_at).getTime(),
@@ -138,6 +140,7 @@ function fileToRow(file: FileEntry, userId: string) {
     mime_type: file.mimeType,
     size: file.size,
     storage_path: file.storagePath,
+    tags: file.tags ?? [],
     updated_at: new Date(file.updatedAt).toISOString(),
     deleted_at: file.deletedAt ? new Date(file.deletedAt).toISOString() : null,
   }

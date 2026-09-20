@@ -19,7 +19,7 @@ import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { deleteFile, ensureFileData, moveFile, renameFile, saveFile } from './store/files'
+import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags } from './store/files'
 import { loadPrefs, savePrefs } from './store/prefs'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
@@ -201,8 +201,12 @@ export default function App() {
     for (const n of notes ?? []) {
       for (const t of n.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1)
     }
+    for (const f of files ?? []) {
+      if (f.deletedAt) continue
+      for (const t of f.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1)
+    }
     return new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh-Hans-CN')))
-  }, [notes])
+  }, [notes, files])
 
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
@@ -473,6 +477,11 @@ export default function App() {
     void updateNote(active.id, { tags }).then(requestPush)
   }
 
+  const handleFileTagsChange = (tags: string[]) => {
+    if (!activeFile) return
+    void setFileTags(activeFile.id, tags).then(requestPush)
+  }
+
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const activeFile = files?.find((f) => f.id === activeFileId) ?? null
   // 新设备上拉到的文件只有云端元数据：打开查看器时按需下载内容并缓存进 Dexie
@@ -522,12 +531,15 @@ export default function App() {
     }
   }
   // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
-  // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中
-  // 有搜索词或标签筛选时跨全部范围：文件名命中，或所属文件夹（含子树）名命中；
-  // 标签视图只含笔记（文件没有标签），不混入文件
+  // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中；
+  // 标签视图 = 全库范围内挂了该标签的文件（与笔记共用标签命名空间）
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (activeTag) return []
+    if (activeTag) {
+      return (files ?? [])
+        .filter((f) => !f.deletedAt && (f.tags ?? []).includes(activeTag))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+    }
     const inScope = (folderId: string | null) =>
       activeFolderSubtree === null ? folderId === null : folderId !== null && activeFolderSubtree.has(folderId)
     return (files ?? [])
@@ -709,6 +721,14 @@ export default function App() {
                   <IconTrash />
                   删除
                 </button>
+              </div>
+              <div className="editor-head">
+                <TagInput
+                  key={`file-tags-${activeFile.id}`}
+                  tags={activeFile.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleFileTagsChange}
+                />
               </div>
               <div className="file-view">
                 {activeFile.dataUrl ? (

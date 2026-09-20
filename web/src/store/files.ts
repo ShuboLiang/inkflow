@@ -19,6 +19,7 @@ export async function saveFile(file: File, folderId: string | null): Promise<Fil
     mimeType: file.type || null,
     size: file.size,
     storagePath: null,
+    tags: [],
     dataUrl,
     dirty: 1,
     updatedAt: Date.now(),
@@ -58,6 +59,13 @@ export async function renameFile(id: string, filename: string): Promise<void> {
   const existing = await db.files.get(id)
   if (!existing || existing.deletedAt || existing.filename === name) return
   await db.files.update(id, { filename: name, dirty: 1, updatedAt: Date.now() })
+}
+
+// 设置标签（与笔记标签同一命名空间，大小写不敏感去重由 TagInput 保证）
+export async function setFileTags(id: string, tags: string[]): Promise<void> {
+  const existing = await db.files.get(id)
+  if (!existing || existing.deletedAt) return
+  await db.files.update(id, { tags, dirty: 1, updatedAt: Date.now() })
 }
 
 // 预览前确保本地有内容：新设备上 dataUrl 为空，按需从 Storage 下载并缓存进 Dexie。

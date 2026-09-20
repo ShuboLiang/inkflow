@@ -382,6 +382,18 @@ export function NoteList({
                     <div className="note-card-time">
                       {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
                     </div>
+                    {(file.tags ?? []).length > 0 && (
+                      <div className="note-card-tags">
+                        {(file.tags ?? []).slice(0, 3).map((t) => (
+                          <span key={t} className="note-card-tag">
+                            # {t}
+                          </span>
+                        ))}
+                        {(file.tags ?? []).length > 3 && (
+                          <span className="note-card-tag">+{(file.tags ?? []).length - 3}</span>
+                        )}
+                      </div>
+                    )}
                     {search.trim() && file.folderId && (
                       <span
                         className="note-card-loc"

@@ -39,6 +39,7 @@ export interface FileEntry {
   mimeType: string | null
   size: number | null
   storagePath: string | null
+  tags: string[]
   // 本地以 data URL 内联存放（同步后仍保留，离线可预览；新设备按需从 Storage 拉取）
   dataUrl: string | null
   dirty: 0 | 1
