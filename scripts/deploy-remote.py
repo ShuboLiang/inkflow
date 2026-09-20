@@ -40,7 +40,13 @@ def main():
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     log(f"连接 {cfg['user']}@{cfg['host']}:{cfg['port']} ...")
-    ssh.connect(cfg["host"], port=int(cfg["port"]), username=cfg["user"], password=pw, timeout=15)
+    ssh.connect(
+        cfg["host"],
+        port=int(cfg["port"]),
+        username=cfg["user"],
+        password=pw,
+        timeout=15,
+    )
 
     # sudo 预热，拿到 5 分钟免密窗口
     code, _, err = run(ssh, "sudo -S -v", timeout=30, stdin_text=pw + "\n")
@@ -78,7 +84,9 @@ def main():
         sys.exit(1)
     log(out.strip().splitlines()[-1] if out.strip() else "load 完成")
     log("重建容器（数据卷不动）...")
-    code, out, err = sudo(f'sh -c "cd {remote_dir} && docker compose up -d --force-recreate"', timeout=600)
+    code, out, err = sudo(
+        f'sh -c "cd {remote_dir} && docker compose up -d --force-recreate"', timeout=600
+    )
     if code != 0:
         log(f"compose 失败: {(out + err).strip()[-500:]}")
         sys.exit(1)
@@ -86,7 +94,9 @@ def main():
     log("等待网关就绪...")
     ok = False
     for _ in range(60):
-        code, _, _ = run(ssh, f"curl -sf -o /dev/null http://127.0.0.1:{port}/", timeout=15)
+        code, _, _ = run(
+            ssh, f"curl -sf -o /dev/null http://127.0.0.1:{port}/", timeout=15
+        )
         if code == 0:
             ok = True
             break
@@ -97,7 +107,9 @@ def main():
     log("网关已就绪")
 
     # 镜像含 Realtime 时验证 WebSocket 握手（101 = 网关→realtime 链路通）
-    code, out, _ = sudo("docker exec inkflow ls /opt/realtime/bin >/dev/null 2>&1 && echo HAS_RT || echo NO_RT")
+    code, out, _ = sudo(
+        "docker exec inkflow ls /opt/realtime/bin >/dev/null 2>&1 && echo HAS_RT || echo NO_RT"
+    )
     if "HAS_RT" in out:
         log("验证 Realtime WebSocket 握手 ...")
         ws_cmd = (

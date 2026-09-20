@@ -263,9 +263,10 @@
   color: var(--ink-500);
 }
 
-/* 表格：整表横向可滚（窄屏/宽表），青色细边框，表头底色，选中单元格高亮 */
+/* 表格：整表横向可滚（窄屏/宽表），纵向不滚——列宽拖拽手柄不再撑出滚动条 */
 .editor-body .ProseMirror .tableWrapper {
   overflow-x: auto;
+  overflow-y: hidden;
   margin: 0.8em 0;
 }
 
@@ -303,10 +304,10 @@
 .editor-body .ProseMirror .column-resize-handle {
   position: absolute;
   top: 0;
-  bottom: -2px;
-  right: -2px;
-  width: 4px;
-  background: var(--qing);
+  bottom: 0;
+  right: -1px;
+  width: 3px;
+  background: rgba(31, 111, 107, 0.35);
   pointer-events: none;
 }
 
