@@ -28,6 +28,7 @@ Thumbs.db
 # Dev artifacts
 .shots/
 backups/
+dev-data/
 inkflow-release-*.tar.gz
 inkflow-images.tar
 inkflow-all-in-one.tar

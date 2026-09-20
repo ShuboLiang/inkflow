@@ -1,126 +1,90 @@
 # InkFlow 服务器部署指南
 
-目标形态：服务器上 Docker Compose 跑 Supabase 全家桶，前端是构建好的静态文件（任意静态服务器托管），浏览器直连 Supabase API（`:8000`）。
+部署形态：**all-in-one 单容器**——PostgreSQL + 认证 + REST + 文件存储 + 前端静态托管，
+全部装进一个镜像。服务器上只有三样东西：一个镜像 tar、一个文件夹（compose + .env +
+两个数据目录）。
 
-## 一、开发机：打包
+特性与取舍：
+
+- 前端 API 地址取浏览器当前来源、anon 密钥由 JWT_SECRET 启动时派生——**换 IP/域名不用重新打包**
+- 服务互保：任一服务崩溃 3 秒自动拉起；postgres 挂了容器退出，由 restart 策略整体重启
+- 注册即登录（免邮箱验证，自托管单人使用）
+- **不含 Realtime**：多端同步退化为 5 秒轮询（个人使用几乎无感）
+- 首次启动约 30-60 秒（数据库初始化 + 业务迁移），看日志 `docker logs -f inkflow`
+
+## 一、开发机：构建并导出镜像
 
 ```powershell
-# 在仓库根目录（有网服务器用这条）
-powershell -File scripts/package-release.ps1 -ServerUrl http://你的服务器IP:8000
-
-# 服务器完全离线（拉不了镜像）时加 -IncludeImages，把镜像也打进去
-powershell -File scripts/package-release.ps1 -ServerUrl http://你的服务器IP:8000 -IncludeImages
+powershell -File scripts/build-all-in-one.ps1
 ```
 
-产出在仓库根目录：`inkflow-release-<时间戳>.tar.gz`（必传）和 `inkflow-images.tar`（可选）。上传到服务器，比如：
-
-```bash
-scp inkflow-release-*.tar.gz user@server:/opt/
-```
+产出在仓库根目录：`inkflow-all-in-one.tar`（约 500MB）。连同 `deploy/` 文件夹一起上传到服务器。
 
 ## 二、服务器：部署
 
 前置：装好 Docker 和 Docker Compose 插件。
 
 ```bash
-mkdir -p /opt/inkflow && cd /opt/inkflow
-tar xzf /opt/inkflow-release-*.tar.gz        # 解包后本目录就是仓库根
-
-# 离线部署先导入镜像（有网跳过）
-docker load -i /opt/inkflow-images.tar
-
-# 启动 Supabase 全家桶（.env 已随包携带，密钥与开发机一致）
-cd supabase/docker
-docker compose up -d
-
-# 等数据库就绪（约 10-20 秒），依次应用 InkFlow 的业务迁移
-until docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; do sleep 2; done
-for f in ../../web/supabase-migrations/0*.sql; do
-  docker exec -i supabase-db psql -U postgres -d postgres < "$f"
-done
-```
-
-## 三、服务器：托管前端
-
-前端已并入 compose（`docker-compose.override.yml` 里的 `web` 服务，nginx 托管 `web/dist`，
-VITE_SUPABASE_URL 打包时已写入），`docker compose up -d` 会连同前端一起起，无需单独操作。
-
-浏览器访问 `http://服务器IP/` 即可，首次打开注册新账号（Auth 页面）。
-端口被占用就改 `supabase/docker/docker-compose.override.yml` 里的映射（如 `"8080:80"`），
-改完重新 `docker compose up -d` 生效。
-
-> 防火墙：需要开放 **80**（前端）和 **8000**（Supabase API，浏览器要直连）。不想暴露 8000 的话，在 nginx 里加 `/supabase` 反代并改前端构建地址，属于进阶配置。
-
-## 四、迁移旧数据（可选）
-
-全新部署是空库。要带走旧笔记/文件，用开发机的备份（`scripts/backup.ps1` 产出）：
-
-```bash
-# 备份 zip 传到服务器并解压后：
-docker cp db.sql supabase-db:/tmp/db.sql
-docker exec -i supabase-db psql -U postgres -d postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-docker exec -i supabase-db psql -U postgres -d postgres -f /tmp/db.sql
-# storage 二进制（停 stack → 覆盖 → 启动）
-cd supabase/docker && docker compose down
-cp -r <解压的备份>/storage/* volumes/storage/
-docker compose up -d
-```
-
-恢复后用原账号登录，数据原样回来。
-
-## 五、日常运维
-
-- **备份**：在服务器上同样跑 `scripts/backup.ps1`（PowerShell）或手工 `pg_dump` + 拷贝 `volumes/storage`；定期把 zip 拉离服务器
-- **升级**：开发机重新打包 → 服务器解包覆盖 → `docker compose up -d`（会自动重建有变化的容器）；数据库结构变化会随包里的迁移文件递增
-- **注意**：`docker-compose.override.yml`、`.env` 属于环境配置，换机器时保持和打包时一致
-
-## 六、极空间 NAS 部署要点
-
-- **机型要求**：必须是 **x86 机型**（Z4 / Z4S / Z423 等）。ARM 机型（Z2S）跑不了 Supabase
-  官方镜像（只有 amd64）。SSH 上去 `uname -m` 确认输出 `x86_64`。
-- **内存**：整套 Supabase 约需 4GB 空闲内存，笔记多再加一点。
-- **传文件**：tar 包通过 SMB 拷到共享文件夹（如 `个人空间/inkflow`），在「文件管理」里解压
-  或 SSH 解压均可。
-- **起服务**（二选一）：
-  1. 新版极空间「Docker」应用支持导入 compose 项目：指向 `supabase/docker/docker-compose.yml`
-     （同目录的 `.env` 会被自动读取）；
-  2. 更稳的方式是开 SSH：`cd` 到解压后的 `supabase/docker`，`docker compose up -d`。
-- **前端**：Docker 应用里新建容器，`nginx:alpine`，文件夹映射 `web/dist` →
-  `/usr/share/nginx/html`（只读），端口映射如 `8080 → 80`（避开 NAS 面板占用的端口）。
-- **打包地址**：开发机打包时 `-ServerUrl` 填 NAS 的访问地址。内网用 `http://<NAS内网IP>:8000`；
-  要通过极空间外网/域名访问，就填那个外网地址重新打包（地址是构建期写死的）。
-- **防火墙/端口**：需要开放 **8000**（Supabase API，浏览器直连）和前端端口。
-- **备份**：NAS 上没有 PowerShell，用 `bash scripts/backup.sh`（SSH 或计划任务），
-  产出与 Windows 版一致的单文件 tar.gz；建议加 cron 每日执行，并定期把包拉离 NAS。
-- **数据留在哪**：数据库数据在 `supabase/docker/volumes/db/data`，文件二进制在
-  `volumes/storage`——都在你映射的共享文件夹里，NAS 的 RAID/备份套件可直接兜住这两目录。
-
-## 七、极简部署：all-in-one 单容器（推荐 NAS 使用）
-
-一个容器装下全部：PostgreSQL + 认证 + REST + 文件存储 + 前端静态托管。服务器上只有
-三样东西：一个镜像 tar、一个文件夹（compose + .env + 两个数据目录）。
-
-**开发机**（构建并导出，产出约 2GB 的 tar）：
-
-```powershell
-powershell -File scripts/build-all-in-one.ps1
-```
-
-**服务器**：
-
-```bash
 docker load -i inkflow-all-in-one.tar
+
 mkdir inkflow && cd inkflow
-# 放入 deploy/docker-compose.yml，复制 deploy/.env.example 为 .env 并修改两个密码
+# 1. 放入 deploy/docker-compose.yml
+# 2. 复制 deploy/.env.example 为 .env，修改两个密码（POSTGRES_PASSWORD、JWT_SECRET）
 docker compose up -d        # 完事
 ```
 
-访问 `http://服务器IP/`，注册账号即用。数据全部在 `./data/db` 和 `./data/storage` 两个目录，
-备份 = 停容器后打包这两个目录（或只对 db 跑 pg_dump + 拷贝 storage）。
+访问 `http://服务器IP/`（compose 默认映射 80 端口，被占用就改 `ports` 为如 `"8080:8080"`，
+改完重新 `docker compose up -d` 生效）。注册账号即用。
 
-特性与取舍：
-- 前端 API 地址取浏览器当前来源、anon 密钥由 JWT_SECRET 启动时派生——**换 IP/域名不用重新打包**
-- 服务互保：任一服务崩溃 3 秒自动拉起；postgres 挂了容器退出，由 restart 策略整体重启
-- **不含 Realtime**：多端同步退化为 5 秒轮询（个人使用几乎无感）；需要秒级同步请用上面的
-  compose 多容器方案
-- 首次启动约 30-60 秒（数据库初始化 + 业务迁移），看日志 `docker logs -f inkflow`
+数据全部落在 compose 同级的两个目录，备份/迁移就是拷贝它们：
+
+- `./data/db` —— 数据库（笔记、元数据全在这）
+- `./data/storage` —— 文件二进制（PDF、图片）
+
+## 三、日常运维
+
+- **备份**：`bash scripts/backup.sh`（SSH 或 cron 每日执行），产出单文件 tar.gz，
+  默认保留 14 份；恢复 = 停容器 → 用备份内容覆盖 `data/db`（或导入其中的 db.sql）和
+  `data/storage` → 启动
+- **升级**：开发机重新 `build-all-in-one.ps1` → 服务器 `docker load` 新 tar →
+  `docker compose up -d`（会自动用新镜像重建容器）；数据库结构变化随镜像内的迁移自动递增
+- **密钥**：anon/service 密钥由 `JWT_SECRET` 派生，改 JWT_SECRET 会让所有已登录会话失效
+  （相当于全部重新登录）；注册完账号后可在 `.env` 设 `DISABLE_SIGNUP=true` 禁止新注册
+
+## 四、极空间 NAS 部署要点
+
+- **机型要求**：必须是 **x86 机型**（Z4 / Z4S / Z423 等）。ARM 机型（Z2S）跑不了
+  （基础镜像是 amd64）。SSH 上去 `uname -m` 确认输出 `x86_64`。
+- **内存**：建议 4GB 空闲内存，笔记多再加一点。
+- **传文件**：tar 包通过 SMB 拷到共享文件夹（如 `个人空间/inkflow`），在「文件管理」里解压。
+- **起服务**（二选一）：
+  1. 新版极空间「Docker」应用支持导入 compose 项目：指向解压后的 `docker-compose.yml`
+     （同目录的 `.env` 会被自动读取）；
+  2. 更稳的方式是开 SSH：`cd` 到解压后的目录，`docker compose up -d`。
+- **防火墙/端口**：compose 默认映射 80；NAS 面板占了 80 就改成如 `"8080:8080"`。
+- **备份**：`bash scripts/backup.sh`，建议加 cron 每日执行，并定期把包拉离 NAS。
+- **数据留在哪**：`data/db` 和 `data/storage` 都在你映射的共享文件夹里，
+  NAS 的 RAID/备份套件可直接兜住这两个目录。
+
+## 五、从旧的多容器 Supabase 栈迁移数据（可选）
+
+旧方案（supabase/docker 全家桶）已移除。若手上有旧栈的整库导出（`pg_dumpall` 或
+`pg_dump` 的 plain SQL）和 storage 目录，按下法迁移：
+
+```bash
+# 1. 全新启动 all-in-one（空 data/db）
+docker compose up -d
+# 等初始化完成（约 60 秒，docker logs -f inkflow 看到 "all services starting"）
+
+# 2. 灌入旧数据库导出（对象已存在之类的 ERROR 属正常，psql 会跳过继续，数据照常写入）
+docker cp db.sql inkflow:/tmp/restore.sql
+docker exec inkflow psql -h 127.0.0.1 -U postgres -d postgres -f /tmp/restore.sql
+
+# 3. 文件二进制：停容器后把旧 storage 内容放进数据目录，再启动
+docker compose down
+cp -r <旧storage>/* data/storage/
+docker compose up -d
+```
+
+恢复后用原账号登录（两边 JWT_SECRET 一致才不用换 anon key；不一致就重新登录一次，
+或按 README 用 derive-keys.mjs 重新生成 anon key 填进前端配置）。

@@ -1,6 +1,6 @@
 #!/bin/bash
 # InkFlow all-in-one 容器入口：postgres + gotrue + postgrest + storage-api + 网关
-# 必需环境变量（compose .env 提供，沿用开发机的 supabase/docker/.env）:
+# 必需环境变量（compose .env 提供）:
 #   POSTGRES_PASSWORD, JWT_SECRET
 # 可选: PUBLIC_ORIGIN（默认 http://localhost，仅用于生成链接）、DISABLE_SIGNUP
 set -uo pipefail

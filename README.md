@@ -1,55 +1,63 @@
 # InkFlow
 
-本地优先（IndexedDB）+ Supabase 云同步的笔记 Web 应用。
+本地优先（IndexedDB）+ 云端同步的笔记 Web 应用。
 
 ## 技术栈
 
 - 前端：Vite + React + TypeScript + TipTap + Dexie + @supabase/supabase-js + FlexSearch
-- 后端：Docker 自托管 Supabase（官方 docker-compose 方案）
+- 后端：all-in-one 单容器（PostgreSQL + GoTrue 认证 + PostgREST + Storage 文件存储 + 前端网关，
+  构建定义在 `docker/all-in-one/`），服务端部署见 [DEPLOY.md](DEPLOY.md)
 
 ## 目录结构
 
 ```
 inkflow/
+├── docker/all-in-one/         # 单容器镜像（Dockerfile / 网关 / 入口 / 库初始化 SQL）
+├── deploy/                    # 服务器部署模板（compose + .env 示例）
 ├── scripts/
-│   └── generate-keys.mjs      # 重新生成 Supabase 密钥/JWT 的脚本
-├── supabase/
-│   └── docker/                # 官方自托管 Supabase（从 supabase/supabase 浅克隆）
+│   ├── build-all-in-one.ps1   # 构建镜像并导出 tar（开发机→服务器）
+│   └── backup.sh              # 备份脚本（pg_dump + storage 拷贝）
 ├── web/                       # 前端
 │   ├── src/lib/               # supabase client、Dexie 本地库
-│   ├── src/sync/              # 同步引擎骨架（LWW 策略）
+│   ├── src/sync/              # 同步引擎（LWW 策略）
 │   ├── src/store/             # 笔记本地 CRUD
 │   ├── src/components/        # TipTap 编辑器
-│   └── supabase-migrations/   # 数据库 schema SQL
-├── docs/
-│   └── limitations.md         # 已知限制与后续处理方向
+│   └── supabase-migrations/   # 数据库 schema SQL（打包进镜像，启动时自动应用）
+├── skills/inkflow-notes/      # 给 agent 写笔记用的 skill
 └── README.md
 ```
 
-## 启动步骤
+## 本地开发
 
-1. 启动 Supabase：
+1. 构建 all-in-one 镜像（只需一次；改动过 `docker/all-in-one/` 或迁移后重新构建）：
 
-   ```bash
-   cd supabase/docker
-   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+   ```powershell
+   powershell -File scripts/build-all-in-one.ps1
    ```
 
-   首次拉取镜像较大（数 GB），请耐心等待。
+2. 启动本地后端（密钥随意，开发用固定值即可）：
 
-   > 注意：必须显式带上 `-f docker-compose.override.yml`（本机 Compose v5 不再自动加载
-   > override 文件）。override 里有两项本地修复：给 supavisor 设置可解析的 hostname
-   > （修复反复重启），并移除宿主机 5432 端口映射（避免与残留端口代理冲突；前端走
-   > 8000 网关，用不到它）。后续所有 `docker compose` 命令都要带这两个 `-f`。
+   ```bash
+   docker run -d --name inkflow -p 8000:8080 \
+     -e POSTGRES_PASSWORD=dev-password \
+     -e JWT_SECRET=dev-secret-dev-secret-dev-secret-dev-secret-dev-secret-dev-secre \
+     -e PUBLIC_ORIGIN=http://localhost:8000 \
+     -v "$PWD/dev-data/db:/var/lib/postgresql/data" \
+     -v "$PWD/dev-data/storage:/var/lib/storage" \
+     inkflow-all-in-one:latest
+   ```
 
-2. 执行数据库 migration：
-   打开 Supabase Studio（默认 http://localhost:8000 ，账号密码在 `supabase/docker/.env` 的
-   `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`），进入 SQL Editor，粘贴并运行
-   `web/supabase-migrations/001_init.sql` 的全部内容。
+   首次启动约 30-60 秒（库初始化 + 业务迁移），日志 `docker logs -f inkflow`。
 
-3. 配置前端 anon key：
-   将 `supabase/docker/.env` 中的 `ANON_KEY` 复制到 `web/.env` 的 `VITE_SUPABASE_ANON_KEY`
-   （当前为 PLACEHOLDER 占位符）。
+3. 配置前端 anon key（密钥是从 JWT_SECRET 派生的，改 JWT_SECRET 就要换）：
+
+   ```bash
+   JWT_SECRET=dev-secret-dev-secret-dev-secret-dev-secret-dev-secret-dev-secre \
+     node docker/all-in-one/derive-keys.mjs
+   ```
+
+   输出的第一个 token 填到 `web/.env` 的 `VITE_SUPABASE_ANON_KEY`
+   （`cp web/.env.example web/.env` 后修改，URL 保持 `http://localhost:8000`）。
 
 4. 启动前端：
 
@@ -59,41 +67,16 @@ inkflow/
    npm run dev
    ```
 
-5. 注册/登录：打开前端页面后先注册账号。**本地开发默认开启了邮箱验证，但 mailer 通常没配置**，
-   会导致注册后收不到验证邮件、无法登录。免验证方案：编辑 `supabase/docker/.env`，设置
-
-   ```
-   ENABLE_EMAIL_AUTOCONFIRM=true
-   ```
-
-   然后重启 auth 服务：
-
-   ```bash
-   cd supabase/docker
-   docker compose up -d --force-recreate auth
-   ```
-
-   之后新注册的账号会直接确认，注册即登录。前端代码也做了容错：注册后若未拿到 session，
-   会自动尝试直接登录一次，失败才提示去查收验证邮件。
+5. 注册/登录：注册即登录（容器内已开启免邮箱验证）。
 
 ## 密钥安全
 
-- 所有 `.env` 文件均已加入 `.gitignore`，**不要提交到任何仓库**。
-- 仓库/示例中的默认 Supabase 密钥是公开的，绝不能用于真实环境。本项目
-  `supabase/docker/.env` 中的密钥已用 `scripts/generate-keys.mjs` 重新生成。
-- 如需重新生成密钥：`node scripts/generate-keys.mjs`，将输出更新到
-  `supabase/docker/.env`（改 JWT_SECRET 后 ANON_KEY / SERVICE_ROLE_KEY 必须一起换）。
+- anon 密钥是公开密钥（RLS 保护数据），泄露本身不致命；JWT_SECRET 才是根密钥，
+  **生产环境务必用一长串随机字符**，泄露它等于别人可以签发任意身份。
+- 服务器部署时 `.env` 里的两个密码用随机值；重新生成 anon key 可用
+  `JWT_SECRET=<你的密钥> node docker/all-in-one/derive-keys.mjs`。
 
-## 手动克隆 Supabase（备选）
+## 备份
 
-若 `supabase/docker` 目录缺失（克隆失败时），手动执行：
-
-```bash
-cd supabase
-git clone --depth 1 https://github.com/supabase/supabase.git
-# Windows (Git Bash):
-mv supabase/docker ./docker && rm -rf supabase
-cd docker && cp .env.example .env
-```
-
-然后运行 `node ../../scripts/generate-keys.mjs` 并把输出值替换进 `.env`。
+`bash scripts/backup.sh`（详见 DEPLOY.md「日常运维」）。数据库 + 文件二进制一个 tar.gz 搞定，
+恢复 = 停容器 → 用备份覆盖 `data/` 下对应目录 → 启动。

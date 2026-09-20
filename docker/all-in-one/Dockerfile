@@ -19,13 +19,9 @@ COPY --from=storage /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6
 COPY --from=storage /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
 COPY --from=storage /app /app
 
-# --- Supabase 库初始化补充脚本（等价于 compose 里的 bind mount，镜像内自带后无需外部文件） ---
-COPY supabase/docker/volumes/db/jwt.sql /docker-entrypoint-initdb.d/init-scripts/99-jwt.sql
-COPY supabase/docker/volumes/db/roles.sql /docker-entrypoint-initdb.d/init-scripts/99-roles.sql
-COPY supabase/docker/volumes/db/webhooks.sql /docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql
-COPY supabase/docker/volumes/db/_supabase.sql /docker-entrypoint-initdb.d/migrations/97-_supabase.sql
-COPY supabase/docker/volumes/db/logs.sql /docker-entrypoint-initdb.d/migrations/99-logs.sql
-COPY supabase/docker/volumes/db/realtime.sql /docker-entrypoint-initdb.d/migrations/99-realtime.sql
+# --- Supabase 库初始化补充脚本（原本 bind mount 自官方 supabase/docker 栈，现已内置于本目录） ---
+COPY docker/all-in-one/initdb/init-scripts/ /docker-entrypoint-initdb.d/init-scripts/
+COPY docker/all-in-one/initdb/migrations/ /docker-entrypoint-initdb.d/migrations/
 
 # --- InkFlow 业务迁移 / 网关 / 入口 / 前端静态产物 ---
 COPY web/supabase-migrations/ /opt/inkflow-migrations/
