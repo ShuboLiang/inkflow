@@ -93,8 +93,11 @@ export default function App() {
     for (const n of notes ?? []) {
       if (n.folderId) m.set(n.folderId, (m.get(n.folderId) ?? 0) + 1)
     }
+    for (const f of files ?? []) {
+      if (f.folderId) m.set(f.folderId, (m.get(f.folderId) ?? 0) + 1)
+    }
     return m
-  }, [notes])
+  }, [notes, files])
 
   // 子文件夹树：按父级分组（每层内按中文拼音排序）
   const folderChildren = useMemo(() => {
@@ -111,7 +114,7 @@ export default function App() {
     return m
   }, [folders])
 
-  // 每个文件夹的子树笔记总数（含所有后代文件夹，不含文件）
+  // 每个文件夹的子树项目总数（含所有后代文件夹，同时计入笔记与文件）
   const subtreeCounts = useMemo(() => {
     const counts = new Map<string, number>()
     const dfs = (id: string): number => {
@@ -595,7 +598,10 @@ export default function App() {
           collapsed={!sidebarOpen}
           folders={folders ?? []}
           counts={subtreeCounts}
-          allCount={(notes ?? []).filter((n) => n.folderId === null).length}
+          allCount={
+            (notes ?? []).filter((n) => n.folderId === null).length +
+            (files ?? []).filter((f) => f.folderId === null).length
+          }
           tags={tagCounts}
           activeFolderId={activeFolderId}
           activeTag={activeTag}
