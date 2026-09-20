@@ -34,3 +34,4 @@ inkflow-images.tar
 inkflow-all-in-one.tar
 scripts/server.config.json
 __pycache__/
+*.mp4
