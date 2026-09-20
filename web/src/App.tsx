@@ -722,26 +722,28 @@ export default function App() {
                   删除
                 </button>
               </div>
-              <div className="editor-head">
-                <TagInput
-                  key={`file-tags-${activeFile.id}`}
-                  tags={activeFile.tags ?? []}
-                  suggestions={[...tagCounts.keys()]}
-                  onChange={handleFileTagsChange}
-                />
-              </div>
-              <div className="file-view">
-                {activeFile.dataUrl ? (
-                  kindOfName(activeFile.filename) === 'html' ? (
-                    <HtmlViewer src={activeFile.dataUrl} />
+              <div className="file-scroll">
+                <div className="editor-head">
+                  <TagInput
+                    key={`file-tags-${activeFile.id}`}
+                    tags={activeFile.tags ?? []}
+                    suggestions={[...tagCounts.keys()]}
+                    onChange={handleFileTagsChange}
+                  />
+                </div>
+                <div className="file-view">
+                  {activeFile.dataUrl ? (
+                    kindOfName(activeFile.filename) === 'html' ? (
+                      <HtmlViewer src={activeFile.dataUrl} />
+                    ) : (
+                      <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
+                        <PdfViewer src={activeFile.dataUrl} />
+                      </Suspense>
+                    )
                   ) : (
-                    <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                      <PdfViewer src={activeFile.dataUrl} />
-                    </Suspense>
-                  )
-                ) : (
-                  <p className="file-view-fallback">正在从云端加载文件…</p>
-                )}
+                    <p className="file-view-fallback">正在从云端加载文件…</p>
+                  )}
+                </div>
               </div>
             </>
           ) : active ? (

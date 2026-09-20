@@ -106,9 +106,19 @@
   white-space: nowrap;
 }
 
-.file-view {
+/* 文件（PDF/HTML）视图的滚动区：标签行 + 查看器整体可滚，
+   查看器最小高度 = 容器可视高度，滚出范围恰好是标签行（与笔记编辑器行为一致） */
+.file-scroll {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-view {
+  flex: 1;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--qing-50);
