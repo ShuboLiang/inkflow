@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import 'katex/dist/katex.min.css'
 import { supabase } from '../lib/supabase'
 import { buildExtensions } from '../lib/editorExtensions'
 import './SharePage.css'
 
+// pdf.js 体积大，懒加载
+const PdfViewer = lazy(() =>
+  import('../components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
+)
+
 // 公开分享页：无需登录，按 token 拉取当前最新内容。
-// 笔记 → 只读 TipTap 渲染；PDF → 公共桶 iframe 内嵌预览。
+// 笔记 → 只读 TipTap 渲染；PDF → pdf.js 逐页渲染（宽度自适应、可触摸滚动）。
 
 type LoadState =
   | { status: 'loading' }
@@ -63,7 +68,9 @@ export function SharePage({ token }: { token: string }) {
         {state.status === 'file' && (
           <div className="share-file">
             <h1 className="share-file-name">{state.filename}</h1>
-            <iframe title={state.filename} src={state.url} className="share-file-frame" />
+            <Suspense fallback={<p className="share-status">正在加载 PDF…</p>}>
+              <PdfViewer src={state.url} />
+            </Suspense>
           </div>
         )}
       </div>

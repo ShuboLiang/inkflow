@@ -5,8 +5,8 @@
 ## 技术栈
 
 - 前端：Vite + React + TypeScript + TipTap + Dexie + @supabase/supabase-js + FlexSearch
-- 后端：all-in-one 单容器（PostgreSQL + GoTrue 认证 + PostgREST + Storage 文件存储 + 前端网关，
-  构建定义在 `docker/all-in-one/`），服务端部署见 [DEPLOY.md](DEPLOY.md)
+- 后端：all-in-one 单容器（PostgreSQL + GoTrue 认证 + PostgREST + Storage 文件存储 + Realtime
+  即时同步 + 前端网关，构建定义在 `docker/all-in-one/`），服务端部署见 [DEPLOY.md](DEPLOY.md)
 
 ## 目录结构
 

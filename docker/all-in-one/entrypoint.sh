@@ -1,5 +1,5 @@
 #!/bin/bash
-# InkFlow all-in-one 容器入口：postgres + gotrue + postgrest + storage-api + 网关
+# InkFlow all-in-one 容器入口：postgres + gotrue + postgrest + storage-api + realtime + 网关
 # 必需环境变量（compose .env 提供）:
 #   POSTGRES_PASSWORD, JWT_SECRET
 # 可选: PUBLIC_ORIGIN（默认 http://localhost，仅用于生成链接）、DISABLE_SIGNUP
@@ -83,6 +83,30 @@ run auth env \
     node dist/start/server.js
 )
 
+# ---------- Realtime（多端即时同步；迁移+种子幂等，只在此跑一次） ----------
+# 元数据库与业务库是同一个 postgres；supabase_admin 有建发布/槽的权限。
+# SECRET_KEY_BASE 由 JWT_SECRET 确定性派生，重启不变（避免会话签名密钥漂移）。
+SECRET_KEY_BASE="$(node -e 'const c=require("crypto"),h=s=>c.createHash("sha256").update(s).digest("hex");console.log(h(process.env.JWT_SECRET+":realtime:0")+h(process.env.JWT_SECRET+":realtime:1"))')"
+REALTIME_ENV=(
+  PORT=4000
+  # beam 整套走 Debian 库（/opt/realtime-libs + /lib/x86_64-linux-gnu），避免混用基础镜像的 Alpine 库
+  LD_LIBRARY_PATH=/opt/realtime-libs:/lib/x86_64-linux-gnu
+  LANG=C.UTF-8
+  DB_HOST=127.0.0.1 DB_PORT=5432
+  DB_USER=supabase_admin DB_PASSWORD="$POSTGRES_PASSWORD" DB_NAME="$POSTGRES_DB"
+  DB_AFTER_CONNECT_QUERY='SET search_path TO _realtime'
+  DB_ENC_KEY=supabaserealtime
+  API_JWT_SECRET="$JWT_SECRET"
+  METRICS_JWT_SECRET="$SECRET_KEY_BASE"
+  SECRET_KEY_BASE="$SECRET_KEY_BASE"
+  APP_NAME=realtime
+  ERL_AFLAGS="-proto_dist inet_tcp"
+  DNS_NODES=''
+)
+log "initializing realtime (migrate + seed)..."
+env "${REALTIME_ENV[@]}" /opt/realtime/bin/migrate >>/var/log/inkflow-realtime.log 2>&1 || { log "realtime migrate failed"; tail -5 /var/log/inkflow-realtime.log; exit 1; }
+env "${REALTIME_ENV[@]}" /opt/realtime/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' >>/var/log/inkflow-realtime.log 2>&1 || { log "realtime seed failed"; tail -5 /var/log/inkflow-realtime.log; exit 1; }
+
 # 等 storage-api 建好 storage.buckets（首次约 10-30 秒）
 for i in $(seq 1 120); do
   su-exec postgres psql -h 127.0.0.1 -d "$POSTGRES_DB" -tAc 'select 1 from storage.buckets limit 1' >/dev/null 2>&1 && break
@@ -116,6 +140,20 @@ for attempt in 1 2 3 4 5; do
 done
 [ "$ok" = 1 ] || { log "migrations failed"; exit 1; }
 
+# ---------- 业务表纳入 realtime 发布（种子阶段已建 publication；幂等补表） ----------
+for i in $(seq 1 120); do
+  su-exec postgres psql -h 127.0.0.1 -d "$POSTGRES_DB" -tAc "select 1 from pg_publication where pubname='supabase_realtime'" 2>/dev/null | grep -q 1 && break
+  sleep 1
+done
+su-exec postgres psql -h 127.0.0.1 -d "$POSTGRES_DB" -tAc "select 1 from pg_publication where pubname='supabase_realtime'" | grep -q 1 || { log "realtime publication not ready"; exit 1; }
+for t in notes folders files; do
+  if [ "$(su-exec postgres psql -h 127.0.0.1 -d "$POSTGRES_DB" -tAc "select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='$t'")" != "1" ]; then
+    log "adding public.$t to supabase_realtime publication"
+    su-exec postgres psql -h 127.0.0.1 -d "$POSTGRES_DB" -c "alter publication supabase_realtime add table public.$t"
+  fi
+done
+log "realtime publication ready"
+
 # ---------- 前端运行时注入 ----------
 # 构建产物里的占位符替换成：API 地址 = 浏览器当前来源（换 IP/域名不用重打包）。
 # 注意 vite 把 env 值输出为反引号模板字符串，必须连反引号一起替换，否则会变成字面文本。
@@ -139,6 +177,9 @@ run rest env \
   PGRST_ADMIN_SERVER_PORT=3001 PGRST_ADMIN_SERVER_HOST=127.0.0.1 \
   PGRST_JWT_SECRET="$JWT_SECRET" \
   /usr/local/bin/postgrest
+
+# Realtime（postgres_changes 即时推送；初始化在上面已跑完）
+run realtime env "${REALTIME_ENV[@]}" /opt/realtime/bin/server
 
 # 网关（静态前端 + 反代，对外唯一端口）
 run gateway node /opt/gateway.mjs

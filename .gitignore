@@ -32,3 +32,5 @@ dev-data/
 inkflow-release-*.tar.gz
 inkflow-images.tar
 inkflow-all-in-one.tar
+scripts/server.config.json
+__pycache__/

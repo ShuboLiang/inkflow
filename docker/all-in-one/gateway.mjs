@@ -4,7 +4,7 @@
 //   /auth/v1/    -> gotrue (127.0.0.1:9999)
 //   /rest/v1/    -> PostgREST (127.0.0.1:3000)
 //   /storage/v1/ -> storage-api (127.0.0.1:5000)
-//   WebSocket upgrade 原样管道转发（为将来接 realtime 预留）
+//   /realtime/v1/ -> realtime (127.0.0.1:4000)，WebSocket upgrade 原样管道转发
 import http from 'node:http'
 import net from 'node:net'
 import fs from 'node:fs'
@@ -16,17 +16,20 @@ const ROUTES = [
   { prefix: '/auth/v1/', port: 9999 },
   { prefix: '/rest/v1/', port: 3000 },
   { prefix: '/storage/v1/', port: 5000 },
+  { prefix: '/realtime/v1/', port: 4000, upstreamPrefix: '/socket', hostRewrite: 'realtime-dev.supabase-realtime' },
 ]
 
 // 上游服务都裸跑在根路径（gotrue 的 /signup、postgrest 的 /notes、storage 的 /object），
-// 网关剥掉 /auth/v1 等前缀再转发（与 supabase 官方网关 Kong 的 strip_path 行为一致）
+// 网关剥掉 /auth/v1 等前缀再转发（与 supabase 官方网关 Kong 的 strip_path 行为一致）。
+// realtime 例外：官方 Kong 映射是 /realtime/v1/* -> /socket/*，upstreamPrefix 就是这个 /socket
 function upstreamPath(reqUrl, route) {
-  return reqUrl.slice(route.prefix.length - 1) || '/'
+  return (route.upstreamPrefix ?? '') + reqUrl.slice(route.prefix.length - 1) || '/'
 }
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -135,7 +138,9 @@ server.on('upgrade', (req, socket, head) => {
   if (!route) return socket.destroy()
   const up = net.connect(route.port, '127.0.0.1', () => {
     const lines = [`${req.method} ${upstreamPath(req.url, route)} HTTP/1.1`]
-    for (const [k, v] of Object.entries(req.headers)) lines.push(`${k}: ${v}`)
+    for (const [k, v] of Object.entries(req.headers)) {
+      lines.push(route.hostRewrite && k.toLowerCase() === 'host' ? `${k}: ${route.hostRewrite}` : `${k}: ${v}`)
+    }
     up.write(lines.join('\r\n') + '\r\n\r\n')
     if (head?.length) up.write(head)
     socket.pipe(up).pipe(socket)

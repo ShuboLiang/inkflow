@@ -9,7 +9,7 @@
 - 前端 API 地址取浏览器当前来源、anon 密钥由 JWT_SECRET 启动时派生——**换 IP/域名不用重新打包**
 - 服务互保：任一服务崩溃 3 秒自动拉起；postgres 挂了容器退出，由 restart 策略整体重启
 - 注册即登录（免邮箱验证，自托管单人使用）
-- **不含 Realtime**：多端同步退化为 5 秒轮询（个人使用几乎无感）
+- **含 Realtime**：多端修改秒级互相同步（postgres_changes 即时推送）；断线时前端自动降级轮询
 - 首次启动约 30-60 秒（数据库初始化 + 业务迁移），看日志 `docker logs -f inkflow`
 
 ## 一、开发机：构建并导出镜像
@@ -19,6 +19,18 @@ powershell -File scripts/build-all-in-one.ps1
 ```
 
 产出在仓库根目录：`inkflow-all-in-one.tar`（约 500MB）。连同 `deploy/` 文件夹一起上传到服务器。
+
+### 日常更新：一键推送（推荐）
+
+配好一次 `scripts/server.config.json`（复制 `server.config.example.json` 填服务器地址、
+SSH 账号密码、compose 目录、网关端口）后，日常更新只跑：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/update-server.ps1          # 构建 + 上传 + 重建 + 验证，全自动
+powershell -ExecutionPolicy Bypass -File scripts/update-server.ps1 -SkipBuild  # 构建没动过，只重新上传部署
+```
+
+数据卷不动，原地升级；脚本会等网关就绪并验证 Realtime WebSocket 握手。
 
 ## 二、服务器：部署
 

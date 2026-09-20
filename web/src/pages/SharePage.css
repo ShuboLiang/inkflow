@@ -121,6 +121,15 @@
   height: calc(100vh - 200px);
 }
 
+.share-file .pdf-view {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
 .share-file-name {
   font-family: var(--font-note);
   font-size: 20px;
@@ -128,14 +137,6 @@
   margin: 0 0 12px;
   color: var(--ink-900);
   word-break: break-all;
-}
-
-.share-file-frame {
-  flex: 1;
-  width: 100%;
-  border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  background: var(--paper);
 }
 
 .share-footer {

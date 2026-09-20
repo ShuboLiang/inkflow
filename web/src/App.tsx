@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
@@ -6,6 +6,11 @@ import { Editor } from './components/Editor'
 import { EditorBoundary } from './components/EditorBoundary'
 import { EmptyState } from './components/EmptyState'
 import { NoteList } from './components/NoteList'
+
+// PDF 查看器（pdf.js 体积大，懒加载：只在打开 PDF 时才下载）
+const PdfViewer = lazy(() =>
+  import('./components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
+)
 import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
@@ -662,7 +667,9 @@ export default function App() {
               </div>
               <div className="file-view">
                 {activeFile.dataUrl ? (
-                  <iframe title={activeFile.filename} src={activeFile.dataUrl} className="file-view-frame" />
+                  <Suspense fallback={<p className="file-view-fallback">正在加载 PDF…</p>}>
+                    <PdfViewer src={activeFile.dataUrl} />
+                  </Suspense>
                 ) : (
                   <p className="file-view-fallback">正在从云端加载文件…</p>
                 )}

@@ -1,0 +1,10 @@
+# 服务器连接配置（被 update-server.ps1 读取；server.config.json 已 gitignore，不会提交）
+# password 是 SSH 密码，同时用于 sudo -S
+{
+  "host": "192.168.10.44",
+  "port": 10000,
+  "user": "你的SSH用户名",
+  "password": "你的SSH密码",
+  "remoteDir": "/服务器上compose文件所在目录",
+  "gatewayPort": 9911
+}

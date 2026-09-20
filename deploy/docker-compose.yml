@@ -5,6 +5,7 @@ name: inkflow
 services:
   inkflow:
     image: inkflow-all-in-one:latest
+    pull_policy: never # 镜像只来自 docker load，绝不去 Hub 拉（服务器无外网/代理不通时防误拉）
     container_name: inkflow
     env_file: .env
     environment:
