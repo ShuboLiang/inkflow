@@ -98,6 +98,9 @@ function serveStatic(req, res, url) {
   const headers = { 'content-type': MIME[ext] || 'application/octet-stream' }
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/pdfjs/')) {
     headers['cache-control'] = 'public, max-age=31536000, immutable'
+  } else if (ext === '.html') {
+    // 入口 HTML 绝不缓存：不带 hash，缓存了旧版会导致用户拿不到新构建
+    headers['cache-control'] = 'no-store'
   } else {
     headers['cache-control'] = 'no-cache'
   }
