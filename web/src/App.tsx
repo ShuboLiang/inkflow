@@ -780,24 +780,24 @@ export default function App() {
                   删除
                 </button>
               </div>
-              <div className="editor-head">
-                <input
-                  key={`title-${active.id}`}
-                  ref={titleRef}
-                  className="editor-title"
-                  defaultValue={active.title}
-                  placeholder="无标题"
-                  aria-label="笔记标题"
-                  onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
-                />
-                <TagInput
-                  key={`tags-${active.id}`}
-                  tags={active.tags ?? []}
-                  suggestions={[...tagCounts.keys()]}
-                  onChange={handleNoteTagsChange}
-                />
-              </div>
               <div className="editor-scroll">
+                <div className="editor-head">
+                  <input
+                    key={`title-${active.id}`}
+                    ref={titleRef}
+                    className="editor-title"
+                    defaultValue={active.title}
+                    placeholder="无标题"
+                    aria-label="笔记标题"
+                    onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
+                  />
+                  <TagInput
+                    key={`tags-${active.id}`}
+                    tags={active.tags ?? []}
+                    suggestions={[...tagCounts.keys()]}
+                    onChange={handleNoteTagsChange}
+                  />
+                </div>
                 <EditorBoundary>
                   <Editor
                     key={active.id}
