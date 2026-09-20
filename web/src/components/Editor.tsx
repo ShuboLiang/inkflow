@@ -6,12 +6,14 @@ import { useEffect, useRef } from 'react'
 import { Toolbar } from './Toolbar'
 import { insertPastedImages, pastedImageFiles } from '../lib/pasteImage'
 import { buildExtensions } from '../lib/editorExtensions'
-import { importFilesIntoEditor } from '../lib/importFile'
+import { importFilesIntoEditor, kindOfFile } from '../lib/importFile'
 import './Editor.css'
 
 interface EditorProps {
   content: unknown
   onUpdate: (content: unknown) => void
+  // html/pdf 等不适合进笔记的内容改存为文件（原生预览），由 App 注入
+  onUploadFiles?: (files: File[]) => void
 }
 
 // 规范化外部内容：新建笔记和数据库默认值存的是 {}，不是合法 TipTap 文档
@@ -22,7 +24,7 @@ function toDoc(content: unknown): object {
   return { type: 'doc', content: [] }
 }
 
-export function Editor({ content, onUpdate }: EditorProps) {
+export function Editor({ content, onUpdate, onUploadFiles }: EditorProps) {
   // 记录编辑器最近一次发出的内容：prop 落后于它说明有未保存的本地输入（防抖未落盘），
   // 此时绝不能用旧 prop setContent 回滚（打开浮层/切换焦点导致 blur 时会触发）。
   const lastEmitted = useRef<string | null>(null)
@@ -191,7 +193,11 @@ export function Editor({ content, onUpdate }: EditorProps) {
         editor={editor}
         onUpload={(files) => {
           if (!editor) return
-          void importFilesIntoEditor(editor, files)
+          // md → 导入为笔记内容；html/pdf 等 → 存为文件原生预览（小游戏、文档不能丢脚本）
+          const docs = files.filter((f) => kindOfFile(f) === 'markdown')
+          const asFiles = files.filter((f) => kindOfFile(f) !== 'markdown')
+          if (asFiles.length) onUploadFiles?.(asFiles)
+          if (docs.length) void importFilesIntoEditor(editor, docs)
         }}
       />
       <div className="editor-shell" onMouseDown={handleShellMouseDown} onClick={handleShellClick}>

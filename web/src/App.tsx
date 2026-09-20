@@ -740,6 +740,9 @@ export default function App() {
                     key={active.id}
                     content={active.content}
                     onUpdate={(content) => scheduleSave(active.id, { content })}
+                    onUploadFiles={(files) => {
+                      for (const f of files) void handleUpload(f)
+                    }}
                   />
                 </EditorBoundary>
               </div>

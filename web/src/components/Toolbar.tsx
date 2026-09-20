@@ -181,7 +181,7 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
             <button
               type="button"
               className="fmt-btn"
-              title="上传 md/html 导入为内容"
+              title="上传文件：md 导入为内容，html/pdf 存为文件预览"
               aria-label="上传文件"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => fileInputRef.current?.click()}
