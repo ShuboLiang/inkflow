@@ -84,8 +84,10 @@ export function SharePage({ token }: { token: string }) {
     }
   }, [token])
 
+  const isHtmlShare = state.status === 'file' && kindOfName(state.filename) === 'html'
+
   return (
-    <div className="share-page">
+    <div className={isHtmlShare ? 'share-page share-page-full' : 'share-page'}>
       <div className={state.status === 'file' ? 'share-sheet share-sheet-file' : 'share-sheet'}>
         {state.status === 'loading' && <p className="share-status">载入中…</p>}
         {state.status === 'missing' && (
