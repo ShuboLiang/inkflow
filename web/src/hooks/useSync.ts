@@ -6,6 +6,9 @@ import { syncEngine } from '../sync/syncEngine'
 import type { SyncStatus } from '../components/SyncIndicator'
 
 const PUSH_INTERVAL_MS = 5000
+// 实时链路静默失效（网关掐空闲连接、移动网络切换后 WebSocket 假死等）时不会有
+// 任何事件到达，靠周期性增量 pull 兜底
+const PULL_INTERVAL_MS = 30000
 
 export function useSync(user: User | null): { status: SyncStatus; requestPush: () => void } {
   const [online, setOnline] = useState(navigator.onLine)
@@ -61,7 +64,8 @@ export function useSync(user: User | null): { status: SyncStatus; requestPush: (
       await push()
     })()
 
-    const timer = setInterval(() => void push(), PUSH_INTERVAL_MS)
+    const pushTimer = setInterval(() => void push(), PUSH_INTERVAL_MS)
+    const pullTimer = setInterval(() => void pull(), PULL_INTERVAL_MS)
     const unsubscribe = syncEngine.subscribeChanges(user.id, () => void pull())
 
     const handleOnline = () => {
@@ -75,11 +79,24 @@ export function useSync(user: User | null): { status: SyncStatus; requestPush: (
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
 
+    // 手机息屏/切后台时页面被冻结、WebSocket 随之断开，期间别端的修改事件全部
+    // 丢失且 realtime 不会重放；回前台必须立刻补拉
+    const handleVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void (async () => {
+        await pull()
+        await push()
+      })()
+    }
+    document.addEventListener('visibilitychange', handleVisible)
+
     return () => {
-      clearInterval(timer)
+      clearInterval(pushTimer)
+      clearInterval(pullTimer)
       unsubscribe()
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisible)
     }
   }, [user, push, pull])
 

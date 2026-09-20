@@ -45,6 +45,11 @@ interface FileRow {
 
 const lastSyncKey = (userId: string) => `inkflow:lastSyncAt:${userId}`
 
+// 增量拉取的回看窗口：设备间时钟偏差会让「updated_at > lastSyncAt」永久漏掉
+// 别端刚写的行（lastSyncAt 只增不减）。每次多回看几分钟，行级守卫
+// （version / updatedAt 比较）保证重复应用是幂等的。
+const PULL_OVERLAP_MS = 5 * 60 * 1000
+
 export function getLastSyncAt(userId: string): number {
   const raw = localStorage.getItem(lastSyncKey(userId))
   return raw ? Number(raw) : 0
@@ -54,7 +59,9 @@ function setLastSyncAt(userId: string, ts: number): void {
   localStorage.setItem(lastSyncKey(userId), String(ts))
 }
 
-// 正在编辑的笔记 id：pull/realtime 回声永远不覆盖它，push 冲突时本地优先。
+// 当前打开的笔记 id：push 冲突时本地优先（正在编辑的内容不能被服务器行覆盖）。
+// pull 不再跳过它——本地有未保存修改时 dirty 位已足以保护，干净行允许被
+// 远端更新刷新（编辑器自身也会避开聚焦/未保存输入状态再覆盖内容）。
 // 由 App 在选中笔记变化时登记。
 let activeEditId: string | null = null
 
@@ -156,9 +163,12 @@ function fileToRow(file: FileEntry, userId: string) {
  *   archived to note_versions and the local version is raised to the server
  *   version so the next push overwrites the server.
  * - pullChanges: fetches server rows with updated_at > lastSyncAt (per user,
- *   stored in localStorage). It skips the actively edited note, skips locally
- *   dirty rows, and skips own push echoes (clean local row already at the same
- *   version). Rows with deleted_at set are removed from Dexie entirely.
+ *   stored in localStorage), minus a small overlap window that absorbs clock
+ *   skew between devices. It skips locally dirty rows and own push echoes
+ *   (clean local row already at the same version). The currently open note is
+ *   no longer skipped: a clean row is safe to refresh from the server (the
+ *   editor refuses to overwrite focused/unsaved input anyway). Rows with
+ *   deleted_at set are removed from Dexie entirely.
  * - handleConflict: pure LWW by updatedAt; the loser is discarded.
  * - folders: 同样按 updated_at 做 LWW，但无版本号和历史归档——纯元数据，
  *   冲突时服务器较新一方直接获胜；删除是软删除（deleted_at），pull 到后
@@ -191,8 +201,12 @@ export const syncEngine = {
             content: server.content,
             version: server.version,
           })
-          await db.notes.update(note.id, { version: server.version as number })
+          // 本地胜出覆盖服务器时把 updatedAt 刷新到当下：离线期间写入的旧时间戳
+          // 会让其他端的增量拉取（updated_at > lastSyncAt）永远看不到这次覆盖
+          const now = Date.now()
+          await db.notes.update(note.id, { version: server.version as number, updatedAt: now })
           note.version = server.version as number
+          note.updatedAt = now
         } else {
           await supabase.from('note_versions').insert({
             note_id: note.id,
@@ -307,7 +321,7 @@ export const syncEngine = {
   },
 
   async pullChanges(userId: string, since?: number): Promise<SyncResult> {
-    const from = since ?? getLastSyncAt(userId)
+    const from = Math.max(0, (since ?? getLastSyncAt(userId)) - PULL_OVERLAP_MS)
     const startedAt = Date.now()
     const { data, error } = await supabase
       .from('notes')
@@ -318,7 +332,6 @@ export const syncEngine = {
 
     let pulled = 0
     for (const row of (data ?? []) as NoteRow[]) {
-      if (row.id === activeEditId) continue
       const local = await db.notes.get(row.id)
       if (local?.dirty === 1) continue
       if (local && local.version === row.version) continue
@@ -404,7 +417,11 @@ export const syncEngine = {
         { event: '*', schema: 'public', table: 'files', filter: `user_id=eq.${userId}` },
         () => onRemoteChange(),
       )
-      .subscribe()
+      .subscribe((status) => {
+        // 订阅成功（含断线重连后的重新订阅）即回拉一次：断线期间错过的
+        // 变更事件不会重放，只能靠增量 pull 补齐
+        if (status === 'SUBSCRIBED') onRemoteChange()
+      })
     return () => {
       void supabase.removeChannel(channel)
     }
