@@ -187,7 +187,7 @@ export default function App() {
     // 「默认」= 未归入任何文件夹的笔记；文件夹视图 = 该文件夹（含子树）
     const inScope = (n: (typeof all)[number]) =>
       activeFolderSubtree === null ? n.folderId === null : activeFolderSubtree.has(n.folderId ?? '')
-    let scoped = q ? all : all.filter(inScope)
+    let scoped = q || activeTag ? all : all.filter(inScope)
     if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     if (!q) return scoped
     // 标题/正文命中，或所属文件夹（含子树）名命中
@@ -336,6 +336,7 @@ export default function App() {
 
   const handleSelectFolder = (id: string) => {
     setActiveFolderId(id)
+    setActiveTag(null)
     setSidebarOpen(false)
   }
 
@@ -499,8 +500,11 @@ export default function App() {
   }
   // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
   // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中
+  // 有搜索词或标签筛选时跨全部范围：文件名命中，或所属文件夹（含子树）名命中；
+  // 标签视图只含笔记（文件没有标签），不混入文件
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
+    if (activeTag) return []
     const inScope = (folderId: string | null) =>
       activeFolderSubtree === null ? folderId === null : folderId !== null && activeFolderSubtree.has(folderId)
     return (files ?? [])
@@ -513,7 +517,7 @@ export default function App() {
           ((f.folderId ?? null) !== null && folderHitSubtree !== null && folderHitSubtree.has(f.folderId as string)),
       )
       .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [files, activeFolderSubtree, search, folderHitSubtree])
+  }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag])
 
   // 上传：pdf 存为当前文件夹的文件；md/html 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
