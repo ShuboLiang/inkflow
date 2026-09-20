@@ -208,46 +208,46 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
       <div className="editor-shell" onMouseDown={handleShellMouseDown} onClick={handleShellClick}>
         <div className="editor-body">
           <EditorContent editor={editor} />
-          <button
-            type="button"
-            className={outlineOpen ? 'outline-toggle active' : 'outline-toggle'}
-            title="文档大纲"
-            aria-label="文档大纲"
-            aria-pressed={outlineOpen}
-            onClick={() => setOutlineOpen((v) => !v)}
-          >
-            ☰
-          </button>
-          {outlineOpen && (
-            <nav className="outline-panel" aria-label="文档大纲">
-              <div className="outline-head">
-                <span>大纲</span>
-                <button type="button" className="outline-close" aria-label="关闭大纲" onClick={() => setOutlineOpen(false)}>
-                  ✕
-                </button>
-              </div>
-              {headings && headings.length > 0 ? (
-                headings.map((h, i) => (
-                  <button
-                    key={`${h.pos}-${i}`}
-                    type="button"
-                    className={`outline-item lv${h.level}`}
-                    title={h.text}
-                    onClick={() => {
-                      // pos 是节点起点，+1 落到标题文本内；滚动定位后聚焦
-                      editor?.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run()
-                    }}
-                  >
-                    {h.text || '（空标题）'}
-                  </button>
-                ))
-              ) : (
-                <p className="outline-empty">暂无标题，用 H1–H3 建立结构</p>
-              )}
-            </nav>
-          )}
         </div>
       </div>
+      <button
+        type="button"
+        className={outlineOpen ? 'outline-toggle active' : 'outline-toggle'}
+        title="文档大纲"
+        aria-label="文档大纲"
+        aria-pressed={outlineOpen}
+        onClick={() => setOutlineOpen((v) => !v)}
+      >
+        ☰
+      </button>
+      {outlineOpen && (
+        <nav className="outline-panel" aria-label="文档大纲">
+          <div className="outline-head">
+            <span>大纲</span>
+            <button type="button" className="outline-close" aria-label="关闭大纲" onClick={() => setOutlineOpen(false)}>
+              ✕
+            </button>
+          </div>
+          {headings && headings.length > 0 ? (
+            headings.map((h, i) => (
+              <button
+                key={`${h.pos}-${i}`}
+                type="button"
+                className={`outline-item lv${h.level}`}
+                title={h.text}
+                onClick={() => {
+                  // pos 是节点起点，+1 落到标题文本内；滚动定位后聚焦
+                  editor?.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run()
+                }}
+              >
+                {h.text || '（空标题）'}
+              </button>
+            ))
+          ) : (
+            <p className="outline-empty">暂无标题，用 H1–H3 建立结构</p>
+          )}
+        </nav>
+      )}
     </>
   )
 }

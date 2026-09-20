@@ -1,4 +1,5 @@
 .editor-pane {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -410,22 +411,20 @@
   padding: 0 1px;
 }
 
-/* 文档大纲：编辑区右上角浮动开关与面板 */
-.editor-body {
-  position: relative;
-}
-
+/* 文档大纲：编辑区右下角悬浮开关（不随正文滚动，始终可点），
+   点击从按钮上方弹出面板 */
 .outline-toggle {
   position: absolute;
-  top: 10px;
-  right: 12px;
-  z-index: 5;
-  width: 30px;
-  height: 30px;
+  right: 14px;
+  bottom: 44px;
+  z-index: 8;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--ink-200);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--paper);
+  box-shadow: 0 2px 8px rgba(28, 33, 40, 0.1);
   color: var(--ink-500);
   font-size: 14px;
   cursor: pointer;
@@ -439,17 +438,17 @@
 
 .outline-panel {
   position: absolute;
-  top: 48px;
-  right: 12px;
-  z-index: 5;
-  width: 220px;
-  max-height: min(60%, 480px);
+  right: 14px;
+  bottom: 84px;
+  z-index: 8;
+  width: 230px;
+  max-height: min(50vh, 420px);
   overflow-y: auto;
   padding: 8px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.14);
   font-family: var(--font-ui);
 }
 
