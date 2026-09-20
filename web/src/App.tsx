@@ -365,6 +365,8 @@ export default function App() {
     setActiveFolderId(id)
     setActiveTag(null)
     setSidebarOpen(false)
+    // 手机上选文件夹=切换浏览上下文：从笔记里跳回列表（与侧栏选标签的行为一致）
+    setMobileView('list')
   }
 
   // 点击搜索结果里的文件夹：跳转进去并清空搜索/标签筛选
@@ -373,6 +375,7 @@ export default function App() {
     setSearch('')
     setActiveFolderId(id)
     setSidebarOpen(false)
+    setMobileView('list')
   }
 
   // 跳到笔记/文件所在文件夹（保留打开的内容，只切换列表上下文）
