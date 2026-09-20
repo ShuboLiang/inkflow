@@ -237,14 +237,21 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
                 title={h.text}
                 onClick={() => {
                   // pos 是节点起点，+1 落到标题文本内。触屏设备不抢焦点：
-                  // focus() 会拉起输入法键盘挡住半屏，只定位选区并滚动即可；
-                  // 精确指针（桌面）保留滚动后聚焦，跳完可立即续写
+                  // focus() 会拉起输入法键盘挡住半屏。但 ProseMirror 未聚焦时
+                  // 不会把选区滚动同步到 DOM，chain 的 scrollIntoView 会失效，
+                  // 因此改用 domAtPos 拿到标题元素后原生滚动定位；桌面精确
+                  // 指针保留「滚动 + 聚焦」，跳完可立即续写
                   if (!editor) return
                   const precise = window.matchMedia('(hover: hover) and (pointer: fine)').matches
-                  const chain = editor.chain().setTextSelection(h.pos + 1).scrollIntoView()
-                  if (precise) chain.focus()
-                  chain.run()
-                  if (!precise) setOutlineOpen(false)
+                  if (precise) {
+                    editor.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run()
+                  } else {
+                    editor.commands.setTextSelection(h.pos + 1)
+                    const at = editor.view.domAtPos(h.pos + 1)
+                    const el = at.node.nodeType === 1 ? (at.node as Element) : at.node.parentElement
+                    el?.scrollIntoView({ block: 'start' })
+                    setOutlineOpen(false)
+                  }
                 }}
               >
                 {h.text || '（空标题）'}
