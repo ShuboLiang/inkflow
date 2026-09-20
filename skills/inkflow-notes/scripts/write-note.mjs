@@ -27,18 +27,27 @@ const title = opt('title') || ''
 const VALUE_FLAGS = new Set(['--title', '--folder', '--tags', '--id'])
 const fileArg = args.find((a, i) => !a.startsWith('--') && (i === 0 || !VALUE_FLAGS.has(args[i - 1])))
 const useStdin = args.includes('--stdin')
+const dryRun = args.includes('--dry-run')
 const folderPath = opt('folder') // 支持 a/b 多级
 const tags = (opt('tags') || '').split(',').map((s) => s.trim()).filter(Boolean)
 const noteId = opt('id') // 提供则更新已有笔记
 
 if ((!fileArg && !useStdin) || (!title && !useStdin)) {
-  console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid]')
+  console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid] [--dry-run]')
   console.error('   或: cat 笔记.md | node write-note.mjs --title "标题" --stdin [--folder a/b]')
   process.exit(1)
 }
 
 const mdText = useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
 const mdDir = fileArg ? dirname(resolve(fileArg)) : process.cwd()
+
+
+
+// 仅验证转换结果、不写库（调试/CI 用）：打印 TipTap JSON 后退出
+if (dryRun) {
+  console.log(JSON.stringify(await mdToDocDry(mdText)))
+  process.exit(0)
+}
 
 // ---------- 认证 ----------
 let token = process.env.INKFLOW_TOKEN
@@ -92,11 +101,13 @@ async function uploadImage(localPath) {
 // ---------- Markdown → TipTap JSON（常用语法子集，与编辑器 schema 一致） ----------
 // 支持: #/##/### 标题、**粗体**、*斜体*、`行内代码`、```代码块、-/* 无序列表、1. 有序列表、
 //       - [ ]/- [x] 待办清单、GFM 表格（首行表头）、> 引用、$行内公式$、$$块级公式$$、
-//       ![图](路径)、[链接](url)
+//       ![图](路径)、[链接](url)、{{文字}}/{{色名:文字}} 文字颜色、==高亮==/==色名:高亮==
 function parseInline(s) {
+  const TEXT_HEX = { 红: '#c92a2a', 橙: '#d9480f', 绿: '#2b8a3e', 青: '#1f6f6b', 蓝: '#1971c2', 紫: '#862e9c', 灰: '#495057' }
+  const MARK_HEX = { 黄: '#fff3bf', 红: '#ffe3e3', 橙: '#ffe8cc', 绿: '#d3f9d8', 青: '#c5f6fa', 蓝: '#dbe4ff', 紫: '#f3d9fa' }
   const nodes = []
   let last = 0
-  const re = /\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|(?<!\$)\$([^$\n]+)\$(?!\$)/g
+  const re = /\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|(?<!\$)\$([^$\n]+)\$(?!\$)|\{\{(?:(红|橙|绿|青|蓝|紫|灰)[:：])?([^{}]+)\}\}|==(?:(黄|红|橙|绿|青|蓝|紫)[:：])?([^=]+)==/g
   let m
   while ((m = re.exec(s)) !== null) {
     if (m.index > last) nodes.push({ type: 'text', text: s.slice(last, m.index) })
@@ -107,15 +118,31 @@ function parseInline(s) {
       nodes.push({ type: 'text', marks: [{ type: 'link', attrs: { href: m[5] } }], text: m[4] })
     else if (m[6] !== undefined)
       nodes.push({ type: 'inlineMath', attrs: { latex: m[6] } })
+    else if (m[7] !== undefined || m[8] !== undefined)
+      // 文字颜色：{{文字}} 默认红，{{蓝:文字}} 指定色（色名同编辑器色板）
+      nodes.push({
+        type: 'text',
+        marks: [{ type: 'textStyle', attrs: { color: TEXT_HEX[m[7]] ?? '#c92a2a' } }],
+        text: m[8],
+      })
+    else if (m[9] !== undefined || m[10] !== undefined)
+      // 荧光高亮：==文字== 默认黄，==红:文字== 指定底色
+      nodes.push({
+        type: 'text',
+        marks: [{ type: 'highlight', attrs: { color: MARK_HEX[m[9]] ?? '#fff3bf' } }],
+        text: m[10],
+      })
     last = m.index + m[0].length
   }
   if (last < s.length) nodes.push({ type: 'text', text: s.slice(last) })
   return nodes.length ? nodes : undefined
 }
 
-const para = (text) => ({ type: 'paragraph', content: parseInline(text) })
+function para(text) {
+  return { type: 'paragraph', content: parseInline(text) }
+}
 
-async function mdToDoc(md) {
+async function mdToDoc(md, dry = false) {
   const lines = md.replace(/\r\n/g, '\n').split('\n')
   const content = []
   let i = 0
@@ -159,7 +186,7 @@ async function mdToDoc(md) {
     const img = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(line.trim())
     if (img) {
       let src = img[2]
-      if (!/^https?:\/\//.test(src) && !src.startsWith('data:')) src = await uploadImage(src)
+      if (!dry && !/^https?:\/\//.test(src) && !src.startsWith('data:')) src = await uploadImage(src)
       content.push({ type: 'image', attrs: { src, alt: img[1] || null, title: null } })
       i++
       continue
@@ -250,6 +277,11 @@ async function mdToDoc(md) {
   return { type: 'doc', content }
 }
 
+// dry-run：图片保持原路径不上传，仅输出转换后的文档 JSON
+async function mdToDocDry(md) {
+  return mdToDoc(md, true)
+}
+
 // ---------- 文件夹解析（a/b 多级，不存在则逐级创建） ----------
 async function resolveFolder(path) {
   if (!path) return null
@@ -276,6 +308,8 @@ async function resolveFolder(path) {
   }
   return parentId
 }
+
+
 
 // ---------- 写入笔记 ----------
 const content = await mdToDoc(mdText)
