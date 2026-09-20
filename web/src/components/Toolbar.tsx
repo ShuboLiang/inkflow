@@ -6,8 +6,6 @@ import './Toolbar.css'
 
 interface ToolbarProps {
   editor: Editor | null
-  // 上传 .md/.html/.pdf：md/html 由外层解析插入，pdf 交给上层存附件
-  onUpload?: (files: File[]) => void
 }
 
 interface ActiveMap {
@@ -25,6 +23,7 @@ interface ActiveMap {
   link: boolean
   inlineMath: boolean
   blockMath: boolean
+  table: boolean
 }
 
 interface MathDraft {
@@ -34,15 +33,17 @@ interface MathDraft {
   to: number
 }
 
-export function Toolbar({ editor, onUpload }: ToolbarProps) {
+export function Toolbar({ editor }: ToolbarProps) {
   if (!editor) return null
-  return <ToolbarInner editor={editor} onUpload={onUpload} />
+  return <ToolbarInner editor={editor} />
 }
 
-function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files: File[]) => void }) {
+function ToolbarInner({ editor }: { editor: Editor }) {
   const [mathDraft, setMathDraft] = useState<MathDraft | null>(null)
+  const [tablePick, setTablePick] = useState(false)
+  // 表格插入网格的悬停规格（行,列），点选后 insertTable
+  const [tableSize, setTableSize] = useState({ rows: 2, cols: 2 })
   const inputRef = useRef<HTMLInputElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const active = useEditorState<ActiveMap>({
     editor,
@@ -62,6 +63,7 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
         link: ctx.editor.isActive('link'),
         inlineMath: ctx.editor.isActive('inlineMath'),
         blockMath: ctx.editor.isActive('blockMath'),
+        table: ctx.editor.isActive('table'),
       }) satisfies ActiveMap,
   })
 
@@ -176,33 +178,25 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
             {item.label}
           </button>
         ))}
-        {onUpload && (
+        <button
+          type="button"
+          className={active.table ? 'fmt-btn active' : 'fmt-btn'}
+          title="插入表格"
+          aria-label="插入表格"
+          aria-pressed={active.table}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setTablePick((v) => !v)}
+        >
+          ▦
+        </button>
+        {active.table && (
           <>
-            <button
-              type="button"
-              className="fmt-btn"
-              title="上传文件：md 导入为内容，html/pdf 存为文件预览"
-              aria-label="上传文件"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 19V5M5 12l7-7 7 7" />
-                <path d="M4 21h16" />
-              </svg>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              hidden
-              multiple
-              accept=".md,.markdown,.html,.htm"
-              onChange={(e) => {
-                const files = e.target.files ? Array.from(e.target.files) : []
-                e.target.value = ''
-                if (files.length) onUpload(files)
-              }}
-            />
+            <button type="button" className="fmt-btn" title="下方插入行" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().addRowAfter().run()}>＋行</button>
+            <button type="button" className="fmt-btn" title="删除当前行" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteRow().run()}>－行</button>
+            <button type="button" className="fmt-btn" title="右侧插入列" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().addColumnAfter().run()}>＋列</button>
+            <button type="button" className="fmt-btn" title="删除当前列" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteColumn().run()}>－列</button>
+            <button type="button" className="fmt-btn" title="切换表头单元格" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleHeaderCell().run()}>⌗</button>
+            <button type="button" className="fmt-btn" title="删除表格" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteTable().run()}>删表</button>
           </>
         )}
       </div>
@@ -230,6 +224,30 @@ function ToolbarInner({ editor, onUpload }: { editor: Editor; onUpload?: (files:
           <button type="button" className="math-popover-cancel" onClick={cancelMath}>
             取消
           </button>
+        </div>
+      )}
+      {tablePick && (
+        <div className="table-popover" role="dialog" aria-label="插入表格">
+          <div className="table-popover-grid">
+            {Array.from({ length: 36 }, (_, i) => {
+              const row = Math.floor(i / 6) + 1
+              const col = (i % 6) + 1
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={row <= tableSize.rows && col <= tableSize.cols ? 'table-cell on' : 'table-cell'}
+                  aria-label={`${row} 行 ${col} 列`}
+                  onMouseEnter={() => setTableSize({ rows: row, cols: col })}
+                  onClick={() => {
+                    setTablePick(false)
+                    editor.chain().focus().insertTable({ rows: row, cols: col, withHeaderRow: true }).run()
+                  }}
+                />
+              )
+            })}
+          </div>
+          <div className="table-popover-label">{tableSize.rows} × {tableSize.cols}</div>
         </div>
       )}
     </div>
