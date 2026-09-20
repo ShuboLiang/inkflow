@@ -21,6 +21,20 @@
   box-sizing: border-box;
 }
 
+/* PDF 分享：纸张本身竖长，容器放宽、留白减小，尽量给查看器更多空间 */
+.share-sheet-file {
+  max-width: 1080px;
+  padding: 20px 24px;
+}
+
+@media (max-width: 767px) {
+  .share-sheet,
+  .share-sheet-file {
+    max-width: 100%;
+    padding: 16px;
+  }
+}
+
 .share-status {
   text-align: center;
   color: var(--ink-500);
@@ -150,7 +164,7 @@
 .share-file {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 200px);
+  height: calc(100vh - 140px);
 }
 
 .share-file .file-view-frame {

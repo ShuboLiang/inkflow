@@ -37,8 +37,10 @@ export function SharePage({ token }: { token: string }) {
       if (cancelled) return
       if (file && (file as { filename?: string }[]).length > 0) {
         const row = file as { filename: string; storage_path: string }[]
+        // 分享对象复制在公共桶 shares/{token}（见 store/shares.ts），
+        // files.storage_path 是私有桶路径，不能直接用
         const base = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, '')
-        const url = `${base}/storage/v1/object/public/shares/${row[0].storage_path}?render=1`
+        const url = `${base}/storage/v1/object/public/shares/${token}?render=1`
         setState({ status: 'file', filename: row[0].filename, url })
         return
       }
@@ -54,7 +56,7 @@ export function SharePage({ token }: { token: string }) {
 
   return (
     <div className="share-page">
-      <div className="share-sheet">
+      <div className={state.status === 'file' ? 'share-sheet share-sheet-file' : 'share-sheet'}>
         {state.status === 'loading' && <p className="share-status">载入中…</p>}
         {state.status === 'missing' && (
           <div className="share-status">
