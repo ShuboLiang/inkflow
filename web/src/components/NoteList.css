@@ -272,6 +272,16 @@
   .card-more {
     display: inline-flex;
   }
+  /* 触屏右上角有「⋯」按钮，标题行/摘要向右缩进，避免把 PDF 类型徽标压到按钮下面 */
+  .note-card-title,
+  .file-card-title,
+  .note-card-excerpt {
+    padding-right: 38px;
+  }
+  .note-card-excerpt {
+    /* 两行摘要如果刚好顶到按钮，也预留空间，同时保持截断效果 */
+    box-sizing: border-box;
+  }
 }
 
 /* 搜索命中高亮（正文片段里的命中词） */
