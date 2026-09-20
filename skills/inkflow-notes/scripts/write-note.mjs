@@ -7,13 +7,13 @@
 // 认证（二选一）：
 //   1) INKFLOW_EMAIL + INKFLOW_PASSWORD   （邮箱密码登录）
 //   2) INKFLOW_TOKEN + INKFLOW_USER_ID    （预签发的 access token，供自动化/测试）
-// 其它环境变量：INKFLOW_URL（默认 http://localhost:8000）、INKFLOW_ANON_KEY（已内置默认值）
+// 其它环境变量：INKFLOW_URL（默认 https://kod.liangshubo.top，即部署好的线上服务）、INKFLOW_ANON_KEY（已内置默认值）
 
 import { readFileSync, existsSync } from 'node:fs'
 import { basename, extname, resolve, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-const SUPABASE_URL = (process.env.INKFLOW_URL || 'http://localhost:8000').replace(/\/$/, '')
+const SUPABASE_URL = (process.env.INKFLOW_URL || 'https://kod.liangshubo.top').replace(/\/$/, '')
 // anon key 是公开密钥（浏览器包里也带着），非秘密
 const ANON_KEY = process.env.INKFLOW_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg5NzQ3MzQ5LCJleHAiOjIxMDUxMDczNDl9.4JLhxMCKeW--vLgZLnb8LGUx4B51PTt56TPgEGF_ZX4'
 
@@ -91,7 +91,8 @@ async function uploadImage(localPath) {
 
 // ---------- Markdown → TipTap JSON（常用语法子集，与编辑器 schema 一致） ----------
 // 支持: #/##/### 标题、**粗体**、*斜体*、`行内代码`、```代码块、-/* 无序列表、1. 有序列表、
-//       > 引用、$行内公式$、$$块级公式$$、![图](路径)、[链接](url)
+//       - [ ]/- [x] 待办清单、GFM 表格（首行表头）、> 引用、$行内公式$、$$块级公式$$、
+//       ![图](路径)、[链接](url)
 function parseInline(s) {
   const nodes = []
   let last = 0
@@ -166,6 +167,50 @@ async function mdToDoc(md) {
 
     if (/^\s*$/.test(line)) {
       i++
+      continue
+    }
+
+    // GFM 表格：| 开头的行 + --- 分隔行，首行为表头
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?[\s\-:|]+\|?\s*$/.test(lines[i + 1] ?? '') && (lines[i + 1] ?? '').includes('-')) {
+      const splitRow = (l) =>
+        l
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((c) => c.trim())
+      const headerCells = splitRow(line)
+      i += 2
+      const bodyRows = []
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        bodyRows.push(splitRow(lines[i]))
+        i++
+      }
+      const cellNode = (type, t) => ({ type, content: [para(t || ' ')] })
+      content.push({
+        type: 'table',
+        content: [
+          { type: 'tableRow', content: headerCells.map((c) => cellNode('tableHeader', c)) },
+          ...bodyRows.map((r) => ({ type: 'tableRow', content: r.map((c) => cellNode('tableCell', c)) })),
+        ],
+      })
+      continue
+    }
+
+    // 待办清单：- [ ] / - [x]
+    const taskRe = /^\s*[-*]\s+\[([ xX])\]\s+/
+    if (taskRe.test(line)) {
+      const items = []
+      while (i < lines.length && taskRe.test(lines[i])) {
+        const tm = taskRe.exec(lines[i])
+        items.push({
+          type: 'taskItem',
+          attrs: { checked: tm[1] !== ' ' },
+          content: [para(lines[i].replace(taskRe, ''))],
+        })
+        i++
+      }
+      content.push({ type: 'taskList', content: items })
       continue
     }
 

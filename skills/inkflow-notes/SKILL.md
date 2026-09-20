@@ -5,7 +5,7 @@ description: 向 InkFlow 笔记应用写入或更新笔记。当用户说「记�
 
 # InkFlow 笔记写入
 
-InkFlow 是自托管在 `http://localhost:8000` 的 Supabase 笔记应用（前端 http://localhost:5173）。
+InkFlow 是部署在 `https://kod.liangshubo.top` 的 Supabase 笔记应用（本地开发环境为 http://localhost:8000）。
 笔记内容必须存 **TipTap 文档 JSON**（不是原始 Markdown/HTML），本 skill 的脚本已完成转换，优先用脚本，不要手写 REST。
 
 ## 前置条件（一次性）
@@ -21,7 +21,7 @@ export INKFLOW_PASSWORD=你的密码
 export INKFLOW_TOKEN=<access_token> INKFLOW_USER_ID=<uuid>
 ```
 
-`INKFLOW_URL` 默认 `http://localhost:8000`，`INKFLOW_ANON_KEY` 已内置，无需设置。
+`INKFLOW_URL` 默认 `https://kod.liangshubo.top`（线上服务），指向本地开发环境时设 `http://localhost:8000`；`INKFLOW_ANON_KEY` 已内置，无需设置。
 
 ## 用法
 
@@ -44,7 +44,8 @@ node "$SKILL_DIR/scripts/write-note.mjs" --title "深度学习基础(修订)" no
 ## Markdown 支持范围
 
 脚本转换器覆盖编辑器全部常用语法：`#`/`##`/`###` 标题、`**粗体**`、`*斜体*`、`` `行内代码` ``、
-` ``` ` 代码块、`- `/`1. ` 列表、`> ` 引用、`$行内公式$`、`$$块级公式$$`、`[链接](url)`。
+` ``` ` 代码块、`- `/`1. ` 列表、`- [ ]`/`- [x]` 待办清单、GFM 表格（`| 列1 | 列2 |`，首行表头）、
+`> ` 引用、`$行内公式$`、`$$块级公式$$`、`[链接](url)`。
 
 图片 `![说明](路径)`：
 - `https://` 开头：原样引用
@@ -73,4 +74,4 @@ node "$SKILL_DIR/scripts/write-note.mjs" --title "深度学习基础(修订)" no
 ## 限制
 
 - 客户端旧版本缓存可能导致新笔记延迟几秒显示，属正常
-- 脚本不做 Markdown 表格/嵌套列表/删除线等冷门语法（保留为纯文本）
+- 脚本不做嵌套列表/删除线/文字颜色等冷门语法（保留为纯文本）
