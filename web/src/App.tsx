@@ -12,6 +12,7 @@ const PdfViewer = lazy(() =>
   import('./components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
 )
 import { HtmlViewer } from './components/HtmlViewer'
+import { TagPicker } from './components/TagPicker'
 import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
@@ -23,7 +24,6 @@ import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags
 import { loadPrefs, savePrefs } from './store/prefs'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
-import { TagInput } from './components/TagInput'
 import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
 import { DialogHost } from './components/Dialog'
@@ -703,6 +703,11 @@ export default function App() {
                 <span className="editor-file-name" title={activeFile.filename}>
                   {activeFile.filename}
                 </span>
+                <TagPicker
+                  tags={activeFile.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleFileTagsChange}
+                />
                 <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
                 {activeFile.dataUrl && (
                   <a
@@ -723,28 +728,18 @@ export default function App() {
                   删除
                 </button>
               </div>
-              <div className="file-scroll">
-                <div className="editor-head">
-                  <TagInput
-                    key={`file-tags-${activeFile.id}`}
-                    tags={activeFile.tags ?? []}
-                    suggestions={[...tagCounts.keys()]}
-                    onChange={handleFileTagsChange}
-                  />
-                </div>
-                <div className="file-view">
-                  {activeFile.dataUrl ? (
-                    kindOfName(activeFile.filename) === 'html' ? (
-                      <HtmlViewer src={activeFile.dataUrl} />
-                    ) : (
-                      <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                        <PdfViewer src={activeFile.dataUrl} />
-                      </Suspense>
-                    )
+              <div className="file-view">
+                {activeFile.dataUrl ? (
+                  kindOfName(activeFile.filename) === 'html' ? (
+                    <HtmlViewer src={activeFile.dataUrl} />
                   ) : (
-                    <p className="file-view-fallback">正在从云端加载文件…</p>
-                  )}
-                </div>
+                    <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
+                      <PdfViewer src={activeFile.dataUrl} />
+                    </Suspense>
+                  )
+                ) : (
+                  <p className="file-view-fallback">正在从云端加载文件…</p>
+                )}
               </div>
             </>
           ) : active ? (
@@ -777,6 +772,11 @@ export default function App() {
                 >
                   Aa
                 </button>
+                <TagPicker
+                  tags={active.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleNoteTagsChange}
+                />
                 <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
                 <button type="button" className="tool-btn danger" onClick={() => void handleDelete()}>
                   <IconTrash />
@@ -793,12 +793,6 @@ export default function App() {
                     placeholder="无标题"
                     aria-label="笔记标题"
                     onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
-                  />
-                  <TagInput
-                    key={`tags-${active.id}`}
-                    tags={active.tags ?? []}
-                    suggestions={[...tagCounts.keys()]}
-                    onChange={handleNoteTagsChange}
                   />
                 </div>
                 <EditorBoundary>
