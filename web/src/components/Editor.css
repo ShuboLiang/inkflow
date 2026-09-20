@@ -39,6 +39,13 @@
   color: var(--qing);
 }
 
+/* 格式栏隐藏开关的开启态 */
+.tool-btn.active-tool {
+  background: var(--qing-50);
+  color: var(--qing);
+  font-weight: 600;
+}
+
 .tool-btn.danger {
   color: var(--danger);
 }

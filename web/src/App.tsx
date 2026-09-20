@@ -20,6 +20,7 @@ import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { deleteFile, ensureFileData, moveFile, renameFile, saveFile } from './store/files'
+import { loadPrefs, savePrefs } from './store/prefs'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
 import { TagInput } from './components/TagInput'
@@ -72,6 +73,8 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
+  // 格式工具栏隐藏偏好：全局（任意笔记隐藏 = 全部隐藏），登录后从云端加载、切换即保存
+  const [toolbarHidden, setToolbarHidden] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -81,6 +84,25 @@ export default function App() {
     () => db.notes.orderBy('updatedAt').reverse().filter((n) => n.deletedAt === null).toArray(),
     [],
   )
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    void loadPrefs()
+      .then((p) => !cancelled && setToolbarHidden(p.toolbarHidden))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const toggleToolbar = () => {
+    setToolbarHidden((cur) => {
+      const next = !cur
+      void savePrefs({ toolbarHidden: next }).catch(() => {})
+      return next
+    })
+  }
 
   const folders = useLiveQuery(async () => {
     const all = await db.folders.filter((f) => f.deletedAt === null).toArray()
@@ -722,6 +744,16 @@ export default function App() {
                   ))}
                 </select>
                 <span className="toolbar-spacer" />
+                <button
+                  type="button"
+                  className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
+                  title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                  aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                  aria-pressed={toolbarHidden}
+                  onClick={toggleToolbar}
+                >
+                  Aa
+                </button>
                 <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
                 <button type="button" className="tool-btn danger" onClick={() => void handleDelete()}>
                   <IconTrash />
@@ -751,6 +783,7 @@ export default function App() {
                     key={active.id}
                     content={active.content}
                     onUpdate={(content) => scheduleSave(active.id, { content })}
+                    toolbarHidden={toolbarHidden}
                   />
                 </EditorBoundary>
               </div>
