@@ -107,30 +107,13 @@
   background: var(--qing-50);
 }
 
-/* pdf.js 逐页渲染；.pdf-view 同时是滚动容器（放大后横向可滚） */
-.pdf-view {
+/* pdf.js 官方 viewer（iframe）：占满 .file-view 剩余空间 */
+.file-view-frame {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
   width: 100%;
-  margin: 0 auto;
-  padding: 12px;
-  box-sizing: border-box;
-}
-
-.pdf-page {
-  margin: 0 auto 8px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 1px 3px rgba(28, 33, 40, 0.12);
-  overflow: hidden;
-}
-
-.pdf-page canvas {
-  display: block;
-  width: 100%;
-  height: auto;
+  border: 0;
+  background: var(--qing-50);
 }
 
 .file-view-fallback {

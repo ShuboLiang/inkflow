@@ -121,11 +121,9 @@
   height: calc(100vh - 200px);
 }
 
-.share-file .pdf-view {
+.share-file .file-view-frame {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--ink-200);
   border-radius: 8px;
   background: var(--paper);

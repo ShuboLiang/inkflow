@@ -42,6 +42,7 @@ const MIME = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.ico': 'image/x-icon',
+  '.wasm': 'application/wasm',
   '.txt': 'text/plain; charset=utf-8',
   '.pdf': 'application/pdf',
   '.md': 'text/plain; charset=utf-8',
