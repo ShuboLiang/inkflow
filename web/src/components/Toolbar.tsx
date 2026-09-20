@@ -24,6 +24,8 @@ interface ActiveMap {
   inlineMath: boolean
   blockMath: boolean
   table: boolean
+  taskList: boolean
+  highlight: boolean
 }
 
 interface MathDraft {
@@ -32,6 +34,29 @@ interface MathDraft {
   from: number
   to: number
 }
+
+// 文字颜色 / 荧光笔色板（与应用整体色调协调的常用色）
+const TEXT_COLORS = [
+  { label: '默认', value: null },
+  { label: '红', value: '#c92a2a' },
+  { label: '橙', value: '#d9480f' },
+  { label: '绿', value: '#2b8a3e' },
+  { label: '青', value: '#1f6f6b' },
+  { label: '蓝', value: '#1971c2' },
+  { label: '紫', value: '#862e9c' },
+  { label: '灰', value: '#495057' },
+]
+
+const MARK_COLORS = [
+  { label: '无', value: null },
+  { label: '黄', value: '#fff3bf' },
+  { label: '红', value: '#ffe3e3' },
+  { label: '橙', value: '#ffe8cc' },
+  { label: '绿', value: '#d3f9d8' },
+  { label: '青', value: '#c5f6fa' },
+  { label: '蓝', value: '#dbe4ff' },
+  { label: '紫', value: '#f3d9fa' },
+]
 
 export function Toolbar({ editor }: ToolbarProps) {
   if (!editor) return null
@@ -43,6 +68,8 @@ function ToolbarInner({ editor }: { editor: Editor }) {
   const [tablePick, setTablePick] = useState(false)
   // 表格插入网格的悬停规格（行,列），点选后 insertTable
   const [tableSize, setTableSize] = useState({ rows: 2, cols: 2 })
+  const [colorPick, setColorPick] = useState(false)
+  const [markPick, setMarkPick] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const active = useEditorState<ActiveMap>({
@@ -64,6 +91,8 @@ function ToolbarInner({ editor }: { editor: Editor }) {
         inlineMath: ctx.editor.isActive('inlineMath'),
         blockMath: ctx.editor.isActive('blockMath'),
         table: ctx.editor.isActive('table'),
+        taskList: ctx.editor.isActive('taskList'),
+        highlight: ctx.editor.isActive('highlight'),
       }) satisfies ActiveMap,
   })
 
@@ -180,12 +209,57 @@ function ToolbarInner({ editor }: { editor: Editor }) {
         ))}
         <button
           type="button"
+          className={active.taskList ? 'fmt-btn active' : 'fmt-btn'}
+          title="待办清单"
+          aria-label="待办清单"
+          aria-pressed={active.taskList}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+        >
+          ☑
+        </button>
+        <button
+          type="button"
+          className={colorPick ? 'fmt-btn active' : 'fmt-btn'}
+          title="文字颜色"
+          aria-label="文字颜色"
+          aria-pressed={colorPick}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setColorPick((v) => !v)
+            setMarkPick(false)
+            setTablePick(false)
+          }}
+        >
+          A<span className="fmt-color-bar" />
+        </button>
+        <button
+          type="button"
+          className={active.highlight ? 'fmt-btn active' : 'fmt-btn'}
+          title="荧光笔高亮"
+          aria-label="荧光笔高亮"
+          aria-pressed={active.highlight}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setMarkPick((v) => !v)
+            setColorPick(false)
+            setTablePick(false)
+          }}
+        >
+          ▨
+        </button>
+        <button
+          type="button"
           className={active.table ? 'fmt-btn active' : 'fmt-btn'}
           title="插入表格"
           aria-label="插入表格"
           aria-pressed={active.table}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setTablePick((v) => !v)}
+          onClick={() => {
+            setTablePick((v) => !v)
+            setColorPick(false)
+            setMarkPick(false)
+          }}
         >
           ▦
         </button>
@@ -224,6 +298,50 @@ function ToolbarInner({ editor }: { editor: Editor }) {
           <button type="button" className="math-popover-cancel" onClick={cancelMath}>
             取消
           </button>
+        </div>
+      )}
+      {colorPick && (
+        <div className="palette-popover" role="dialog" aria-label="文字颜色">
+          {TEXT_COLORS.map((c) => (
+            <button
+              key={c.label}
+              type="button"
+              className="palette-swatch"
+              style={c.value ? { background: c.value } : undefined}
+              title={c.label}
+              aria-label={`文字颜色 ${c.label}`}
+              onClick={() => {
+                setColorPick(false)
+                const chain = editor.chain().focus()
+                if (c.value) chain.setColor(c.value).run()
+                else chain.unsetColor().run()
+              }}
+            >
+              {c.value ? '' : '⌀'}
+            </button>
+          ))}
+        </div>
+      )}
+      {markPick && (
+        <div className="palette-popover" role="dialog" aria-label="荧光笔高亮">
+          {MARK_COLORS.map((c) => (
+            <button
+              key={c.label}
+              type="button"
+              className="palette-swatch"
+              style={c.value ? { background: c.value } : undefined}
+              title={c.label}
+              aria-label={`高亮 ${c.label}`}
+              onClick={() => {
+                setMarkPick(false)
+                const chain = editor.chain().focus()
+                if (c.value) chain.setHighlight({ color: c.value }).run()
+                else chain.unsetHighlight().run()
+              }}
+            >
+              {c.value ? '' : '⌀'}
+            </button>
+          ))}
         </div>
       )}
       {tablePick && (

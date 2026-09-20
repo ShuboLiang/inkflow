@@ -7,6 +7,14 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
+import { Highlight } from '@tiptap/extension-highlight'
+import { TaskList } from '@tiptap/extension-task-list'
+import { TaskItem } from '@tiptap/extension-task-item'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
+import { common, createLowlight } from 'lowlight'
+import 'highlight.js/styles/github.css'
 import { InputRule, type Extensions } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
@@ -169,7 +177,8 @@ const BlockMathRule = BlockMath.extend({
 // +- != 2x3 << >> -> <-（数学常用符号序列）。保留 --、...、引号、版权符号等散文排版规则。
 export function buildExtensions(): Extensions {
   return [
-    StarterKit,
+    // codeBlock 用 CodeBlockLowlight 替换（语法高亮），StarterKit 自带的不注册
+    StarterKit.configure({ codeBlock: false }),
     Typography.configure({
       superscriptTwo: false,
       superscriptThree: false,
@@ -196,5 +205,13 @@ export function buildExtensions(): Extensions {
     TableRow,
     TableHeader,
     TableCell,
+    // 待办清单（- [ ] 语法可用）、荧光笔高亮（多色）、文字颜色
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Highlight.configure({ multicolor: true }),
+    TextStyle,
+    Color,
+    // 代码块语法高亮（common 语言集，约 40 种常用语言）
+    CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
   ]
 }

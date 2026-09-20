@@ -201,3 +201,37 @@
     padding: 24px 20px;
   }
 }
+
+/* 待办清单（只读分享页） */
+.share-doc-body .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  margin-left: 0;
+  padding-left: 2px;
+}
+
+.share-doc-body .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.share-doc-body .ProseMirror ul[data-type='taskList'] li > label {
+  margin: 4px 0 0;
+  user-select: none;
+}
+
+.share-doc-body .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--ink-500);
+  text-decoration: line-through;
+}
+
+/* 代码块语法高亮背景透明化，保持应用底色 */
+.share-doc-body .ProseMirror pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+.share-doc-body .ProseMirror mark {
+  border-radius: 3px;
+  padding: 0 1px;
+}

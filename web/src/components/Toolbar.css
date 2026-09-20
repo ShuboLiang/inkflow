@@ -133,3 +133,46 @@
   font-size: 12px;
   color: var(--ink-500);
 }
+
+/* 文字颜色按钮的下划色条 */
+.fmt-color-bar {
+  display: block;
+  width: 14px;
+  height: 2px;
+  margin: 1px auto 0;
+  background: #c92a2a;
+  border-radius: 1px;
+}
+
+/* 颜色/高亮色板 */
+.palette-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  font-family: var(--font-ui);
+}
+
+.palette-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ink-200);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-500);
+  background: #fff;
+}
+
+.palette-swatch:hover {
+  transform: scale(1.12);
+}
