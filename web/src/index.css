@@ -1,9 +1,16 @@
+html,
+body,
 #root {
-  min-height: 100vh;
+  height: 100%;
+}
+
+html {
+  overflow: hidden; /* html 的 overflow 直接约束视口，双保险锁住窗口滚动 */
 }
 
 body {
   margin: 0;
+  overflow: hidden; /* SPA 全屏布局：窗口本身永不出现滚动条，滚动只发生在设计的内层容器 */
   background: var(--paper);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
