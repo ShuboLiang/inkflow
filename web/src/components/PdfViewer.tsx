@@ -50,14 +50,26 @@ async function registerFontAliases() {
   }
 }
 
+const MIN_ZOOM = 1
+const MAX_ZOOM = 5
+const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+// 桌面端页宽上限；放大时同比例放宽
+const PAGE_MAX_WIDTH = 900
+
 // PDF 查看器：逐页渲染到 canvas，宽度自适应容器，纵向触摸滚动。
 // 替换原先的 <iframe dataUrl> 方案——浏览器内建查看器在手机上不缩放、不滚动。
+// 缩放：双击/双指捏合/Ctrl+滚轮；canvas 按缩放后的尺寸重渲染，任意倍率下文字都清晰。
 export function PdfViewer({ src }: { src: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   // loaded / failed 都绑 src，切换文件时自动失效，无需在 effect 里手动清状态
   const [loaded, setLoaded] = useState<{ src: string; doc: PDFDocumentProxy } | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   const [width, setWidth] = useState(0)
+  // zoom 立即作用于布局（捏合时跟着手），renderZoom 防抖后触发 canvas 重绘，
+  // 手势过程中canvas先拉伸、松手后变清晰——避免连续重绘卡顿
+  const [zoom, setZoom] = useState(1)
+  const [renderZoom, setRenderZoom] = useState(1)
+  const zoomRef = useRef(1)
 
   useEffect(() => {
     let cancelled = false
@@ -77,6 +89,13 @@ export function PdfViewer({ src }: { src: string }) {
     }
   }, [src])
 
+  // 切换文件时重置缩放
+  useEffect(() => {
+    zoomRef.current = 1
+    setZoom(1)
+    setRenderZoom(1)
+  }, [src])
+
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -90,25 +109,162 @@ export function PdfViewer({ src }: { src: string }) {
     return () => ro.disconnect()
   }, [])
 
+  useEffect(() => {
+    const t = setTimeout(() => setRenderZoom(zoom), 180)
+    return () => clearTimeout(t)
+  }, [zoom])
+
+  const applyZoom = (z: number) => {
+    const c = clampZoom(z)
+    zoomRef.current = c
+    setZoom(c)
+  }
+
+  // 缩放后保持 (cx, cy)（相对滚动视口）下的内容不动
+  const zoomAt = (nextZoom: number, cx: number, cy: number) => {
+    const el = containerRef.current
+    if (!el) return
+    const k = clampZoom(nextZoom) / zoomRef.current
+    if (k === 1) return
+    const sl = el.scrollLeft
+    const st = el.scrollTop
+    applyZoom(zoomRef.current * k)
+    el.scrollLeft = (sl + cx) * k - cx
+    el.scrollTop = (st + cy) * k - cy
+  }
+
+  // ---- 触摸手势：单指拖动（放大时）、双指捏合 ----
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ span: number; zoom: number; cx: number; cy: number; sl: number; st: number } | null>(null)
+  const pan = useRef<{ x: number; y: number } | null>(null)
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = containerRef.current
+    if (!el) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()]
+      const rect = el.getBoundingClientRect()
+      pinch.current = {
+        span: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        zoom: zoomRef.current,
+        cx: (a.x + b.x) / 2 - rect.left,
+        cy: (a.y + b.y) / 2 - rect.top,
+        sl: el.scrollLeft,
+        st: el.scrollTop,
+      }
+      pan.current = null
+    } else if (pointers.current.size === 1 && zoomRef.current > 1) {
+      pan.current = { x: e.clientX, y: e.clientY }
+    }
+  }
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = pointers.current.get(e.pointerId)
+    const el = containerRef.current
+    if (!p || !el) return
+    p.x = e.clientX
+    p.y = e.clientY
+    if (pinch.current && pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()]
+      const span = Math.hypot(a.x - b.x, a.y - b.y) || 1
+      const g = pinch.current
+      const next = clampZoom(g.zoom * (span / g.span))
+      const k = next / g.zoom
+      zoomRef.current = next
+      setZoom(next)
+      el.scrollLeft = (g.sl + g.cx) * k - g.cx
+      el.scrollTop = (g.st + g.cy) * k - g.cy
+    } else if (pan.current && pointers.current.size === 1) {
+      el.scrollLeft -= e.clientX - pan.current.x
+      el.scrollTop -= e.clientY - pan.current.y
+      pan.current = { x: e.clientX, y: e.clientY }
+    }
+  }
+
+  const endPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
+    if (pointers.current.size === 0) pan.current = null
+  }
+
+  // 双击/双击触控：1x ↔ 2.5x，缩向点击处；iOS 双触可靠性差，用双 tap 间隔兜底
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null)
+  const onDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const cx = e.clientX - rect.left
+    const cy = e.clientY - rect.top
+    zoomAt(zoomRef.current > 1 ? 1 : 2.5, cx, cy)
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    endPointer(e)
+    if (e.pointerType !== 'touch' || pointers.current.size > 0) return
+    const now = Date.now()
+    const el = containerRef.current
+    if (lastTap.current && now - lastTap.current.t < 350 && el) {
+      const rect = el.getBoundingClientRect()
+      zoomAt(zoomRef.current > 1 ? 1 : 2.5, e.clientX - rect.left, e.clientY - rect.top)
+      lastTap.current = null
+    } else {
+      lastTap.current = { t: now, x: e.clientX, y: e.clientY }
+    }
+  }
+
+  // 桌面触控板捏合（Ctrl+滚轮）；React 的 wheel 是被动监听，这里用原生 + preventDefault
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      zoomAt(zoomRef.current * Math.exp(-e.deltaY * 0.015), e.clientX - rect.left, e.clientY - rect.top)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const doc = loaded && loaded.src === src ? loaded.doc : null
   const error = failed === src
 
   return (
-    <div ref={containerRef} className="pdf-view">
+    <div
+      ref={containerRef}
+      className="pdf-view"
+      style={{ touchAction: zoom > 1 ? 'none' : 'pan-y', cursor: zoom > 1 ? 'grab' : 'default' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={endPointer}
+      onDoubleClick={onDoubleClick}
+    >
       {error ? (
         <p className="file-view-fallback">PDF 加载失败，请尝试下载后查看。</p>
       ) : !doc ? (
         <p className="file-view-fallback">正在加载 PDF…</p>
       ) : (
         Array.from({ length: doc.numPages }, (_, i) => (
-          <PdfPage key={i} doc={doc} pageNumber={i + 1} width={width} />
+          <PdfPage key={i} doc={doc} pageNumber={i + 1} renderWidth={width * renderZoom} zoom={zoom} />
         ))
       )}
     </div>
   )
 }
 
-function PdfPage({ doc, pageNumber, width }: { doc: PDFDocumentProxy; pageNumber: number; width: number }) {
+function PdfPage({
+  doc,
+  pageNumber,
+  renderWidth,
+  zoom,
+}: {
+  doc: PDFDocumentProxy
+  pageNumber: number
+  renderWidth: number
+  zoom: number
+}) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visible, setVisible] = useState(false)
@@ -142,9 +298,9 @@ function PdfPage({ doc, pageNumber, width }: { doc: PDFDocumentProxy; pageNumber
     }
   }, [visible, doc, pageNumber])
 
-  // aspect 在 deps 里：canvas 挂载（重渲染）后本 effect 重跑，ref 才拿得到
+  // renderWidth 变化（容器宽度 / 缩放 settle）即重绘，保证任意倍率下文字清晰
   useEffect(() => {
-    if (!visible || !width || !aspect) return
+    if (!visible || !renderWidth || !aspect) return
     const canvas = canvasRef.current
     if (!canvas) return
     let cancelled = false
@@ -156,7 +312,7 @@ function PdfPage({ doc, pageNumber, width }: { doc: PDFDocumentProxy; pageNumber
         const base = page.getViewport({ scale: 1 })
         // 上限 3：iPhone 是 3x 屏，封顶 2 会导致文字发虚；再高内存/渲染耗时平方级上涨
         const dpr = Math.min(window.devicePixelRatio || 1, 3)
-        const viewport = page.getViewport({ scale: (width / base.width) * dpr })
+        const viewport = page.getViewport({ scale: (renderWidth / base.width) * dpr })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
         renderTask = page.render({ canvas, viewport })
@@ -167,10 +323,19 @@ function PdfPage({ doc, pageNumber, width }: { doc: PDFDocumentProxy; pageNumber
       cancelled = true
       renderTask?.cancel()
     }
-  }, [visible, width, aspect, doc, pageNumber])
+  }, [visible, renderWidth, aspect, doc, pageNumber])
 
   return (
-    <div ref={wrapRef} className="pdf-page" style={aspect ? { aspectRatio: `1 / ${aspect}` } : undefined}>
+    <div
+      ref={wrapRef}
+      className="pdf-page"
+      style={{
+        aspectRatio: aspect ? `1 / ${aspect}` : undefined,
+        // 缩放时页宽跟手势即时变化；canvas 重绘前会先被拉伸（settle 后恢复清晰）
+        width: `${zoom * 100}%`,
+        maxWidth: zoom * PAGE_MAX_WIDTH,
+      }}
+    >
       {aspect > 0 ? <canvas ref={canvasRef} /> : null}
     </div>
   )

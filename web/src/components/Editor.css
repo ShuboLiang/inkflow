@@ -104,23 +104,23 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   background: var(--qing-50);
 }
 
-/* pdf.js 逐页渲染；页宽自适应容器，桌面端限宽居中 */
+/* pdf.js 逐页渲染；.pdf-view 同时是滚动容器（放大后横向可滚） */
 .pdf-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   width: 100%;
-  max-width: 900px;
   margin: 0 auto;
   padding: 12px;
   box-sizing: border-box;
 }
 
 .pdf-page {
-  width: 100%;
-  margin-bottom: 8px;
+  margin: 0 auto 8px;
   background: #fff;
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(28, 33, 40, 0.12);
