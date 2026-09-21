@@ -336,6 +336,13 @@ async function mdToDoc(md, dry = false) {
       continue
     }
 
+    // 分割线：---/***/___ 独占一行（编辑器 StarterKit 自带 horizontalRule 节点）
+    if (/^\s{0,3}([-_*])(?:[ \t]*\1){2,}[ \t]*$/.test(line)) {
+      content.push({ type: 'horizontalRule' })
+      i++
+      continue
+    }
+
     // 独占一行的图片 → image 块节点（本地路径自动上传 Storage）
     const img = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(line.trim())
     if (img) {
