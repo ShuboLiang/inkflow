@@ -13,6 +13,7 @@ const PdfViewer = lazy(() =>
 )
 import { HtmlViewer } from './components/HtmlViewer'
 import { TagPicker } from './components/TagPicker'
+import { TabBar } from './components/TabBar'
 import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
@@ -21,7 +22,7 @@ import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags } from './store/files'
-import { loadPrefs, savePrefs } from './store/prefs'
+import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
@@ -34,6 +35,7 @@ import { migrateInlineImages, noteImageSrcs } from './store/images'
 import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
+const tabsStorageKey = (userId: string) => `inkflow:tabs:${userId}`
 
 function IconTrash() {
   return (
@@ -108,6 +110,7 @@ export default function App() {
   const { status: syncStatus, requestPush } = useSync(user)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
+  const [tabs, setTabs] = useState<TabItem[]>([])
   const [activeFolderId, setActiveFolderId] = useState<string>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -153,7 +156,7 @@ export default function App() {
     })
   }
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!activeId && !activeFileId) return
     if (isContentFullScreen) {
       setDesktopSidebarCollapsed(false)
@@ -170,7 +173,7 @@ export default function App() {
         localStorage.setItem(DESKTOP_NOTELIST_KEY, 'true')
       } catch {}
     }
-  }
+  }, [activeId, activeFileId, isContentFullScreen])
 
   // 格式工具栏隐藏偏好：全局（任意笔记隐藏 = 全部隐藏），登录后从云端加载、切换即保存
   const [toolbarHidden, setToolbarHidden] = useState(false)
@@ -197,6 +200,13 @@ export default function App() {
         if (!storedTheme() && isValidTheme(p.theme)) {
           applyTheme(p.theme)
           setTheme(p.theme)
+        }
+        // 若云端有 tabs，且本地尚未有有效 tabs，则从云端恢复
+        if (Array.isArray(p.tabs) && p.tabs.length > 0) {
+          setTabs((cur) => {
+            if (cur.length > 0) return cur
+            return p.tabs!
+          })
         }
       })
       .catch(() => {})
@@ -429,7 +439,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isContentFullScreen, activeId, activeFileId])
+  }, [isContentFullScreen, toggleFullscreen])
 
   // 存量图片迁移（每次启动跑一次）：正文里的 data URL 图片上传到 Storage 并替换为
   // 公共 URL，笔记标脏走正常同步。后台分批进行，不阻塞界面；失败的笔记下次启动再试。
@@ -481,6 +491,7 @@ export default function App() {
     flushSave()
     const note = await createNote('', activeFolderId === 'all' ? null : activeFolderId)
     setTitleFocusReq({ id: note.id, n: ++titleFocusSeq.current })
+    setTabs((prev) => [...prev, { kind: 'note', id: note.id }])
     setActiveFileId(null)
     setActiveId(note.id)
     setMobileView('editor')
@@ -488,9 +499,73 @@ export default function App() {
 
   const handleSelect = (id: string) => {
     flushSave()
+    setTabs((prev) => {
+      if (prev.some((t) => t.kind === 'note' && t.id === id)) return prev
+      return [...prev, { kind: 'note', id }]
+    })
     setActiveFileId(null)
     setActiveId(id)
     setMobileView('editor')
+  }
+
+  const handleSelectTab = (tab: TabItem) => {
+    flushSave()
+    if (tab.kind === 'note') {
+      setActiveFileId(null)
+      setActiveId(tab.id)
+    } else {
+      setActiveId(null)
+      setActiveFileId(tab.id)
+    }
+    setMobileView('editor')
+  }
+
+  const handleCloseTab = (tabId: string) => {
+    flushSave()
+    const targetIndex = tabs.findIndex((t) => t.id === tabId)
+    if (targetIndex === -1) return
+
+    const nextTabs = tabs.filter((t) => t.id !== tabId)
+    setTabs(nextTabs)
+
+    const isClosingActive = activeId === tabId || activeFileId === tabId
+    if (isClosingActive) {
+      if (nextTabs.length === 0) {
+        setActiveId(null)
+        setActiveFileId(null)
+      } else {
+        const nextActiveIndex = Math.min(targetIndex, nextTabs.length - 1)
+        const nextActive = nextTabs[nextActiveIndex]
+        if (nextActive.kind === 'note') {
+          setActiveFileId(null)
+          setActiveId(nextActive.id)
+        } else {
+          setActiveId(null)
+          setActiveFileId(nextActive.id)
+        }
+      }
+    }
+  }
+
+  const handleCloseOtherTabs = (tabId: string) => {
+    flushSave()
+    const kept = tabs.find((t) => t.id === tabId)
+    if (!kept) return
+    setTabs([kept])
+    if (kept.kind === 'note') {
+      setActiveFileId(null)
+      setActiveId(kept.id)
+    } else {
+      setActiveId(null)
+      setActiveFileId(kept.id)
+    }
+  }
+
+  const handleCloseAllTabs = () => {
+    flushSave()
+    setTabs([])
+    setActiveId(null)
+    setActiveFileId(null)
   }
 
   // 右键菜单「重命名」：选中并聚焦标题输入框
@@ -509,9 +584,10 @@ export default function App() {
     const ok = await confirmDialog({ title: '删除笔记', message: '删除这篇笔记？', confirmText: '删除', danger: true })
     if (!ok) return
     flushSave()
-    await softDeleteNote(active.id)
+    const delId = active.id
+    await softDeleteNote(delId)
     requestPush()
-    setActiveId(null)
+    handleCloseTab(delId)
     setMobileView('list')
   }
 
@@ -646,33 +722,65 @@ export default function App() {
     }
   }, [user, activeFileIdForEffect, activeFileHasData])
 
-  // 记住最后打开的笔记/文件，下次启动直接恢复（按用户分开存）
-  useEffect(() => {
-    if (!user) return
-    if (activeFileId) {
-      localStorage.setItem(lastOpenKey(user.id), JSON.stringify({ kind: 'file', id: activeFileId }))
-    } else if (activeId) {
-      localStorage.setItem(lastOpenKey(user.id), JSON.stringify({ kind: 'note', id: activeId }))
-    }
-  }, [user, activeId, activeFileId])
+  // 过滤掉已被删除或不存在的笔记/文件标签项
+  const validTabs = useMemo(() => {
+    if (!notes && !files) return tabs
+    return tabs.filter((t) => {
+      if (t.kind === 'note') {
+        return !notes || notes.some((x) => x.id === t.id && x.deletedAt === null)
+      } else {
+        return !files || files.some((x) => x.id === t.id && !x.deletedAt)
+      }
+    })
+  }, [tabs, notes, files])
 
-  // 启动时恢复上次打开的笔记/文件（localStorage + Dexie 都是渲染期外部数据，
+  // 启动时恢复上次打开的标签页（localStorage + Dexie 都是渲染期外部数据，
   // 用「渲染期调整状态」模式一次性恢复，避免 effect 里 setState 触发额外渲染）
   const [restored, setRestored] = useState(false)
   if (!restored && user && notes !== undefined && files !== undefined) {
     setRestored(true)
     try {
-      const raw = localStorage.getItem(lastOpenKey(user.id))
+      let loadedTabs: TabItem[] = []
+      let loadedActiveTabId: string | null = null
+      const raw = localStorage.getItem(tabsStorageKey(user.id))
       if (raw) {
-        const saved = JSON.parse(raw) as { kind: string; id: string }
-        if (saved.kind === 'file') {
-          const f = files.find((x) => x.id === saved.id && !x.deletedAt)
+        const parsed = JSON.parse(raw) as { tabs?: TabItem[]; activeTabId?: string | null }
+        if (Array.isArray(parsed.tabs)) {
+          loadedTabs = parsed.tabs
+          loadedActiveTabId = parsed.activeTabId ?? null
+        }
+      }
+      // 兼容旧版单一记录
+      if (loadedTabs.length === 0) {
+        const oldRaw = localStorage.getItem(lastOpenKey(user.id))
+        if (oldRaw) {
+          const saved = JSON.parse(oldRaw) as { kind: string; id: string }
+          if (saved.kind === 'file' || saved.kind === 'note') {
+            loadedTabs = [{ kind: saved.kind, id: saved.id }]
+            loadedActiveTabId = saved.id
+          }
+        }
+      }
+
+      const initialValid = loadedTabs.filter((t) => {
+        if (t.kind === 'file') {
+          return files.some((x) => x.id === t.id && !x.deletedAt)
+        } else {
+          return notes.some((x) => x.id === t.id && x.deletedAt === null)
+        }
+      })
+
+      if (initialValid.length > 0) {
+        setTabs(initialValid)
+        const activeItem = initialValid.find((t) => t.id === loadedActiveTabId) || initialValid[0]
+        if (activeItem.kind === 'file') {
+          const f = files.find((x) => x.id === activeItem.id)
           if (f) {
             setActiveFileId(f.id)
             if (f.folderId) setActiveFolderId(f.folderId)
           }
         } else {
-          const n = notes.find((x) => x.id === saved.id && x.deletedAt === null)
+          const n = notes.find((x) => x.id === activeItem.id)
           if (n) {
             setActiveId(n.id)
             if (n.folderId) setActiveFolderId(n.folderId)
@@ -683,6 +791,34 @@ export default function App() {
       // 本地记录损坏则忽略，保持默认空状态
     }
   }
+
+  // 标签页持久化：保存到 localStorage，并防抖同步到云端 user_prefs
+  const savePrefsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!user || !restored) return
+    const activeTabId = activeFileId || activeId
+    try {
+      localStorage.setItem(
+        tabsStorageKey(user.id),
+        JSON.stringify({ tabs: validTabs, activeTabId }),
+      )
+    } catch {}
+
+    if (savePrefsTimer.current) clearTimeout(savePrefsTimer.current)
+    savePrefsTimer.current = setTimeout(() => {
+      void savePrefs({
+        toolbarHidden,
+        theme,
+        tabs: validTabs,
+        activeTabId,
+      }).catch(() => {})
+    }, 600)
+
+    return () => {
+      if (savePrefsTimer.current) clearTimeout(savePrefsTimer.current)
+    }
+  }, [user, restored, validTabs, activeId, activeFileId, toolbarHidden, theme])
+
   // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
   // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中；
   // 标签视图 = 全库范围内挂了该标签的文件（与笔记共用标签命名空间）
@@ -713,7 +849,11 @@ export default function App() {
     const folderId = targetFolderId !== undefined ? targetFolderId : activeFolderId === 'all' ? null : activeFolderId
     const kind = kindOfFile(file)
     if (kind === 'binary' || kind === 'html') {
-      await saveFile(file, folderId)
+      const saved = await saveFile(file, folderId)
+      setTabs((prev) => [...prev, { kind: 'file', id: saved.id }])
+      setActiveId(null)
+      setActiveFileId(saved.id)
+      setMobileView('editor')
       return
     }
     try {
@@ -723,6 +863,7 @@ export default function App() {
       // 编辑器可能在两次之间挂载拿到空文档，内容被「未保存」保护挡住永远刷不进来
       const note = await createNote(title, folderId, content)
       requestPush()
+      setTabs((prev) => [...prev, { kind: 'note', id: note.id }])
       setActiveFileId(null)
       setActiveId(note.id)
       setMobileView('editor')
@@ -741,6 +882,10 @@ export default function App() {
   // 选中文件：主内容区变成内嵌查看器（与选中笔记同一位置，不弹窗）
   const handleSelectFile = (id: string) => {
     flushSave()
+    setTabs((prev) => {
+      if (prev.some((t) => t.kind === 'file' && t.id === id)) return prev
+      return [...prev, { kind: 'file', id }]
+    })
     setActiveId(null)
     setActiveFileId(id)
     setMobileView('editor')
@@ -755,8 +900,9 @@ export default function App() {
       danger: true,
     })
     if (!ok) return
-    await deleteFile(activeFile.id)
-    setActiveFileId(null)
+    const delId = activeFile.id
+    await deleteFile(delId)
+    handleCloseTab(delId)
   }
 
   if (loading) {
@@ -882,6 +1028,17 @@ export default function App() {
             for (const f of Array.from(e.dataTransfer.files)) void handleUpload(f)
           }}
         >
+          <TabBar
+            tabs={validTabs}
+            activeTabId={activeFileId || activeId}
+            notes={notes}
+            files={files}
+            onSelectTab={handleSelectTab}
+            onCloseTab={handleCloseTab}
+            onCloseOtherTabs={handleCloseOtherTabs}
+            onCloseAllTabs={handleCloseAllTabs}
+            onNewNote={() => void handleCreate()}
+          />
           {activeFile ? (
             <>
               <div className="editor-toolbar">
