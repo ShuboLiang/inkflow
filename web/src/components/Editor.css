@@ -62,26 +62,7 @@
   padding: 4px 8px;
 }
 
-/* 所在文件夹：药丸下拉，青底白字风格 */
-.editor-folder {
-  appearance: none;
-  -webkit-appearance: none;
-  max-width: 200px;
-  padding: 6px 26px 6px 12px;
-  border: none;
-  border-radius: 999px;
-  background-color: var(--qing-50);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231f6f6b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--qing);
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* 所在文件夹的移动入口已收进卡片菜单（移动到文件夹…），工具栏不再放下拉 */
 
 /* 文件查看器（选中 pdf 后主内容区内嵌显示，与笔记共用 editor-pane） */
 .editor-file-name {
@@ -587,10 +568,6 @@
   .tool-btn.danger:hover {
     background: var(--danger-50);
     color: var(--danger);
-  }
-
-  .editor-folder:hover {
-    filter: brightness(0.96);
   }
 
   .outline-toggle:hover {

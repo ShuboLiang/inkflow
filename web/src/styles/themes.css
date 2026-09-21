@@ -71,11 +71,6 @@
   border-left-width: 4px;
 }
 
-/* 药丸也裁方：文件夹下拉随刊本走直角 */
-[data-theme='qianyin'] .editor-folder {
-  border-radius: var(--radius);
-}
-
 /* ===== 灯下：墨蓝夜 + 灯焰黄，「青灯黄卷」 ===== */
 [data-theme='dengxia'] {
   color-scheme: dark; /* 原生滚动条/下拉/输入跟随暗色 */

@@ -566,11 +566,6 @@ export default function App() {
     requestPush()
   }
 
-  const handleMoveNote = (folderId: string | null) => {
-    if (!active) return
-    void updateNote(active.id, { folderId }).then(requestPush)
-  }
-
   const handleDropNote = (noteId: string, folderId: string | null) => {
     const note = notes?.find((n) => n.id === noteId)
     if (!note || note.deletedAt !== null || note.folderId === folderId) return
@@ -839,6 +834,7 @@ export default function App() {
         <NoteList
           notes={visibleNotes}
           files={filesInView}
+          folders={folders ?? []}
           folderHits={folderHits}
           activeId={activeId}
           search={search}
@@ -853,6 +849,8 @@ export default function App() {
           onUpload={(file) => void handleUpload(file)}
           onRenameNote={handleRenameNote}
           onRenameFile={handleRenameFile}
+          onMoveNote={handleDropNote}
+          onMoveFile={handleDropFile}
           onRequestPush={requestPush}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
@@ -933,19 +931,6 @@ export default function App() {
                 <button type="button" className="editor-back" onClick={() => setMobileView('list')}>
                   ← 返回列表
                 </button>
-                <select
-                  className="editor-folder"
-                  value={active.folderId ?? ''}
-                  aria-label="所在文件夹"
-                  onChange={(e) => handleMoveNote(e.target.value || null)}
-                >
-                  <option value="">无文件夹</option>
-                  {(folders ?? []).map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </select>
                 <span className="toolbar-spacer" />
                 <button
                   type="button"

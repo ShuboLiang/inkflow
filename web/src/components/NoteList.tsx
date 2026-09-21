@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FileEntry, Note } from '../lib/db'
+import type { FileEntry, Folder, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
 import { deleteFile, ensureFileData } from '../store/files'
@@ -13,6 +13,7 @@ import './NoteList.css'
 interface NoteListProps {
   notes: Note[]
   files: FileEntry[]
+  folders: Folder[]
   folderHits: { id: string; name: string; path: string }[]
   activeId: string | null
   search: string
@@ -28,6 +29,8 @@ interface NoteListProps {
   onUpload: (file: File) => void
   onRenameNote: (id: string) => void
   onRenameFile: (id: string, filename: string) => void
+  onMoveNote: (id: string, folderId: string | null) => void
+  onMoveFile: (id: string, folderId: string | null) => void
   onRequestPush: () => void
   emptyHint?: string
 }
@@ -104,6 +107,7 @@ function IconFolderSmall() {
 export function NoteList({
   notes,
   files,
+  folders,
   folderHits,
   activeId,
   search,
@@ -118,11 +122,15 @@ export function NoteList({
   onUpload,
   onRenameNote,
   onRenameFile,
+  onMoveNote,
+  onMoveFile,
   onRequestPush,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
+  // 「移动到文件夹…」的级联菜单（与 card 菜单同一定位策略）
+  const [moveMenu, setMoveMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
   // 增量渲染：一次只渲染前 RENDER_PAGE 条，滚近底部再追加，避免大列表全量挂 DOM
   const [renderLimit, setRenderLimit] = useState(RENDER_PAGE)
@@ -215,7 +223,7 @@ export function NoteList({
     onRequestPush()
   }
 
-  const menuItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] => {
+  const menuItems = (m: { x: number; y: number; kind: 'note' | 'file'; id: string }): MenuItem[] => {
     const target =
       m.kind === 'note' ? notes.find((n) => n.id === m.id) : files.find((f) => f.id === m.id)
     const gotoFolderItem: MenuItem | null =
@@ -226,10 +234,17 @@ export function NoteList({
             onClick: () => onGotoFolder(target.folderId as string),
           }
         : null
+    // 在原菜单位置换成文件夹列表（ContextMenu 自带视口避让）
+    const moveItem: MenuItem = {
+      key: 'move',
+      label: '移动到文件夹…',
+      onClick: () => setMoveMenu({ x: m.x, y: m.y, kind: m.kind, id: m.id }),
+    }
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
+          moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
           { key: 'rename', label: '重命名', onClick: () => onRenameNote(m.id) },
           { key: 'd1', label: '', divider: true, onClick: () => {} },
@@ -238,12 +253,33 @@ export function NoteList({
       : [
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
+          moveItem,
           { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
           { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('file', m.id) },
           { key: 'd1', label: '', divider: true, onClick: () => {} },
           { key: 'del', label: '删除', danger: true, onClick: () => void deleteFileById(m.id) },
         ]
+  }
+
+  // 文件夹列表（按路径拼音排序），当前所在位置打 ✓
+  const moveToItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] => {
+    const target =
+      m.kind === 'note' ? notes.find((n) => n.id === m.id) : files.find((f) => f.id === m.id)
+    const cur = target?.folderId ?? null
+    const move = (folderId: string | null) => () =>
+      m.kind === 'note' ? onMoveNote(m.id, folderId) : onMoveFile(m.id, folderId)
+    const entries = folders
+      .map((f) => ({ id: f.id, label: folderPathOf(f.id) ?? f.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'))
+    return [
+      { key: 'none', label: cur === null ? '✓ 无文件夹' : '无文件夹', onClick: move(null) },
+      ...entries.map((f) => ({
+        key: f.id,
+        label: cur === f.id ? `✓ ${f.label}` : f.label,
+        onClick: move(f.id),
+      })),
+    ]
   }
 
   const openMenu = (e: React.MouseEvent, kind: 'note' | 'file', id: string) => {
@@ -466,6 +502,14 @@ export function NoteList({
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
+      {moveMenu && (
+        <ContextMenu
+          x={moveMenu.x}
+          y={moveMenu.y}
+          items={moveToItems(moveMenu)}
+          onClose={() => setMoveMenu(null)}
+        />
+      )}
       {fileDragDepth > 0 && (
         <div className="note-list-drop-overlay">松开以上传到当前文件夹（md/html 新建笔记，pdf 存为文件）</div>
       )}
