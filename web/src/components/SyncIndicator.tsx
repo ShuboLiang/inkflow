@@ -11,10 +11,11 @@ const LABELS: Record<SyncStatus, string> = {
 }
 
 export function SyncIndicator({ status = 'synced' }: { status?: SyncStatus }) {
+  const label = LABELS[status]
   return (
-    <span className="sync-indicator" data-status={status} role="status">
+    <span className="sync-indicator" data-status={status} role="status" title={label}>
       <span className="sync-indicator-dot" aria-hidden="true" />
-      {LABELS[status]}
+      <span className="sync-indicator-text">{label}</span>
     </span>
   )
 }

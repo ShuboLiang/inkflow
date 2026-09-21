@@ -37,3 +37,9 @@
   background: var(--ink-500);
   opacity: 0.5;
 }
+
+@media (max-width: 767px) {
+  .sync-indicator-text {
+    display: none;
+  }
+}

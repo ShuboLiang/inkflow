@@ -72,7 +72,7 @@
 @media (max-width: 767px) {
   .share-card {
     position: fixed;
-    top: 88px;
+    top: 76px;
     right: 12px;
     left: 12px;
     bottom: auto;

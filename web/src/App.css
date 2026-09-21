@@ -174,13 +174,22 @@
 
 @media (max-width: 767px) {
   .app-topbar {
-    padding: 0 8px;
-    height: 36px;
-    min-height: 36px;
-    gap: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 40px;
+    padding: 0;
+    gap: 0;
   }
 
-  .app-shell.mobile-list .app-topbar-center .tab-bar-container {
+  /* 列表视图：单行居中，只显示菜单、标题和同步指示点 */
+  .app-shell.mobile-list .app-topbar {
+    height: 40px;
+    padding: 0 10px;
+    align-items: center;
+  }
+
+  .app-shell.mobile-list .app-topbar-center {
     display: none;
   }
 
@@ -188,8 +197,9 @@
     display: block;
     flex: 1;
     text-align: center;
-    font-size: 13px;
-    color: var(--ink-500);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-900);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -205,12 +215,63 @@
     display: none !important;
   }
 
+  /* 编辑视图：两行优雅排列（第一行返回+操作工具，第二行全宽 Tab 栏） */
   .app-shell.mobile-editor .app-menu {
     display: none !important;
   }
 
+  .app-shell.mobile-editor .app-topbar-left {
+    order: 1;
+    height: 40px;
+    padding-left: 6px;
+  }
+
   .app-shell.mobile-editor .app-topbar-back {
     display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .app-shell.mobile-editor .app-topbar-mobile-title {
+    display: none;
+  }
+
+  .app-shell.mobile-editor .app-topbar-right {
+    order: 2;
+    height: 40px;
+    margin-left: auto;
+    padding-right: 8px;
+    gap: 4px;
+  }
+
+  .app-shell.mobile-editor .app-topbar-center {
+    order: 3;
+    flex: 0 0 100%;
+    width: 100%;
+    height: 35px;
+    border-top: 1px solid var(--ink-200);
+  }
+
+  .app-topbar-right .tool-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-s);
+  }
+
+  .app-topbar-right .tag-picker-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .app-topbar-right .tool-btn span {
@@ -219,10 +280,6 @@
 
   .app-topbar-right .tool-btn.fullscreen-toggle {
     display: none !important;
-  }
-
-  .app-topbar-right .tool-btn {
-    padding: 4px 6px;
   }
 
   .app-main .note-list {

@@ -30,7 +30,7 @@
 @media (max-width: 767px) {
   .tag-picker-pop {
     position: fixed;
-    top: 88px;
+    top: 76px;
     bottom: auto;
     right: 12px;
     left: 12px;
