@@ -244,14 +244,24 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
                   if (!editor) return
                   const precise = window.matchMedia('(hover: hover) and (pointer: fine)').matches
                   if (precise) {
-                    editor.chain().focus().setTextSelection(h.pos + 1).scrollIntoView().run()
+                    editor.chain().focus().setTextSelection(h.pos + 1).run()
                   } else {
                     editor.commands.setTextSelection(h.pos + 1)
-                    const at = editor.view.domAtPos(h.pos + 1)
-                    const el = at.node.nodeType === 1 ? (at.node as Element) : at.node.parentElement
-                    el?.scrollIntoView({ block: 'start' })
-                    setOutlineOpen(false)
                   }
+                  const at = editor.view.domAtPos(h.pos + 1)
+                  const el = at.node.nodeType === 1 ? (at.node as Element) : at.node.parentElement
+                  if (el) {
+                    // 仅滚动 .editor-scroll 内部容器，绝不调用 el.scrollIntoView()。
+                    // 否则浏览器会遍历滚动 html/body/window，导致移动端顶部顶栏被顶出视口且无法恢复。
+                    const container = el.closest<HTMLElement>('.editor-scroll')
+                    if (container) {
+                      const containerRect = container.getBoundingClientRect()
+                      const elRect = el.getBoundingClientRect()
+                      const offset = elRect.top - containerRect.top - 16
+                      container.scrollBy({ top: offset, behavior: 'smooth' })
+                    }
+                  }
+                  setOutlineOpen(false)
                 }}
               >
                 {h.text || '（空标题）'}

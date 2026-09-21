@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ContextMenu, type MenuItem } from './ContextMenu'
-import { kindOfName } from '../lib/importFile'
+import { isHtmlFile } from '../lib/importFile'
 import type { TabItem } from '../store/prefs'
 import type { Note, FileEntry } from '../lib/db'
 import './TabBar.css'
@@ -51,7 +51,7 @@ export function TabBar({
     } else {
       const file = files?.find((f) => f.id === tab.id)
       const filename = file?.filename || '文件'
-      const isHtml = kindOfName(filename) === 'html'
+      const isHtml = file ? isHtmlFile(file) : false
       return {
         title: filename,
         kind: isHtml ? ('html' as const) : ('pdf' as const),

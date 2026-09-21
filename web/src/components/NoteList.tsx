@@ -7,7 +7,7 @@ import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { confirmDialog } from '../lib/dialog'
 import { matchSnippet } from '../lib/search'
-import { kindOfName } from '../lib/importFile'
+import { fileDownloadName, isHtmlFile } from '../lib/importFile'
 import './NoteList.css'
 
 interface NoteListProps {
@@ -193,7 +193,7 @@ export function NoteList({
     }
     const a = document.createElement('a')
     a.href = dataUrl
-    a.download = file.filename
+    a.download = fileDownloadName(file)
     a.click()
   }
 
@@ -413,7 +413,7 @@ export function NoteList({
                       <span className="file-card-name" title={file.filename}>
                         {file.filename}
                       </span>
-                      <span className="file-card-badge">{kindOfName(file.filename) === 'html' ? 'HTML' : 'PDF'}</span>
+                      <span className="file-card-badge">{isHtmlFile(file) ? 'HTML' : 'PDF'}</span>
                     </div>
                     <div className="note-card-time">
                       {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}

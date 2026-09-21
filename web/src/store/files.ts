@@ -12,11 +12,16 @@ export async function saveFile(file: File, folderId: string | null): Promise<Fil
     reader.onerror = () => reject(new Error('read file failed'))
     reader.readAsDataURL(file)
   })
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  const fallbackMime = ext === 'pdf' ? 'application/pdf' : ext === 'html' || ext === 'htm' ? 'text/html' : null
+  const mimeType = file.type || fallbackMime
+  // 上传时去除 .pdf / .html / .htm 后缀名
+  const cleanName = file.name.replace(/\.(pdf|html|htm)$/i, '').trim() || file.name
   const entry: FileEntry = {
     id: crypto.randomUUID(),
     folderId,
-    filename: file.name,
-    mimeType: file.type || null,
+    filename: cleanName,
+    mimeType,
     size: file.size,
     storagePath: null,
     tags: [],
@@ -54,7 +59,7 @@ export async function moveFile(id: string, folderId: string | null): Promise<voi
 
 // 重命名：只改 filename，走文件 LWW 同步推上云；分享链接里的文件名也是实时查表，随之更新
 export async function renameFile(id: string, filename: string): Promise<void> {
-  const name = filename.trim()
+  const name = filename.trim().replace(/\.(pdf|html|htm)$/i, '').trim()
   if (!name) return
   const existing = await db.files.get(id)
   if (!existing || existing.deletedAt || existing.filename === name) return

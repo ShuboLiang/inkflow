@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/db'
 import { dataUrlToBlob, ensureFileData } from './files'
-import { kindOfName } from '../lib/importFile'
+import { isHtmlFile } from '../lib/importFile'
 
 // 分享外链：shares 表只存映射（token → note/file）与撤销状态。
 // 笔记内容实时读 notes 表（RPC 绕 RLS）；PDF 字节不可变，分享时复制到公共桶 shares。
@@ -86,7 +86,7 @@ export async function createFileShare(userId: string, fileId: string): Promise<S
   if (!dataUrl) throw new Error('file content unavailable')
 
   const mime =
-    file.mimeType ?? (kindOfName(file.filename) === 'html' ? 'text/html' : 'application/octet-stream')
+    file.mimeType ?? (isHtmlFile(file) ? 'text/html' : 'application/octet-stream')
   const token = crypto.randomUUID()
   // 注意必须传 ArrayBuffer：storage-js 对 Blob 会走 FormData 分支，
   // storage-api 从 multipart 里取不到 content-type，分享出去的 HTML 会被当 text/plain 展示

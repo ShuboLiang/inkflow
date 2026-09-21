@@ -25,7 +25,7 @@ import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags
 import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
-import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
+import { fileDownloadName, fileToDocJson, isHtmlFile, kindOfFile } from './lib/importFile'
 import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
 import { DialogHost } from './components/Dialog'
@@ -1008,7 +1008,7 @@ export default function App() {
                 <a
                   className="tool-btn"
                   href={activeFile.dataUrl}
-                  download={activeFile.filename}
+                  download={fileDownloadName(activeFile)}
                   title="下载"
                 >
                   <IconDownload />
@@ -1157,7 +1157,7 @@ export default function App() {
           {activeFile ? (
             <div className="file-view">
               {activeFile.dataUrl ? (
-                kindOfName(activeFile.filename) === 'html' ? (
+                isHtmlFile(activeFile) ? (
                   <HtmlViewer src={activeFile.dataUrl} />
                 ) : (
                   <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>

@@ -18,6 +18,21 @@ export function kindOfName(name: string): DocKind {
   return 'binary'
 }
 
+export function isHtmlFile(file: { filename: string; mimeType?: string | null }): boolean {
+  if (file.mimeType === 'text/html' || file.mimeType?.includes('html')) return true
+  const n = file.filename.toLowerCase()
+  return n.endsWith('.html') || n.endsWith('.htm')
+}
+
+export function fileDownloadName(file: { filename: string; mimeType?: string | null }): string {
+  const isHtml = isHtmlFile(file)
+  const n = file.filename.toLowerCase()
+  if (isHtml) {
+    return n.endsWith('.html') || n.endsWith('.htm') ? file.filename : `${file.filename}.html`
+  }
+  return n.endsWith('.pdf') ? file.filename : `${file.filename}.pdf`
+}
+
 export function kindOfFile(file: File): DocKind {
   if (file.type === 'text/markdown') return 'markdown'
   if (file.type === 'text/html') return 'html'

@@ -3,7 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import 'katex/dist/katex.min.css'
 import { supabase } from '../lib/supabase'
 import { buildExtensions } from '../lib/editorExtensions'
-import { kindOfName } from '../lib/importFile'
+import { isHtmlFile } from '../lib/importFile'
 import './SharePage.css'
 
 // pdf.js 体积大，懒加载
@@ -18,7 +18,7 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'missing' }
   | { status: 'note'; title: string; content: unknown }
-  | { status: 'file'; filename: string; url: string }
+  | { status: 'file'; filename: string; mimeType: string | null; url: string }
 
 export function SharePage({ token }: { token: string }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -37,12 +37,12 @@ export function SharePage({ token }: { token: string }) {
       const { data: file } = await supabase.rpc('get_shared_file', { p_token: token })
       if (cancelled) return
       if (file && (file as { filename?: string }[]).length > 0) {
-        const row = file as { filename: string; storage_path: string }[]
+        const row = file as { filename: string; mime_type?: string | null; storage_path: string }[]
         // 分享对象复制在公共桶 shares/{token}（见 store/shares.ts），
         // files.storage_path 是私有桶路径，不能直接用
         const base = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, '')
         const url = `${base}/storage/v1/object/public/shares/${token}?render=1`
-        setState({ status: 'file', filename: row[0].filename, url })
+        setState({ status: 'file', filename: row[0].filename, mimeType: row[0].mime_type ?? null, url })
         return
       }
       setState({ status: 'missing' })
@@ -55,7 +55,7 @@ export function SharePage({ token }: { token: string }) {
     }
   }, [token])
 
-  const isHtmlShare = state.status === 'file' && kindOfName(state.filename) === 'html'
+  const isHtmlShare = state.status === 'file' && isHtmlFile(state)
 
   // HTML 分享不用 iframe（微信内置浏览器等环境不支持）：校验分享有效后直接顶层跳转，
   // 网关 /share-raw/<token> 代取字节并强制 text/html + CSP sandbox
@@ -79,7 +79,7 @@ export function SharePage({ token }: { token: string }) {
         {state.status === 'file' && (
           <div className="share-file">
             <h1 className="share-file-name">{state.filename}</h1>
-            {kindOfName(state.filename) === 'html' ? (
+            {isHtmlFile(state) ? (
               <p className="share-status">正在打开…</p>
             ) : (
               <Suspense fallback={<p className="share-status">正在加载 PDF…</p>}>
