@@ -40,8 +40,8 @@ export interface FileEntry {
   size: number | null
   storagePath: string | null
   tags: string[]
-  // 本地以 data URL 内联存放（同步后仍保留，离线可预览；新设备按需从 Storage 拉取）
-  dataUrl: string | null
+  // 文件内容纯云端流式按需加载，不再持久化在本地 IndexedDB
+  dataUrl?: string | null
   dirty: 0 | 1
   updatedAt: number
   syncedAt: number | null
@@ -97,3 +97,17 @@ export interface ImageCache {
 db.version(4).stores({
   images: 'path, dirty',
 })
+
+// v5: 文件内容改为纯云端按需加载，本地 Dexie 只存元数据，清除存量 dataUrl 释放磁盘
+db.version(5)
+  .stores({
+    files: 'id, folderId, dirty',
+  })
+  .upgrade((tx) =>
+    tx
+      .table('files')
+      .toCollection()
+      .modify((f: Partial<FileEntry>) => {
+        delete f.dataUrl
+      }),
+  )

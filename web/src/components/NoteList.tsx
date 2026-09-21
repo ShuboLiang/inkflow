@@ -9,7 +9,7 @@ import {
 import type { FileEntry, Folder, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
-import { deleteFile, ensureFileData } from '../store/files'
+import { acquireFileUrl, deleteFile } from '../store/files'
 import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { MoveFolderModal } from './MoveFolderModal'
@@ -179,13 +179,13 @@ export function NoteList({
   const downloadFile = async (id: string) => {
     const file = files.find((f) => f.id === id)
     if (!file) return
-    const dataUrl = file.dataUrl ?? (await ensureFileData(id))
-    if (!dataUrl) {
+    const url = await acquireFileUrl(id)
+    if (!url) {
       showToast('文件内容不可用（可能尚未同步）')
       return
     }
     const a = document.createElement('a')
-    a.href = dataUrl
+    a.href = url
     a.download = fileDownloadName(file)
     a.click()
   }

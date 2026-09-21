@@ -21,7 +21,7 @@ import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags } from './store/files'
+import { acquireFileUrl, deleteFile, moveFile, renameFile, saveFile, setFileTags } from './store/files'
 import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
@@ -721,14 +721,33 @@ export default function App() {
     void setFileTags(activeFile.id, tags).then(requestPush)
   }
 
-  // 新设备上拉到的文件只有云端元数据：打开查看器时按需下载内容并缓存进 Dexie
-  const activeFileIdForEffect = activeFile?.id ?? null
-  const activeFileHasData = !!activeFile?.dataUrl
+  // 纯云端文件按需流式拉取到内存（Blob URL），不写入 IndexedDB
+  const [fileUrlState, setFileUrlState] = useState<{ id: string | null; url: string | null; error: boolean }>({
+    id: null,
+    url: null,
+    error: false,
+  })
+
   useEffect(() => {
-    if (user && activeFileIdForEffect && !activeFileHasData) {
-      void ensureFileData(activeFileIdForEffect)
+    if (!activeFileId) return
+    let cancelled = false
+
+    void acquireFileUrl(activeFileId).then((url) => {
+      if (cancelled) return
+      setFileUrlState({
+        id: activeFileId,
+        url,
+        error: !url,
+      })
+    })
+
+    return () => {
+      cancelled = true
     }
-  }, [user, activeFileIdForEffect, activeFileHasData])
+  }, [activeFileId])
+
+  const activeFileUrl = fileUrlState.id === activeFileId ? fileUrlState.url : null
+  const fileLoadError = fileUrlState.id === activeFileId ? fileUrlState.error : false
 
   // 过滤掉已被删除或不存在的笔记/文件标签项
   const validTabs = useMemo(() => {
@@ -857,7 +876,8 @@ export default function App() {
     const folderId = targetFolderId !== undefined ? targetFolderId : activeFolderId === 'all' ? null : activeFolderId
     const kind = kindOfFile(file)
     if (kind === 'binary' || kind === 'html') {
-      const saved = await saveFile(file, folderId)
+      const saved = await saveFile(file, folderId, user?.id)
+      requestPush()
       setTabs((prev) => [...prev, { kind: 'file', id: saved.id }])
       setActiveId(null)
       setActiveFileId(saved.id)
@@ -1042,10 +1062,10 @@ export default function App() {
                 onChange={handleFileTagsChange}
               />
               <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
-              {activeFile.dataUrl && (
+              {activeFileUrl && (
                 <a
                   className="tool-btn"
-                  href={activeFile.dataUrl}
+                  href={activeFileUrl}
                   download={fileDownloadName(activeFile)}
                   title="下载"
                 >
@@ -1207,14 +1227,16 @@ export default function App() {
         >
           {activeFile ? (
             <div className="file-view">
-              {activeFile.dataUrl ? (
+              {activeFileUrl ? (
                 isHtmlFile(activeFile) ? (
-                  <HtmlViewer src={activeFile.dataUrl} />
+                  <HtmlViewer src={activeFileUrl} />
                 ) : (
                   <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                    <PdfViewer src={activeFile.dataUrl} />
+                    <PdfViewer src={activeFileUrl} />
                   </Suspense>
                 )
+              ) : fileLoadError ? (
+                <p className="file-view-fallback">文件加载失败（云端文件可能已被删除或网络不可用）</p>
               ) : (
                 <p className="file-view-fallback">正在从云端加载文件…</p>
               )}

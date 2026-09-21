@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 
 // PDF 查看器：iframe 嵌入 pdf.js 官方 viewer（Firefox 内置同款，静态资源在 public/pdfjs/viewer/）。
 // 替换之前的手写 canvas 渲染器——官方 viewer 自带缩放重渲染、文本层、查找、
@@ -66,36 +66,31 @@ const blobUrlCache = new Map<string, string>()
 
 export function PdfViewer({ src }: { src: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
-  const [blobUrl, setBlobUrl] = useState<{ src: string; url: string } | null>(null)
-  const [failed, setFailed] = useState<string | null>(null)
+
+  const isData = src.startsWith('data:')
 
   // data: URL 太长，不能直接塞进 viewer.html?file=，转成 blob: URL；
-  // data: URL 太长，不能直接塞进 viewer.html?file=，转成 blob: URL。
   // 同一文件重复打开时复用已转换的 blob（base64 解码只做一次，会话内常驻）；
-  // http(s) 地址（分享页）直接交给 viewer 自己拉取
-  useEffect(() => {
-    if (!src.startsWith('data:')) return
+  // http(s) 地址（分享页）或直接 blob: URL 直接交给 viewer 自己拉取
+  const blobUrl = useMemo(() => {
+    if (!isData) return null
     const cached = blobUrlCache.get(src)
-    if (cached) {
-      setBlobUrl({ src, url: cached })
-      return
-    }
-    let url: string | null = null
+    if (cached) return cached
     try {
-      url = URL.createObjectURL(dataUrlToBlob(src))
+      const url = URL.createObjectURL(dataUrlToBlob(src))
       blobUrlCache.set(src, url)
-      setBlobUrl({ src, url })
+      return url
     } catch {
-      setFailed(src)
+      return null
     }
-  }, [src])
+  }, [src, isData])
 
-  const fileUrl = src.startsWith('data:') ? (blobUrl?.src === src ? blobUrl.url : null) : src
+  const fileUrl = !isData ? src : blobUrl
   const viewerUrl = fileUrl
     ? `${import.meta.env.BASE_URL}pdfjs/viewer/web/viewer.html?file=${encodeURIComponent(fileUrl)}#zoom=page-width&pagemode=none`
     : null
 
-  if (failed === src) {
+  if (isData && !blobUrl) {
     return <p className="file-view-fallback">PDF 加载失败，请尝试下载后查看。</p>
   }
   if (!viewerUrl) {

@@ -1,6 +1,6 @@
 import { db, type FileEntry, type Folder, type Note } from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { dataUrlToBlob } from '../store/files'
+import { dataUrlToBlob, revokeFileUrl } from '../store/files'
 import { uploadPendingImages, imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from '../store/images'
 
 export interface SyncResult {
@@ -130,7 +130,6 @@ function rowToFile(row: FileRow): FileEntry {
     size: row.size,
     storagePath: row.storage_path,
     tags: Array.isArray(row.tags) ? row.tags : [],
-    dataUrl: null, // 内容按需从 Storage 拉取（pull 时保留本地已有缓存）
     dirty: 0,
     updatedAt: new Date(row.updated_at).getTime(),
     syncedAt: Date.now(),
@@ -269,23 +268,24 @@ export const syncEngine = {
           const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
           if (rmErr) console.error('remove storage object failed', rmErr)
         }
-        // 先清掉引用此文件的分享（公共桶对象 + shares 行），否则外键
-        // shares_file_id_fkey 会挡住 files 行的物理删除，推送永远 409 重试
+        // 清理引用此文件的分享（公共桶对象 + shares 行）
         const { data: shares, error: shareErr } = await supabase
           .from('shares')
           .select('token')
           .eq('file_id', file.id)
-        if (shareErr) throw shareErr
+        if (shareErr) console.error('select shares failed', shareErr)
         const tokens = (shares ?? []).map((s) => s.token as string)
         if (tokens.length) {
           const { error: rmShareErr } = await supabase.storage.from('shares').remove(tokens)
           if (rmShareErr) console.error('remove share objects failed', rmShareErr)
           const { error: delShareErr } = await supabase.from('shares').delete().eq('file_id', file.id)
-          if (delShareErr) throw delShareErr
+          if (delShareErr) console.error('delete shares failed', delShareErr)
         }
-        const { error: delErr } = await supabase.from('files').delete().eq('id', file.id)
-        if (delErr) throw delErr
+        // 关键修复：以软删除方式将带有 deleted_at 和最新 updated_at 的元数据 upsert 到 files 表，保留墓碑供其他端消费
+        const { error } = await supabase.from('files').upsert(fileToRow(file, userId))
+        if (error) throw error
         await db.files.delete(file.id)
+        revokeFileUrl(file.id)
         pushed++
         continue
       }
@@ -319,7 +319,7 @@ export const syncEngine = {
         new Date((server as FileRow).updated_at).getTime() > file.updatedAt
       ) {
         // 本地还没上传内容、服务器元数据又更新过：以服务器为准，下轮 pull 拉详情
-        await db.files.put({ ...rowToFile(server as FileRow), dataUrl: file.dataUrl })
+        await db.files.put(rowToFile(server as FileRow))
         continue
       }
 
@@ -396,14 +396,37 @@ export const syncEngine = {
       if (local?.dirty === 1) continue
       const remoteTs = new Date(row.updated_at).getTime()
       if (row.deleted_at) {
-        if (local) await db.files.delete(row.id)
+        if (local) {
+          await db.files.delete(row.id)
+          revokeFileUrl(row.id)
+        }
         pulled++
         continue
       }
       if (local && local.updatedAt >= remoteTs) continue
-      // 只更新元数据；本地已有内容缓存则保留，没有则等预览时按需下载
-      await db.files.put({ ...rowToFile(row), dataUrl: local?.dataUrl ?? null })
+      // 纯元数据同步：不存 dataUrl
+      await db.files.put(rowToFile(row))
       pulled++
+    }
+
+    // 孤儿文件对齐清理：解决云端已物理抹除（或已被软删除）的历史文件在本地残留的问题
+    // 查询云端当前用户未删除的全部文件 ID
+    const { data: activeServerFiles, error: activeErr } = await supabase
+      .from('files')
+      .select('id')
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+    if (!activeErr && activeServerFiles) {
+      const activeIds = new Set(activeServerFiles.map((s) => s.id as string))
+      const localFiles = await db.files.toArray()
+      for (const lf of localFiles) {
+        // 本地标记已同步（非未保存新文件）但不在云端有效列表中，即为孤儿文件，本地物理清除
+        if (lf.dirty === 0 && lf.syncedAt !== null && !activeIds.has(lf.id)) {
+          await db.files.delete(lf.id)
+          revokeFileUrl(lf.id)
+          pulled++
+        }
+      }
     }
     setLastSyncAt(userId, startedAt)
     return { pushed: 0, pulled, conflicts: 0 }

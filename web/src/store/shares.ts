@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/db'
-import { dataUrlToBlob, ensureFileData } from './files'
 import { isHtmlFile } from '../lib/importFile'
 
 // 分享外链：shares 表只存映射（token → note/file）与撤销状态。
@@ -81,9 +80,9 @@ export async function createFileShare(userId: string, fileId: string): Promise<S
   if (existing) return existing
 
   const file = await db.files.get(fileId)
-  if (!file || file.deletedAt) throw new Error('file not found')
-  const dataUrl = file.dataUrl ?? (await ensureFileData(fileId))
-  if (!dataUrl) throw new Error('file content unavailable')
+  if (!file || file.deletedAt || !file.storagePath) throw new Error('file not found')
+  const { data, error: downErr } = await supabase.storage.from('files').download(file.storagePath)
+  if (downErr || !data) throw new Error('file content unavailable')
 
   const mime =
     file.mimeType ?? (isHtmlFile(file) ? 'text/html' : 'application/octet-stream')
@@ -92,7 +91,7 @@ export async function createFileShare(userId: string, fileId: string): Promise<S
   // storage-api 从 multipart 里取不到 content-type，分享出去的 HTML 会被当 text/plain 展示
   const { error: upErr } = await supabase.storage
     .from('shares')
-    .upload(token, await dataUrlToBlob(dataUrl, mime).arrayBuffer(), {
+    .upload(token, await data.arrayBuffer(), {
       contentType: mime,
       upsert: true,
     })
