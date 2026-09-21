@@ -8,16 +8,26 @@ description: 向 InkFlow 笔记应用写入或更新笔记。当用户说「记�
 InkFlow 是部署在 `https://kod.liangshubo.top` 的 Supabase 笔记应用（本地开发环境为 http://localhost:8000）。
 笔记内容必须存 **TipTap 文档 JSON**（不是原始 Markdown/HTML），本 skill 的脚本已完成转换，优先用脚本，不要手写 REST。
 
-## 前置条件（一次性）
+## 前置条件（一次性，之后免密）
 
-脚本需要认证，两种方式任选：
+首次配置只需跑一次登录，token 会缓存到 `~/.inkflow/auth.json`，之后所有调用（包括新的 AI 会话）**不再需要账号密码**，token 过期自动用 refresh_token 续期：
 
 ```bash
-# 方式 1：邮箱密码（推荐）
+INKFLOW_EMAIL=你的邮箱 INKFLOW_PASSWORD=你的密码 \
+  node "$SKILL_DIR/scripts/write-note.mjs" --login
+# 本地开发环境加 INKFLOW_URL=http://localhost:8000
+```
+
+建议在终端里自己跑这条命令配置，密码不经过 AI 对话。缓存按服务地址分键，本地（`http://localhost:8000`）与线上互不干扰；换账号重跑一次 `--login` 即覆盖。
+
+没有缓存时的兜底（CI/自动化等场景，token 优先级：显式 INKFLOW_TOKEN > 缓存 > 邮箱密码）：
+
+```bash
+# 邮箱密码（用后同样写入缓存）
 export INKFLOW_EMAIL=你的邮箱
 export INKFLOW_PASSWORD=你的密码
 
-# 方式 2：预签发 token（自动化场景）
+# 或预签发 token
 export INKFLOW_TOKEN=<access_token> INKFLOW_USER_ID=<uuid>
 ```
 

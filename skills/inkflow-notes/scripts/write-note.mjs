@@ -9,8 +9,9 @@
 //   2) INKFLOW_TOKEN + INKFLOW_USER_ID    （预签发的 access token，供自动化/测试）
 // 其它环境变量：INKFLOW_URL（默认 https://kod.liangshubo.top，即部署好的线上服务）、INKFLOW_ANON_KEY（已内置默认值）
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { basename, extname, resolve, dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 
 const SUPABASE_URL = (process.env.INKFLOW_URL || 'https://kod.liangshubo.top').replace(/\/$/, '')
@@ -28,17 +29,21 @@ const VALUE_FLAGS = new Set(['--title', '--folder', '--tags', '--id'])
 const fileArg = args.find((a, i) => !a.startsWith('--') && (i === 0 || !VALUE_FLAGS.has(args[i - 1])))
 const useStdin = args.includes('--stdin')
 const dryRun = args.includes('--dry-run')
+const loginOnly = args.includes('--login')
 const folderPath = opt('folder') // 支持 a/b 多级
 const tags = (opt('tags') || '').split(',').map((s) => s.trim()).filter(Boolean)
 const noteId = opt('id') // 提供则更新已有笔记
 
-if ((!fileArg && !useStdin) || (!title && !useStdin)) {
+if (loginOnly) {
+  // --login：只做认证并缓存 token（不写笔记），用于首次一次性配置
+} else if ((!fileArg && !useStdin) || (!title && !useStdin)) {
   console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid] [--dry-run]')
   console.error('   或: cat 笔记.md | node write-note.mjs --title "标题" --stdin [--folder a/b]')
+  console.error('首次配置认证: INKFLOW_EMAIL=x INKFLOW_PASSWORD=y node write-note.mjs --login')
   process.exit(1)
 }
 
-const mdText = useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
+const mdText = loginOnly ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
 const mdDir = fileArg ? dirname(resolve(fileArg)) : process.cwd()
 
 
@@ -50,15 +55,32 @@ if (dryRun) {
 }
 
 // ---------- 认证 ----------
-let token = process.env.INKFLOW_TOKEN
-let userId = process.env.INKFLOW_USER_ID
-if (!token) {
-  const email = process.env.INKFLOW_EMAIL
-  const password = process.env.INKFLOW_PASSWORD
-  if (!email || !password) {
-    console.error('缺少认证：设置 INKFLOW_EMAIL+INKFLOW_PASSWORD，或 INKFLOW_TOKEN+INKFLOW_USER_ID')
-    process.exit(1)
+// token 缓存在 ~/.inkflow/auth.json（按服务地址分键）：首次邮箱密码登录后持久化，
+// access_token 过期自动用 refresh_token 续期，此后不再需要提供密码。
+// INKFLOW_TOKEN 显式提供时优先使用且不读写缓存（自动化/测试场景）。
+const AUTH_DIR = resolve(homedir(), '.inkflow')
+const AUTH_FILE = resolve(AUTH_DIR, 'auth.json')
+
+function readAuthCache() {
+  try {
+    return JSON.parse(readFileSync(AUTH_FILE, 'utf8'))
+  } catch {
+    return {}
   }
+}
+
+function saveAuthCache(entry) {
+  const all = readAuthCache()
+  all[SUPABASE_URL] = entry
+  try {
+    mkdirSync(AUTH_DIR, { recursive: true })
+    writeFileSync(AUTH_FILE, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
+  } catch (err) {
+    console.error('警告: token 缓存写入失败（本次仍正常运行）:', err.message)
+  }
+}
+
+async function passwordLogin(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
@@ -68,9 +90,73 @@ if (!token) {
     console.error('登录失败:', res.status, await res.text())
     process.exit(1)
   }
-  const data = await res.json()
-  token = data.access_token
-  userId = data.user.id
+  return res.json()
+}
+
+function cacheableAuth(data) {
+  return {
+    user_id: data.user?.id,
+    email: data.user?.email,
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    // expires_in 是秒数；提前 60s 视为过期，避免边界上拿到将失效的 token
+    expires_at: Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600) - 60,
+  }
+}
+
+let token = process.env.INKFLOW_TOKEN
+let userId = process.env.INKFLOW_USER_ID
+let authFrom = ''
+
+if (!token) {
+  const cached = readAuthCache()[SUPABASE_URL]
+  const now = Math.floor(Date.now() / 1000)
+  if (cached?.access_token && cached.expires_at > now) {
+    token = cached.access_token
+    userId = cached.user_id
+    authFrom = `token 缓存 (${AUTH_FILE})`
+  } else if (cached?.refresh_token) {
+    // 过期续期：refresh_token 一次一换（gotrue 轮换），失败则回落到密码登录
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: cached.refresh_token }),
+      })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const entry = cacheableAuth(await res.json())
+      saveAuthCache(entry)
+      token = entry.access_token
+      userId = entry.user_id
+      authFrom = 'refresh_token 续期'
+    } catch {
+      // refresh 失效（长期未用被服务端吊销等），继续走密码
+    }
+  }
+}
+
+if (!token) {
+  const email = process.env.INKFLOW_EMAIL
+  const password = process.env.INKFLOW_PASSWORD
+  if (!email || !password) {
+    console.error('缺少认证。两种方式任选：')
+    console.error('  1) 首次配置（登录一次后缓存到 ~/.inkflow/auth.json，之后免密）：')
+    console.error('     INKFLOW_EMAIL=你的邮箱 INKFLOW_PASSWORD=你的密码 node scripts/write-note.mjs --login')
+    console.error('  2) 显式 token：INKFLOW_TOKEN=<access_token> INKFLOW_USER_ID=<uuid>')
+    process.exit(1)
+  }
+  const entry = cacheableAuth(await passwordLogin(email, password))
+  saveAuthCache(entry)
+  token = entry.access_token
+  userId = entry.user_id
+  authFrom = '邮箱密码登录（已缓存，下次免密）'
+}
+
+if (loginOnly) {
+  console.log(`登录成功，token 已缓存到 ${AUTH_FILE}`)
+  console.log(`user_id: ${userId}`)
+  console.log('之后调用本脚本无需再提供邮箱密码；token 过期会自动续期。')
+  process.exit(0)
 }
 
 const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
