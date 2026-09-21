@@ -269,6 +269,20 @@ export const syncEngine = {
           const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
           if (rmErr) console.error('remove storage object failed', rmErr)
         }
+        // 先清掉引用此文件的分享（公共桶对象 + shares 行），否则外键
+        // shares_file_id_fkey 会挡住 files 行的物理删除，推送永远 409 重试
+        const { data: shares, error: shareErr } = await supabase
+          .from('shares')
+          .select('token')
+          .eq('file_id', file.id)
+        if (shareErr) throw shareErr
+        const tokens = (shares ?? []).map((s) => s.token as string)
+        if (tokens.length) {
+          const { error: rmShareErr } = await supabase.storage.from('shares').remove(tokens)
+          if (rmShareErr) console.error('remove share objects failed', rmShareErr)
+          const { error: delShareErr } = await supabase.from('shares').delete().eq('file_id', file.id)
+          if (delShareErr) throw delShareErr
+        }
         const { error: delErr } = await supabase.from('files').delete().eq('id', file.id)
         if (delErr) throw delErr
         await db.files.delete(file.id)

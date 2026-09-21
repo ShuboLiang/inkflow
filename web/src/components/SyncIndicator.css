@@ -24,6 +24,15 @@
   animation: ink-breathe 1.6s ease-in-out infinite;
 }
 
+/* 推/拉失败：红点常亮提示有数据没同步上去（会自动退避重试） */
+.sync-indicator[data-status='error'] {
+  color: var(--danger);
+}
+
+.sync-indicator[data-status='error'] .sync-indicator-dot {
+  background: var(--danger);
+}
+
 .sync-indicator[data-status='offline'] .sync-indicator-dot {
   background: var(--ink-500);
   opacity: 0.5;
