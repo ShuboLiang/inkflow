@@ -38,23 +38,26 @@ const fileArg = args.find((a, i) => !a.startsWith('--') && (i === 0 || !VALUE_FL
 const useStdin = args.includes('--stdin')
 const dryRun = args.includes('--dry-run')
 const loginOnly = args.includes('--login')
+const listTagsOnly = args.includes('--list-tags') || args.includes('--tags-list')
+const allowNewTags = args.includes('--allow-new-tags')
 const findQuery = opt('find')
 const folderPath = opt('folder') // 支持 a/b 多级；undefined = 更新时保留原文件夹
 const tagsArg = opt('tags') // undefined = 更新时保留原标签；'' = 显式清空
 const tags = (tagsArg || '').split(',').map((s) => s.trim()).filter(Boolean)
 const noteId = opt('id') // 提供则更新已有笔记
 
-if (loginOnly || findQuery !== undefined) {
-  // --login / --find：不走写笔记主流程
+if (loginOnly || listTagsOnly || findQuery !== undefined) {
+  // --login / --list-tags / --find：不走写笔记主流程
 } else if ((!fileArg && !useStdin) || (!title && !useStdin)) {
   console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid] [--dry-run]')
   console.error('   或: cat 笔记.md | node write-note.mjs --title "标题" --stdin [--folder a/b]')
+  console.error('查看已有标签: node write-note.mjs --list-tags')
   console.error('搜索笔记: node write-note.mjs --find "关键词"   （拿 id 用于 --id 更新）')
   console.error('首次配置认证: INKFLOW_EMAIL=x INKFLOW_PASSWORD=y node write-note.mjs --login')
   process.exit(1)
 }
 
-const mdText = loginOnly || findQuery !== undefined ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
+const mdText = loginOnly || listTagsOnly || findQuery !== undefined ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
 const mdDir = fileArg ? dirname(resolve(fileArg)) : process.cwd()
 
 
@@ -222,6 +225,53 @@ if (findQuery !== undefined) {
     }
     if (hits.length > 20) console.log(`…另有 ${hits.length - 20} 篇未显示`)
     console.log('更新某篇: node write-note.mjs --title "新标题" 内容.md --id <上面的 uuid>')
+  }
+}
+
+// ---------- 获取系统已有标签（来自有效 notes 和 files） ----------
+async function getExistingTags() {
+  const [notesRes, filesRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/notes?select=tags&deleted_at=is.null&limit=2000`, { headers }),
+    fetch(`${SUPABASE_URL}/rest/v1/files?select=tags&deleted_at=is.null&limit=2000`, { headers }),
+  ])
+  const tagCounts = new Map()
+  if (notesRes.ok) {
+    const rows = await notesRes.json()
+    for (const r of rows) {
+      for (const t of r.tags ?? []) {
+        if (typeof t === 'string' && t.trim()) {
+          const clean = t.trim()
+          tagCounts.set(clean, (tagCounts.get(clean) || 0) + 1)
+        }
+      }
+    }
+  }
+  if (filesRes.ok) {
+    const rows = await filesRes.json()
+    for (const r of rows) {
+      for (const t of r.tags ?? []) {
+        if (typeof t === 'string' && t.trim()) {
+          const clean = t.trim()
+          tagCounts.set(clean, (tagCounts.get(clean) || 0) + 1)
+        }
+      }
+    }
+  }
+  return tagCounts
+}
+
+// ---------- --list-tags：列出所有已有标签 ----------
+if (listTagsOnly) {
+  const existingMap = await getExistingTags()
+  const sorted = [...existingMap.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+  if (!sorted.length) {
+    console.log('当前系统中没有任何标签')
+  } else {
+    console.log(`现有标签 (${sorted.length} 个):`)
+    for (const [tag, count] of sorted) {
+      console.log(`- ${tag} (${count} 篇)`)
+    }
+    console.log(`\n标签列表: ${sorted.map(([t]) => t).join(', ')}`)
   }
 }
 
@@ -476,11 +526,38 @@ async function resolveFolder(path) {
 
 // process.exit 在 Windows 上与 libuv 清理竞态会触发断言崩溃，
 // --login/--find 分支靠这个条件让模块自然结束
-if (!loginOnly && findQuery === undefined) {
+if (!loginOnly && !listTagsOnly && findQuery === undefined) {
   // ---------- 写入笔记 ----------
   const content = await mdToDoc(mdText)
   const folderId = await resolveFolder(folderPath)
   const now = new Date().toISOString()
+
+  let finalTags = tags
+  if (tags.length > 0 && !allowNewTags) {
+    const existingMap = await getExistingTags()
+    const existingList = [...existingMap.keys()]
+    const keptTags = []
+    const droppedTags = []
+
+    for (const tag of tags) {
+      const match = existingList.find((e) => e.toLowerCase() === tag.toLowerCase())
+      if (match) {
+        if (!keptTags.includes(match)) keptTags.push(match)
+      } else {
+        droppedTags.push(tag)
+      }
+    }
+
+    if (droppedTags.length > 0) {
+      console.warn(`[InkFlow] 提示: 标签只允许从已有标签中选择，已忽略不存在的新标签: ${droppedTags.join(', ')}`)
+      if (existingList.length > 0) {
+        console.warn(`[InkFlow] 当前系统已有标签: ${existingList.join(', ')}`)
+      } else {
+        console.warn(`[InkFlow] 当前系统中暂无任何已有标签，本次已略去标签`)
+      }
+    }
+    finalTags = keptTags
+  }
 
   let result
   if (noteId) {
@@ -498,7 +575,7 @@ if (!loginOnly && findQuery === undefined) {
         ...(title ? { title } : {}),
         content,
         ...(folderPath !== undefined ? { folder_id: folderId } : {}),
-        ...(tagsArg !== undefined ? { tags } : {}),
+        ...(tagsArg !== undefined ? { tags: finalTags } : {}),
         version: rows[0].version + 1,
         updated_at: now,
         deleted_at: null,
@@ -515,7 +592,7 @@ if (!loginOnly && findQuery === undefined) {
         user_id: userId,
         title,
         content,
-        tags,
+        tags: finalTags,
         folder_id: folderId,
         version: 1,
         updated_at: now,

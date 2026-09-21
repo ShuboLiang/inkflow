@@ -38,23 +38,35 @@ export INKFLOW_TOKEN=<access_token> INKFLOW_USER_ID=<uuid>
 脚本就在本文件同目录的 `scripts/write-note.mjs`（仓库内路径 `skills/inkflow-notes/scripts/write-note.mjs`）：
 
 ```bash
-# 新建笔记（Markdown 文件 → 笔记）
+# 查看系统已有标签（重要：写笔记选标签前必查）
+node skills/inkflow-notes/scripts/write-note.mjs --list-tags
+
+# 新建笔记（Markdown 文件 → 笔记，--tags 只能从已有标签中挑选）
 node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础" note.md \
-  --folder "课程/机器学习" --tags "深度学习,AI"
+  --folder "课程/机器学习" --tags "游戏"
 
 # 从标准输入读入
 cat summary.md | node "$SKILL_DIR/scripts/write-note.mjs" --title "会议总结" --stdin --folder "工作"
 
 # 搜索笔记（标题/正文/标签命中），拿 id 用于更新
-node "$SKILL_DIR/scripts/write-note.mjs" --find "关键词"
+node skills/inkflow-notes/scripts/write-note.mjs --find "关键词"
 
 # 更新已有笔记（用笔记 uuid 覆盖）
-node "$SKILL_DIR/scripts/write-note.mjs" --title "深度学习基础(修订)" note.md --id <uuid>
+node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础(修订)" note.md --id <uuid>
 ```
 
 输出：JSON `{ id, title, folder_id, updated_at }`。`id` 即笔记 uuid，更新时用。AI 更新笔记时不知道 id 就先 `--find`。
 
 **更新语义**：`--id` 模式只覆盖显式提供的字段——没传 `--folder`/`--tags`/`--title` 时保留原值（只改正文不会把笔记移出文件夹或清空标签）；`--tags ""` 显式清空。
+
+## 标签选择规范（严格遵守）
+
+**生成或写入笔记时，标签【只能】从用户已存在的标签中选择，【严禁】新建标签！**
+
+1. **先查后选**：在确定打什么标签前，先执行 `node skills/inkflow-notes/scripts/write-note.mjs --list-tags` 查看当前系统已存在的全部标签；
+2. **匹配原则**：从已有标签列表中挑选与当前笔记内容最贴合的 0~3 个标签；
+3. **无合适则不打标签**：如果现有标签中没有与笔记主题契合的标签，**直接不传 `--tags` 参数，不要凭空发明新标签**；
+4. **脚本硬拦截**：`write-note.mjs` 底层已强制校验，任何不存在的新标签会被自动过滤剔除。
 
 ## Markdown 支持范围
 

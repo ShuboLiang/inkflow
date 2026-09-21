@@ -13,6 +13,7 @@ InkFlow：本地优先（IndexedDB）+ 云端同步的笔记 Web 应用。all-in
 - `docker/all-in-one/` — 镜像构建：Dockerfile（多阶段拷贝 gotrue/postgrest/storage/realtime 到 nix 系 postgres 基础镜像）、gateway.mjs（静态+反代，路由仿 Kong：/realtime/v1/* → /socket/* 且 Host 改写成 realtime-dev.supabase-realtime）、entrypoint.sh（拉起 postgres+四个服务+迁移+发布配置）。改网关记得 MIME 表要全（缺 .mjs 会导致 pdf.js worker 加载失败）。
 - `deploy/` — 服务器模板（compose + .env 示例）。compose 里 `pull_policy: never`，镜像只来自 `docker load`。
 - `scripts/update-server.ps1` + `scripts/deploy-remote.py` — 一键部署（构建→导出→SFTP 上传→load→重建→验证）。**`.ps1` 文件必须带 UTF-8 BOM**（Windows PowerShell 5.1 无 BOM 会把中文按 GBK 解析报错）；用 `-ExecutionPolicy Bypass` 执行。服务器连接配置在 `scripts/server.config.json`（已 gitignore）。
+- `skills/inkflow-notes/` — AI 笔记写入技能。**生成/写入笔记时，标签必须只能从已存在的标签中选择，严禁新建标签**。写笔记前先查已有标签（`--list-tags`），无合适标签则不传 `--tags`。
 
 ## 常用命令
 
