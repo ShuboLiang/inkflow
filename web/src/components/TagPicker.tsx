@@ -18,16 +18,18 @@ export function TagPicker({
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
     }
     window.addEventListener('mousedown', onDown)
+    window.addEventListener('touchstart', onDown)
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('touchstart', onDown)
       window.removeEventListener('keydown', onKey)
     }
   }, [open])
@@ -37,8 +39,8 @@ export function TagPicker({
       <button
         type="button"
         className={open || tags.length > 0 ? 'tool-btn tag-picker-btn on' : 'tool-btn tag-picker-btn'}
-        title="标签"
-        aria-label="标签"
+        title="设置标签"
+        aria-label="设置标签"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
@@ -49,8 +51,13 @@ export function TagPicker({
         {tags.length > 0 ? tags.length : ''}
       </button>
       {open && (
-        <div className="tag-picker-pop" role="dialog" aria-label="编辑标签">
-          <TagInput tags={tags} suggestions={suggestions} onChange={onChange} />
+        <div className="tag-picker-pop" role="dialog" aria-label="设置标签">
+          <TagInput
+            tags={tags}
+            suggestions={suggestions}
+            onChange={onChange}
+            onClose={() => setOpen(false)}
+          />
         </div>
       )}
     </div>
