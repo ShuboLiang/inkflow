@@ -27,6 +27,8 @@ Thumbs.db
 
 # Dev artifacts
 .shots/
+# 本地 Supabase 开发栈（运行数据 + .env 密钥），不属于仓库
+supabase/
 backups/
 dev-data/
 inkflow-release-*.tar.gz
