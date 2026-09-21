@@ -670,6 +670,14 @@ export default function App() {
     setDesktopNoteListCollapsed(false)
   }
 
+  // 卡片标签点击：搜索词优先级高于标签过滤，不清空搜索的话点了标签也看不到过滤效果
+  const handleSelectTag = (name: string) => {
+    setSearch('')
+    setActiveTag(name)
+    setMobileView('list')
+    setDesktopNoteListCollapsed(false)
+  }
+
   const handleRenameTag = async (oldName: string, newName: string) => {
     const merged = tagCounts.has(newName)
     const ok = await confirmDialog({
@@ -1173,6 +1181,7 @@ export default function App() {
           onSelectFolderHit={handleSelectFolderHit}
           folderPathOf={(id) => folderPathNames(id, folders ?? [])}
           onGotoFolder={handleGotoFolder}
+          onSelectTag={handleSelectTag}
           onSelect={handleSelect}
           onCreate={() => void handleCreate()}
           onSelectFile={handleSelectFile}

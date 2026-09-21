@@ -32,6 +32,8 @@ interface NoteListProps {
   /** 文件夹 id → 路径名（如 课程 / 数学），找不到返回 null */
   folderPathOf: (folderId: string) => string | null
   onGotoFolder: (folderId: string) => void
+  /** 点击卡片上的标签小圆片 → 按该标签过滤列表 */
+  onSelectTag: (tag: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
   onSelectFile: (id: string) => void
@@ -101,6 +103,7 @@ export function NoteList({
   onSelectFolderHit,
   folderPathOf,
   onGotoFolder,
+  onSelectTag,
   onSelect,
   onCreate,
   onSelectFile,
@@ -424,7 +427,15 @@ export function NoteList({
                     {(file.tags ?? []).length > 0 && (
                       <div className="note-card-tags">
                         {(file.tags ?? []).slice(0, 3).map((t) => (
-                          <span key={t} className="note-card-tag">
+                          <span
+                            key={t}
+                            className="note-card-tag tag-jump"
+                            title={`按标签筛选：${t}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onSelectTag(t)
+                            }}
+                          >
                             # {t}
                           </span>
                         ))}
@@ -482,7 +493,15 @@ export function NoteList({
                   {(note.tags ?? []).length > 0 && (
                     <div className="note-card-tags">
                       {(note.tags ?? []).slice(0, 3).map((t) => (
-                        <span key={t} className="note-card-tag">
+                        <span
+                          key={t}
+                          className="note-card-tag tag-jump"
+                          title={`按标签筛选：${t}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onSelectTag(t)
+                          }}
+                        >
                           # {t}
                         </span>
                       ))}

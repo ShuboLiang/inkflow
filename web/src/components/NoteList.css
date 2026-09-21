@@ -100,6 +100,10 @@
   line-height: 1.6;
 }
 
+.note-card-tag.tag-jump {
+  cursor: pointer;
+}
+
 .note-card {
   display: block;
   width: 100%;
@@ -413,5 +417,10 @@
     color: var(--qing);
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  .note-card-tag.tag-jump:hover {
+    color: #fff;
+    background: var(--qing);
   }
 }
