@@ -308,7 +308,8 @@ export default function App() {
       if (f.deletedAt) continue
       for (const t of f.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1)
     }
-    return new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh-Hans-CN')))
+    // 数量优先、同数量按拼音：常用标签排前面（侧栏默认只显示前 N 个）
+    return new Map([...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN')))
   }, [notes, files])
 
   const visibleNotes = useMemo(() => {
@@ -668,6 +669,8 @@ export default function App() {
     setActiveTag((cur) => (cur === name ? null : name))
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
+    // 与点文件夹一致：移动端选完标签随手关抽屉（桌面端 sidebarOpen 无效果）
+    setSidebarOpen(false)
   }
 
   // 卡片标签点击：搜索词优先级高于标签过滤，不清空搜索的话点了标签也看不到过滤效果
@@ -676,6 +679,7 @@ export default function App() {
     setActiveTag(name)
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
+    setSidebarOpen(false)
   }
 
   const handleRenameTag = async (oldName: string, newName: string) => {

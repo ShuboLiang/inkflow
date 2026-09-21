@@ -4,9 +4,11 @@ import {
   ChevronDown,
   Plus,
   Pencil,
+  Search,
   Trash2,
   MoreHorizontal,
   LogOut,
+  X,
 } from 'lucide-react'
 import type { Folder } from '../lib/db'
 import { ContextMenu, type MenuItem } from './ContextMenu'
@@ -15,6 +17,13 @@ import './Sidebar.css'
 
 // 文件夹拖拽移动仅在精确指针设备启用
 const DRAG_FINE = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+
+// 标签收纳：默认只显示前 N 个（数量优先排序下的常用标签），
+// 总数超过阈值再出现搜索框；两个开关状态都记在 localStorage
+const TAGS_PREVIEW = 10
+const TAGS_SEARCH_THRESHOLD = 15
+const TAGS_COLLAPSED_KEY = 'inkflow:sidebar:tagsCollapsed'
+const TAGS_SHOW_ALL_KEY = 'inkflow:sidebar:tagsShowAll'
 
 interface SidebarProps {
   email: string
@@ -123,6 +132,40 @@ export function Sidebar({
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   // 拖拽悬停的放置目标（'all' / 文件夹 id / tag:xxx），用于高亮反馈
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  // 标签区收纳：整区折叠 / 展开全部 / 搜索过滤
+  const [tagsCollapsed, setTagsCollapsed] = useState(() => localStorage.getItem(TAGS_COLLAPSED_KEY) === 'true')
+  const [tagsShowAll, setTagsShowAll] = useState(() => localStorage.getItem(TAGS_SHOW_ALL_KEY) === 'true')
+  const [tagFilter, setTagFilter] = useState('')
+
+  const toggleTagsCollapsed = () => {
+    setTagsCollapsed((cur) => {
+      localStorage.setItem(TAGS_COLLAPSED_KEY, String(!cur))
+      return !cur
+    })
+  }
+  const toggleTagsShowAll = () => {
+    setTagsShowAll((cur) => {
+      localStorage.setItem(TAGS_SHOW_ALL_KEY, String(!cur))
+      return !cur
+    })
+  }
+
+  // 搜索过滤 + 截断：搜索中忽略前 N 截断；折叠态下激活的标签也保证可见
+  const tagQuery = tagFilter.trim().toLowerCase()
+  const allTags = useMemo(() => [...tags.entries()], [tags])
+  const matchedTags = useMemo(
+    () => (tagQuery ? allTags.filter(([name]) => name.toLowerCase().includes(tagQuery)) : allTags),
+    [allTags, tagQuery],
+  )
+  const visibleTags = useMemo(() => {
+    if (tagQuery || tagsShowAll || matchedTags.length <= TAGS_PREVIEW) return matchedTags
+    const head = matchedTags.slice(0, TAGS_PREVIEW)
+    if (activeTag && !head.some(([name]) => name === activeTag)) {
+      const active = matchedTags.find(([name]) => name === activeTag)
+      if (active) return [...head, active]
+    }
+    return head
+  }, [matchedTags, tagQuery, tagsShowAll, activeTag])
 
   // 按父级分组的树（每层内已按中文拼音排序）
   const childrenByParent = useMemo(() => {
@@ -455,64 +498,108 @@ export function Sidebar({
       ) : (
         renderFolderTree(null, 0)
       )}
-      <div className="sidebar-section">标签</div>
       {tags.size === 0 ? (
-        <div className="sidebar-empty">暂无标签</div>
+        <div className="sidebar-section">标签</div>
       ) : (
-        [...tags.entries()].map(([name, count]) =>
-          editingTag === name ? (
-            <InlineNameInput
-              key={`tag-${name}`}
-              ariaLabel="重命名标签"
-              defaultValue={name}
-              onSubmit={(newName) => {
-                onRenameTag(name, newName)
-                setEditingTag(null)
-              }}
-              onCancel={() => setEditingTag(null)}
-            />
-          ) : (
-            <div
-              key={`tag-${name}`}
-              className={tagClass(name)}
-              {...tagDropHandlers(name)}
-              onContextMenu={(e) => openMenu(e, tagMenuItems(name))}
-            >
-              <button
-                type="button"
-                className="sidebar-folder-name"
-                title={`#${name}`}
-                onClick={() => onToggleTag(name)}
-                onDoubleClick={() => setEditingTag(name)}
-              >
-                # {name}
-              </button>
-              {count > 0 && <span className="sidebar-count">{count}</span>}
-              <span className="sidebar-folder-actions">
-                <button
-                  type="button"
-                  className="sidebar-folder-action"
-                  title="重命名"
-                  aria-label={`重命名标签 ${name}`}
-                  onClick={() => setEditingTag(name)}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-folder-action"
-                  title="删除"
-                  aria-label={`删除标签 ${name}`}
-                  onClick={() => onDeleteTag(name)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </span>
-              {moreButton(tagMenuItems(name), name)}
-            </div>
-          ),
-        )
+        <button
+          type="button"
+          className="sidebar-section sidebar-section-toggle"
+          onClick={toggleTagsCollapsed}
+          aria-expanded={!tagsCollapsed}
+        >
+          <span>标签</span>
+          {tagsCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+        </button>
       )}
+      {tags.size === 0 && <div className="sidebar-empty">暂无标签</div>}
+      {!tagsCollapsed && tags.size > 0 && allTags.length > TAGS_SEARCH_THRESHOLD && (
+        <div className="sidebar-tag-search">
+          <Search size={13} className="sidebar-tag-search-icon" />
+          <input
+            type="text"
+            value={tagFilter}
+            placeholder="搜索标签…"
+            aria-label="搜索标签"
+            onChange={(e) => setTagFilter(e.target.value)}
+          />
+          {tagFilter && (
+            <button
+              type="button"
+              className="sidebar-tag-search-clear"
+              aria-label="清空标签搜索"
+              onClick={() => setTagFilter('')}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      )}
+      {!tagsCollapsed &&
+        (matchedTags.length === 0 ? (
+          <div className="sidebar-empty">{tagQuery ? '无匹配标签' : '暂无标签'}</div>
+        ) : (
+          <>
+            {visibleTags.map(([name, count]) =>
+              editingTag === name ? (
+                <InlineNameInput
+                  key={`tag-${name}`}
+                  ariaLabel="重命名标签"
+                  defaultValue={name}
+                  onSubmit={(newName) => {
+                    onRenameTag(name, newName)
+                    setEditingTag(null)
+                  }}
+                  onCancel={() => setEditingTag(null)}
+                />
+              ) : (
+                <div
+                  key={`tag-${name}`}
+                  className={tagClass(name)}
+                  {...tagDropHandlers(name)}
+                  onContextMenu={(e) => openMenu(e, tagMenuItems(name))}
+                >
+                  <button
+                    type="button"
+                    className="sidebar-folder-name"
+                    title={`#${name}`}
+                    onClick={() => onToggleTag(name)}
+                    onDoubleClick={() => setEditingTag(name)}
+                  >
+                    # {name}
+                  </button>
+                  {count > 0 && <span className="sidebar-count">{count}</span>}
+                  <span className="sidebar-folder-actions">
+                    <button
+                      type="button"
+                      className="sidebar-folder-action"
+                      title="重命名"
+                      aria-label={`重命名标签 ${name}`}
+                      onClick={() => setEditingTag(name)}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="sidebar-folder-action"
+                      title="删除"
+                      aria-label={`删除标签 ${name}`}
+                      onClick={() => onDeleteTag(name)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </span>
+                  {moreButton(tagMenuItems(name), name)}
+                </div>
+              ),
+            )}
+            {!tagQuery && matchedTags.length > TAGS_PREVIEW && (
+              <button type="button" className="sidebar-tags-more" onClick={toggleTagsShowAll}>
+                {tagsShowAll ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                <span>{tagsShowAll ? '收起标签列表' : `显示全部 ${matchedTags.length} 个标签`}</span>
+              </button>
+            )}
+          </>
+        ))}
       <div className="sidebar-footer">
         <ThemePicker theme={theme} onChange={onThemeChange} />
         <span className="sidebar-email" title={email}>

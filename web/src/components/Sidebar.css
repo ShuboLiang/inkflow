@@ -97,6 +97,81 @@
   cursor: pointer;
 }
 
+/* 「标签」标题行做成按钮：点击折叠/展开整个标签区 */
+.sidebar-section-toggle {
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 标签迷你搜索框（标签超过阈值时出现），样式对齐笔记列表的搜索框 */
+.sidebar-tag-search {
+  position: relative;
+  margin: 6px 10px 4px;
+}
+
+.sidebar-tag-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 26px 5px 28px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--ink-900);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sidebar-tag-search input:focus {
+  outline: none;
+  border-color: var(--qing);
+  background: var(--paper);
+}
+
+.sidebar-tag-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-500);
+  pointer-events: none;
+}
+
+.sidebar-tag-search-clear {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-500);
+  cursor: pointer;
+  border-radius: var(--radius-s);
+}
+
+/* 「显示全部 X 个标签」行 */
+.sidebar-tags-more {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--ink-500);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .sidebar-empty {
   padding: 4px 10px;
   font-size: 13px;
@@ -289,6 +364,20 @@
   }
 
   .sidebar-section-add:hover {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .sidebar-section-toggle:hover {
+    background: var(--qing-50);
+  }
+
+  .sidebar-tag-search-clear:hover {
+    color: var(--ink-900);
+    background: var(--qing-50);
+  }
+
+  .sidebar-tags-more:hover {
     background: var(--qing-50);
     color: var(--qing);
   }
