@@ -1,5 +1,10 @@
 .share-page {
-  min-height: 100vh;
+  /* html/body 被主应用全局锁死（overflow hidden + body 固定定位），窗口永不滚动；
+     分享页原来用 min-height:100vh 依赖窗口滚动 → 手机上拉不动。
+     改为自身占满视口高度、内部滚动（与主应用「滚动只在内层容器」同策略） */
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   align-items: center;
