@@ -8,6 +8,7 @@
   font-family: var(--font-ui);
   min-height: 0;
   position: relative;
+  transition: width 0.2s ease, opacity 0.2s ease;
 }
 
 .note-list-search {

@@ -9,6 +9,7 @@
   padding: 16px 12px;
   gap: 4px;
   overflow-y: auto; /* 文件夹/标签多时侧栏自身可滚，不再被视口裁掉 unreachable */
+  transition: width 0.2s ease, padding 0.2s ease, opacity 0.2s ease;
 }
 
 .sidebar-brand {

@@ -52,6 +52,8 @@
 
 .editor-back {
   display: none;
+  flex: none;
+  white-space: nowrap;
   border: none;
   background: none;
   font-size: 14px;
@@ -399,6 +401,15 @@
 }
 
 @media (max-width: 767px) {
+  .fullscreen-toggle {
+    display: none;
+  }
+
+  .editor-toolbar {
+    padding: 6px 12px;
+    overflow-x: auto;
+  }
+
   .editor-back {
     display: block;
   }

@@ -42,6 +42,27 @@
 
 
 
+.app-topbar-desktop-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.app-topbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--ink-500);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
 .app-main {
   position: relative;
   display: flex;
@@ -49,9 +70,46 @@
   min-height: 0;
 }
 
+@media (min-width: 1024px) {
+  .app-main.sidebar-collapsed .sidebar {
+    width: 0 !important;
+    padding: 0 !important;
+    border-right: none !important;
+    overflow: hidden !important;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-main.notelist-collapsed .note-list {
+    width: 0 !important;
+    padding: 0 !important;
+    border-right: none !important;
+    overflow: hidden !important;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* 电脑全屏专注模式：大屏下编辑器正文适度居中，保持舒适行长 */
+@media (min-width: 1200px) {
+  .app-main.sidebar-collapsed.notelist-collapsed .editor-head,
+  .app-main.sidebar-collapsed.notelist-collapsed .editor-shell {
+    padding-left: max(48px, calc((100% - 880px) / 2));
+    padding-right: max(48px, calc((100% - 880px) / 2));
+  }
+}
+
 @media (max-width: 1023px) {
   .app-menu {
     display: block;
+  }
+
+  .app-topbar-desktop-tools {
+    display: none;
   }
 }
 
@@ -79,4 +137,15 @@
   .app-menu:hover {
     background: var(--qing-50);
   }
+
+  .app-topbar-btn:hover {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .app-topbar-btn.active {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
 }
+

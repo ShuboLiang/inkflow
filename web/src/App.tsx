@@ -51,6 +51,44 @@ function IconDownload() {
   )
 }
 
+function IconSidebar() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </svg>
+  )
+}
+
+function IconNoteList() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M15 3v18" />
+    </svg>
+  )
+}
+
+function IconMaximize() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </svg>
+  )
+}
+
+function IconMinimize() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+    </svg>
+  )
+}
+
+const DESKTOP_SIDEBAR_KEY = 'inkflow:desktop:sidebarCollapsed'
+const DESKTOP_NOTELIST_KEY = 'inkflow:desktop:noteListCollapsed'
+
 // 文件夹的祖先路径名（如「课程 / 数学」），找不到返回 null
 function folderPathNames(id: string, folders: { id: string; name: string; parentId: string | null }[]): string | null {
   const byId = new Map(folders.map((f) => [f.id, f]))
@@ -68,11 +106,71 @@ export default function App() {
   const { user, loading, signOut } = useAuth()
   const { status: syncStatus, requestPush } = useSync(user)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
+  // 电脑端侧栏折叠状态：默认从 localStorage 读取
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DESKTOP_SIDEBAR_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [desktopNoteListCollapsed, setDesktopNoteListCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DESKTOP_NOTELIST_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  // 当没有打开任何笔记或文件时，自动保证列表可见，避免空状态界面
+  const isNoteListEffectivelyCollapsed = desktopNoteListCollapsed && (activeId !== null || activeFileId !== null)
+  const isContentFullScreen = desktopSidebarCollapsed && isNoteListEffectivelyCollapsed
+
+  const toggleDesktopSidebar = () => {
+    setDesktopSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(DESKTOP_SIDEBAR_KEY, String(next))
+      } catch {}
+      return next
+    })
+  }
+
+  const toggleDesktopNoteList = () => {
+    setDesktopNoteListCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(DESKTOP_NOTELIST_KEY, String(next))
+      } catch {}
+      return next
+    })
+  }
+
+  const toggleFullscreen = () => {
+    if (!activeId && !activeFileId) return
+    if (isContentFullScreen) {
+      setDesktopSidebarCollapsed(false)
+      setDesktopNoteListCollapsed(false)
+      try {
+        localStorage.setItem(DESKTOP_SIDEBAR_KEY, 'false')
+        localStorage.setItem(DESKTOP_NOTELIST_KEY, 'false')
+      } catch {}
+    } else {
+      setDesktopSidebarCollapsed(true)
+      setDesktopNoteListCollapsed(true)
+      try {
+        localStorage.setItem(DESKTOP_SIDEBAR_KEY, 'true')
+        localStorage.setItem(DESKTOP_NOTELIST_KEY, 'true')
+      } catch {}
+    }
+  }
+
   // 格式工具栏隐藏偏好：全局（任意笔记隐藏 = 全部隐藏），登录后从云端加载、切换即保存
   const [toolbarHidden, setToolbarHidden] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -110,6 +208,7 @@ export default function App() {
   }, [])
 
   const files = useLiveQuery(() => db.files.toArray(), [])
+  const activeFile = files?.find((f) => f.id === activeFileId) ?? null
 
   const folderCounts = useMemo(() => {
     const m = new Map<string, number>()
@@ -277,6 +376,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Ctrl/Cmd + \ 切换全屏，Esc 退出全屏
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+        e.preventDefault()
+        toggleFullscreen()
+      } else if (e.key === 'Escape' && isContentFullScreen) {
+        e.preventDefault()
+        setDesktopSidebarCollapsed(false)
+        setDesktopNoteListCollapsed(false)
+        try {
+          localStorage.setItem(DESKTOP_SIDEBAR_KEY, 'false')
+          localStorage.setItem(DESKTOP_NOTELIST_KEY, 'false')
+        } catch {}
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isContentFullScreen, activeId, activeFileId])
+
   // 存量图片迁移（每次启动跑一次）：正文里的 data URL 图片上传到 Storage 并替换为
   // 公共 URL，笔记标脏走正常同步。后台分批进行，不阻塞界面；失败的笔记下次启动再试。
   const migratedRef = useRef(false)
@@ -367,6 +486,7 @@ export default function App() {
     setSidebarOpen(false)
     // 手机上选文件夹=切换浏览上下文：从笔记里跳回列表（与侧栏选标签的行为一致）
     setMobileView('list')
+    setDesktopNoteListCollapsed(false)
   }
 
   // 点击搜索结果里的文件夹：跳转进去并清空搜索/标签筛选
@@ -376,6 +496,7 @@ export default function App() {
     setActiveFolderId(id)
     setSidebarOpen(false)
     setMobileView('list')
+    setDesktopNoteListCollapsed(false)
   }
 
   // 跳到笔记/文件所在文件夹（保留打开的内容，只切换列表上下文）
@@ -440,6 +561,7 @@ export default function App() {
   const handleToggleTag = (name: string) => {
     setActiveTag((cur) => (cur === name ? null : name))
     setMobileView('list')
+    setDesktopNoteListCollapsed(false)
   }
 
   const handleRenameTag = async (oldName: string, newName: string) => {
@@ -484,9 +606,6 @@ export default function App() {
     if (!activeFile) return
     void setFileTags(activeFile.id, tags).then(requestPush)
   }
-
-  const [activeFileId, setActiveFileId] = useState<string | null>(null)
-  const activeFile = files?.find((f) => f.id === activeFileId) ?? null
 
   // 新设备上拉到的文件只有云端元数据：打开查看器时按需下载内容并缓存进 Dexie
   const activeFileIdForEffect = activeFile?.id ?? null
@@ -627,6 +746,28 @@ export default function App() {
         >
           ☰
         </button>
+        <div className="app-topbar-desktop-tools">
+          <button
+            type="button"
+            className={desktopSidebarCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
+            title={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
+            aria-label={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
+            aria-pressed={desktopSidebarCollapsed}
+            onClick={toggleDesktopSidebar}
+          >
+            <IconSidebar />
+          </button>
+          <button
+            type="button"
+            className={isNoteListEffectivelyCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
+            title={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
+            aria-label={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
+            aria-pressed={isNoteListEffectivelyCollapsed}
+            onClick={toggleDesktopNoteList}
+          >
+            <IconNoteList />
+          </button>
+        </div>
         <span className="app-view-title">
           {activeTag
             ? `# ${activeTag}`
@@ -636,7 +777,16 @@ export default function App() {
         </span>
         <SyncIndicator status={syncStatus} />
       </header>
-      <div className={mobileView === 'editor' ? 'app-main view-editor' : 'app-main'}>
+      <div
+        className={[
+          'app-main',
+          mobileView === 'editor' ? 'view-editor' : '',
+          desktopSidebarCollapsed ? 'sidebar-collapsed' : '',
+          isNoteListEffectivelyCollapsed ? 'notelist-collapsed' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         <Sidebar
           email={user.email ?? ''}
           collapsed={!sidebarOpen}
@@ -724,6 +874,17 @@ export default function App() {
                 )}
                 <button
                   type="button"
+                  className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
+                  title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
+                  aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
+                  aria-pressed={isContentFullScreen}
+                  onClick={toggleFullscreen}
+                >
+                  {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
+                  <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
+                </button>
+                <button
+                  type="button"
                   className="tool-btn danger"
                   onClick={() => void handleDeleteFile()}
                 >
@@ -781,6 +942,17 @@ export default function App() {
                   onChange={handleNoteTagsChange}
                 />
                 <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
+                <button
+                  type="button"
+                  className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
+                  title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
+                  aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
+                  aria-pressed={isContentFullScreen}
+                  onClick={toggleFullscreen}
+                >
+                  {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
+                  <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
+                </button>
                 <button type="button" className="tool-btn danger" onClick={() => void handleDelete()}>
                   <IconTrash />
                   删除
