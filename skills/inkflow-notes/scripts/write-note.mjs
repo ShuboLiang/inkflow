@@ -183,14 +183,14 @@ if (findQuery !== undefined) {
   }
   const rows = await res.json()
   // 文件夹 id → 路径（a/b），一次拉全量在本地拼
-  const fres = await fetch(`${SUPABASE_URL}/rest/v1/folders?select=id,name,parent_id&limit=1000`, { headers })
+  const fres = await fetch(`${SUPABASE_URL}/rest/v1/folders?select=id,name,parent_id,deleted_at&limit=1000`, { headers })
   const folders = fres.ok ? await fres.json() : []
   const byId = new Map(folders.map((f) => [f.id, f]))
   const pathOf = (id) => {
     const names = []
     let cur = id ? byId.get(id) : null
     while (cur) {
-      names.unshift(cur.name)
+      names.unshift(cur.deleted_at ? `${cur.name}(已删)` : cur.name)
       cur = cur.parent_id ? byId.get(cur.parent_id) : null
     }
     return names.join('/') || '(无文件夹)'
@@ -442,8 +442,10 @@ async function resolveFolder(path) {
   let parentId = null
   for (const name of path.split('/').map((s) => s.trim()).filter(Boolean)) {
     const parentFilter = parentId === null ? 'parent_id=is.null' : `parent_id=eq.${parentId}`
+    // 必须排除软删除的文件夹：同名文件夹被删后重建时 id 不同，
+    // 不排除会把笔记写进 UI 永远不显示的墓碑文件夹
     const find = await fetch(
-      `${SUPABASE_URL}/rest/v1/folders?select=id&name=eq.${encodeURIComponent(name)}&${parentFilter}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/folders?select=id&name=eq.${encodeURIComponent(name)}&${parentFilter}&deleted_at=is.null&limit=1`,
       { headers },
     )
     if (!find.ok) throw new Error(`查询文件夹失败: ${find.status} ${await find.text()}`)
