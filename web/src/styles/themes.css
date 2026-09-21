@@ -1,0 +1,147 @@
+/* InkFlow 主题：挂在 <html data-theme="…"> 上，只覆盖令牌 + 少量签名细节。
+   每套主题换的不止颜色——正文字体、圆角、选区、光标、乃至纸面质感都随主题走。
+   默认主题（青墨）不设 data-theme，落在 tokens.css 的 :root 上。 */
+
+/* ===== 朱笺：米白宣纸 + 朱砂批注 + 仿宋 ===== */
+[data-theme='zhujian'] {
+  --paper: #faf6ec;
+  --surface: #fffdf6;
+  --ink-900: #2f2a22;
+  --ink-500: #7a6f5b;
+  --ink-200: #e6dcc6;
+  --qing: #a83226;
+  --qing-50: #f5e3da;
+  --danger: #8f2d1f;
+  --danger-50: #f3ddd6;
+  --font-note: FangSong, STFangsong, serif;
+}
+
+/* 巧思一：品牌名旁钤一枚「朱」字小印 */
+[data-theme='zhujian'] .sidebar-brand::after {
+  content: '朱';
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--qing);
+  color: #fff8ee;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 3px;
+}
+
+/* 巧思二：落笔即朱批——标题与正文的光标是朱砂色 */
+[data-theme='zhujian'] .editor-title,
+[data-theme='zhujian'] .editor-body .ProseMirror {
+  caret-color: var(--qing);
+}
+
+/* ===== 铅印：冷白纸 + 蓝黑墨 + 宋体，方角刊本 ===== */
+[data-theme='qianyin'] {
+  --paper: #f6f4ee;
+  --surface: #fffefa;
+  --ink-900: #23201b;
+  --ink-500: #6e6759;
+  --ink-200: #ddd8cb;
+  --qing: #33526e;
+  --qing-50: #e4e9ec;
+  --danger: #a03123;
+  --danger-50: #f5e2dd;
+  --radius: 2px;
+  --radius-s: 2px;
+  --font-ui: Georgia, 'Songti SC', SimSun, serif;
+  --font-note: 'Songti SC', SimSun, 'Noto Serif CJK SC', serif;
+}
+
+/* 巧思一：铅字排印——栏目标签拉开字距，像刊物的栏目头 */
+[data-theme='qianyin'] .sidebar-section {
+  letter-spacing: 0.3em;
+}
+
+/* 巧思二：标题带出铅字的字肩 */
+[data-theme='qianyin'] .editor-body .ProseMirror h1,
+[data-theme='qianyin'] .editor-body .ProseMirror h2,
+[data-theme='qianyin'] .editor-body .ProseMirror h3 {
+  letter-spacing: 0.05em;
+}
+
+/* 巧思三：引用排成辞书体例——左侧双细线 */
+[data-theme='qianyin'] .editor-body .ProseMirror blockquote {
+  border-left-style: double;
+  border-left-width: 4px;
+}
+
+/* 药丸也裁方：文件夹下拉随刊本走直角 */
+[data-theme='qianyin'] .editor-folder {
+  border-radius: var(--radius);
+}
+
+/* ===== 灯下：墨蓝夜 + 灯焰黄，「青灯黄卷」 ===== */
+[data-theme='dengxia'] {
+  color-scheme: dark; /* 原生滚动条/下拉/输入跟随暗色 */
+  --paper: #151a20;
+  --surface: #1d242c;
+  --ink-900: #e8e4d9;
+  --ink-500: #96a0aa;
+  --ink-200: #323d47;
+  --qing: #e3b05f;
+  --qing-50: #2b2a22;
+  --danger: #e2795f;
+  --danger-50: #382721;
+}
+
+/* 巧思：暖黄的选区与光标——夜里被灯照到的那一行 */
+[data-theme='dengxia'] ::selection {
+  background: color-mix(in srgb, var(--qing) 32%, transparent);
+}
+
+[data-theme='dengxia'] .editor-title,
+[data-theme='dengxia'] .editor-body .ProseMirror {
+  caret-color: var(--qing);
+}
+
+/* ===== 牛皮纸：牛皮纸面 + 邮戳蓝 + 楷体手账 ===== */
+[data-theme='niupizhi'] {
+  --paper: #d3bc90;
+  --surface: #ece0bd;
+  --ink-900: #33261a;
+  --ink-500: #6d5c44;
+  --ink-200: #b59d72;
+  --qing: #2f6ba8;
+  --qing-50: #c6ae7e;
+  --danger: #8c3226;
+  --danger-50: #cfa990;
+  --font-note: KaiTi, 'Kaiti SC', STKaiti, serif;
+}
+
+/* 巧思一：整面牛皮纸的纸纹（SVG 噪点铺在最上层，不挡交互） */
+[data-theme='niupizhi'] .app-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 巧思二：选中的文件夹/标签像贴上去的白标签纸 */
+[data-theme='niupizhi'] .sidebar-item.active,
+[data-theme='niupizhi'] .sidebar-folder.active {
+  background: var(--surface);
+  color: var(--qing);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink-900) 30%, transparent);
+}
+
+/* 巧思三：正文里的图片变成拍立得——白边下宽，像贴进手账的照片 */
+[data-theme='niupizhi'] .editor-body .ProseMirror img {
+  background: var(--surface);
+  border: 4px solid var(--surface);
+  border-bottom-width: 16px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink-900) 30%, transparent);
+}
+
+/* 巧思四：引用排成缝线——虚线像纸页装订的线迹 */
+[data-theme='niupizhi'] .editor-body .ProseMirror blockquote {
+  border-left: 2px dashed var(--ink-500);
+}

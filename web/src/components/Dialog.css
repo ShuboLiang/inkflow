@@ -14,9 +14,9 @@
   width: 100%;
   max-width: 380px;
   padding: 24px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(28, 33, 40, 0.22);
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--ink-900) 22%, transparent);
   font-family: var(--font-ui);
   animation: dlg-pop-in 180ms ease-out;
 }
@@ -42,7 +42,7 @@
   margin-bottom: 20px;
   padding: 8px 12px;
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--paper);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -63,7 +63,7 @@
 .dlg-btn {
   padding: 8px 18px;
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: none;
   font-family: var(--font-ui);
   font-size: 13px;
@@ -74,7 +74,7 @@
 .dlg-btn.primary {
   border-color: var(--qing);
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
 }
 
 .dlg-btn.primary.danger {

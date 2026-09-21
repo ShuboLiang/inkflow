@@ -1,15 +1,27 @@
 :root {
   --paper: #f8f9f7;
+  /* surface：卡片/浮层/输入框的纸面（比 paper 更亮的一层） */
+  --surface: #fff;
   --ink-900: #1c2128;
   --ink-500: #5a6472;
   --ink-200: #d8ddd9;
   --qing: #1f6f6b;
   --qing-50: #e8f0ef;
   --danger: #b54534;
+  --danger-50: #f9ebe8;
+
+  /* 圆角分两档：控件用小档、面板/图片用大档（铅印主题整体归零成方角） */
+  --radius-s: 6px;
+  --radius: 8px;
 
   --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-note: 'LXGW WenKai', serif;
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+/* 选区统一带主题强调色的淡染（朱批/黄卷/蓝墨各随其主题） */
+::selection {
+  background: color-mix(in srgb, var(--qing) 24%, transparent);
 }
 
 *:focus-visible {
@@ -92,6 +104,6 @@
 .img-lightbox img {
   max-width: 100%;
   max-height: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
 }

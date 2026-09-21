@@ -1,16 +1,17 @@
 import { supabase } from '../lib/supabase'
 
 // 用户偏好：跨设备持久化的小设置（RLS 限定本人一行，prefs 是 JSONB 按需取键）。
-// 目前只有 toolbarHidden——格式工具栏全局隐藏（任意笔记隐藏 = 所有笔记隐藏）。
+// toolbarHidden——格式工具栏全局隐藏；theme——主题 id（见 lib/theme.ts）。
 
 export interface Prefs {
   toolbarHidden: boolean
+  theme: string
 }
 
 export async function loadPrefs(): Promise<Prefs> {
   const { data } = await supabase.from('user_prefs').select('prefs').maybeSingle()
-  const p = (data?.prefs ?? {}) as { toolbarHidden?: boolean }
-  return { toolbarHidden: !!p.toolbarHidden }
+  const p = (data?.prefs ?? {}) as { toolbarHidden?: boolean; theme?: string }
+  return { toolbarHidden: !!p.toolbarHidden, theme: p.theme ?? '' }
 }
 
 export async function savePrefs(prefs: Prefs): Promise<void> {

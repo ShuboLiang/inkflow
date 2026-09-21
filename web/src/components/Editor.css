@@ -25,7 +25,7 @@
   flex: none;
   padding: 6px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: none;
   font-family: var(--font-ui);
   font-size: 13px;
@@ -159,7 +159,7 @@
   flex-direction: column;
   padding: 0 48px 64px;
   cursor: text;
-  border-radius: 8px;
+  border-radius: var(--radius);
   transition: background 0.3s ease;
 }
 
@@ -196,7 +196,7 @@
   font-family: var(--font-mono);
   font-size: 14px;
   background: var(--qing-50);
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   padding: 12px 16px;
   overflow-x: auto;
   /* ProseMirror 根节点注入的 white-space 会让 pre 继承成折行（pre-wrap），
@@ -287,7 +287,7 @@
   height: auto;
   margin: 0.6em auto 1.2em;
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: default;
   animation: ink-img-in 240ms ease-out;
 }
@@ -299,7 +299,7 @@
 
 /* KaTeX 公式 */
 .editor-body .ProseMirror .tiptap-mathematics-render {
-  border-radius: 4px;
+  border-radius: var(--radius-s);
 }
 
 /* 宽公式自身横向滚动（与代码块/表格同策略），不再把 .editor-scroll 撑宽 */
@@ -363,7 +363,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(31, 111, 107, 0.12);
+  background: color-mix(in srgb, var(--qing) 12%, transparent);
   pointer-events: none;
 }
 
@@ -373,7 +373,7 @@
   bottom: 0;
   right: -1px;
   width: 3px;
-  background: rgba(31, 111, 107, 0.35);
+  background: color-mix(in srgb, var(--qing) 35%, transparent);
   pointer-events: none;
 }
 
@@ -495,9 +495,9 @@
   height: 32px;
   padding: 0;
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--paper);
-  box-shadow: 0 2px 8px rgba(28, 33, 40, 0.1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink-900) 10%, transparent);
   color: var(--ink-500);
   font-size: 14px;
   cursor: pointer;
@@ -519,8 +519,8 @@
   padding: 8px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.14);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 14%, transparent);
   font-family: var(--font-ui);
 }
 
@@ -551,7 +551,7 @@
   border: none;
   background: none;
   padding: 5px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   font-size: 13px;
   color: var(--ink-900);
   cursor: pointer;
@@ -585,7 +585,7 @@
   }
 
   .tool-btn.danger:hover {
-    background: #f9ebe8;
+    background: var(--danger-50);
     color: var(--danger);
   }
 

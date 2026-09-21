@@ -1,0 +1,44 @@
+.theme-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 0 2px;
+}
+
+.theme-picker-label {
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.theme-picker-swatches {
+  display: flex;
+  gap: 9px;
+}
+
+/* 色卡：左上纸面色、右下强调色，对开圆 */
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ink-200);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.theme-swatch.active {
+  outline: 2px solid var(--qing);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .theme-swatch:hover {
+    transform: scale(1.12);
+  }
+}
+
+@media (hover: none) {
+  .theme-swatch:active {
+    transform: scale(1.12);
+  }
+}

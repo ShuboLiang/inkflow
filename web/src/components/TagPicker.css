@@ -20,6 +20,6 @@
   padding: 12px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 12%, transparent);
 }

@@ -22,6 +22,7 @@ import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/fo
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags } from './store/files'
 import { loadPrefs, savePrefs } from './store/prefs'
+import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
 import { fileToDocJson, kindOfFile, kindOfName } from './lib/importFile'
 import { countWords } from './lib/wordCount'
@@ -173,6 +174,8 @@ export default function App() {
 
   // 格式工具栏隐藏偏好：全局（任意笔记隐藏 = 全部隐藏），登录后从云端加载、切换即保存
   const [toolbarHidden, setToolbarHidden] = useState(false)
+  // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
+  const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
   const titleRef = useRef<HTMLInputElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -187,7 +190,15 @@ export default function App() {
     if (!user) return
     let cancelled = false
     void loadPrefs()
-      .then((p) => !cancelled && setToolbarHidden(p.toolbarHidden))
+      .then((p) => {
+        if (cancelled) return
+        setToolbarHidden(p.toolbarHidden)
+        // 本机没选过主题（新设备）→ 跟随账号的云端主题
+        if (!storedTheme() && isValidTheme(p.theme)) {
+          applyTheme(p.theme)
+          setTheme(p.theme)
+        }
+      })
       .catch(() => {})
     return () => {
       cancelled = true
@@ -197,9 +208,17 @@ export default function App() {
   const toggleToolbar = () => {
     setToolbarHidden((cur) => {
       const next = !cur
-      void savePrefs({ toolbarHidden: next }).catch(() => {})
+      void savePrefs({ toolbarHidden: next, theme }).catch(() => {})
       return next
     })
+  }
+
+  // 切主题：本机立即生效并记住，同时随账号存到云端（新设备首次登录会带上）
+  const changeTheme = (id: string) => {
+    if (id === theme) return
+    applyTheme(id)
+    setTheme(id)
+    void savePrefs({ toolbarHidden, theme: id }).catch(() => {})
   }
 
   const folders = useLiveQuery(async () => {
@@ -813,6 +832,8 @@ export default function App() {
           onFilesDrop={(dropped, folderId) => {
             for (const file of dropped) void handleUpload(file, folderId)
           }}
+          theme={theme}
+          onThemeChange={changeTheme}
           onSignOut={() => void signOut()}
         />
         <NoteList

@@ -19,7 +19,7 @@
   min-width: 30px;
   padding: 4px 7px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: none;
   font-size: 13px;
   color: var(--ink-900);
@@ -44,8 +44,8 @@
   padding: 10px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 12%, transparent);
   font-family: var(--font-ui);
 }
 
@@ -53,8 +53,8 @@
   width: 320px;
   padding: 8px 10px;
   border: 1px solid var(--ink-200);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: var(--radius-s);
+  background: var(--surface);
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink-900);
@@ -63,7 +63,7 @@
 .math-popover-ok,
 .math-popover-cancel {
   padding: 7px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   font-size: 13px;
   cursor: pointer;
   border: none;
@@ -71,7 +71,7 @@
 
 .math-popover-ok {
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
 }
 
 .math-popover-cancel {
@@ -89,8 +89,8 @@
   padding: 10px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 12%, transparent);
   font-family: var(--font-ui);
 }
 
@@ -106,7 +106,7 @@
   padding: 0;
   border: 1px solid var(--ink-200);
   border-radius: 3px;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
 }
 
@@ -143,8 +143,8 @@
   padding: 10px;
   background: var(--paper);
   border: 1px solid var(--ink-200);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(28, 33, 40, 0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 12%, transparent);
   font-family: var(--font-ui);
 }
 
@@ -153,12 +153,12 @@
   height: 22px;
   padding: 0;
   border: 1px solid var(--ink-200);
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
   color: var(--ink-500);
-  background: #fff;
+  background: var(--surface);
 }
 
 /* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停，导致点按两下才触发 */

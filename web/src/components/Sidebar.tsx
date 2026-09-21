@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Folder } from '../lib/db'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { ThemePicker } from './ThemePicker'
 import './Sidebar.css'
 
 // 文件夹拖拽移动仅在精确指针设备启用
@@ -27,6 +28,8 @@ interface SidebarProps {
   onDropNoteToTag: (noteId: string, tag: string) => void
   onDropFile: (fileId: string, folderId: string | null) => void
   onFilesDrop: (files: File[], folderId: string | null) => void
+  theme: string
+  onThemeChange: (id: string) => void
   onSignOut: () => void
 }
 
@@ -121,6 +124,8 @@ export function Sidebar({
   onDropNoteToTag,
   onDropFile,
   onFilesDrop,
+  theme,
+  onThemeChange,
   onSignOut,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
@@ -524,6 +529,7 @@ export function Sidebar({
         )
       )}
       <div className="sidebar-footer">
+        <ThemePicker theme={theme} onChange={onThemeChange} />
         <span className="sidebar-email" title={email}>
           {email}
         </span>
