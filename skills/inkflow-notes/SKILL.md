@@ -45,11 +45,16 @@ node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础" no
 # 从标准输入读入
 cat summary.md | node "$SKILL_DIR/scripts/write-note.mjs" --title "会议总结" --stdin --folder "工作"
 
+# 搜索笔记（标题/正文/标签命中），拿 id 用于更新
+node "$SKILL_DIR/scripts/write-note.mjs" --find "关键词"
+
 # 更新已有笔记（用笔记 uuid 覆盖）
 node "$SKILL_DIR/scripts/write-note.mjs" --title "深度学习基础(修订)" note.md --id <uuid>
 ```
 
-输出：JSON `{ id, title, folder_id, updated_at }`。`id` 即笔记 uuid，更新时用。
+输出：JSON `{ id, title, folder_id, updated_at }`。`id` 即笔记 uuid，更新时用。AI 更新笔记时不知道 id 就先 `--find`。
+
+**更新语义**：`--id` 模式只覆盖显式提供的字段——没传 `--folder`/`--tags`/`--title` 时保留原值（只改正文不会把笔记移出文件夹或清空标签）；`--tags ""` 显式清空。
 
 ## Markdown 支持范围
 
@@ -71,7 +76,7 @@ node "$SKILL_DIR/scripts/write-note.mjs" --title "深度学习基础(修订)" no
 ## 行为约定
 
 - `--folder` 用 `/` 分隔多级路径（如 `课程/数学`），**不存在会逐级自动创建**
-- 不传 `--folder` 的笔记属于「无文件夹」，出现在「全部笔记」
+- 不传 `--folder` 的**新建**笔记属于「无文件夹」，出现在「全部笔记」
 - 不传 `--id` 总是**新建**笔记（不会按标题合并）；要覆盖旧笔记必须显式给 `--id`
 - 更新时脚本会自动 `version + 1` 并刷新 `updated_at`，与客户端的同步冲突逻辑兼容；
   客户端打开时实时拉取，几秒内在界面上可见

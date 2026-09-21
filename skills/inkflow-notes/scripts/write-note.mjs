@@ -14,6 +14,14 @@ import { basename, extname, resolve, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 
+// 网络等失败时打一行干净错误而非整段堆栈（顶层 await 的异常走 uncaughtException）
+const cleanExit = (err) => {
+  console.error('执行失败:', err instanceof Error ? err.message : err)
+  process.exit(1)
+}
+process.on('unhandledRejection', cleanExit)
+process.on('uncaughtException', cleanExit)
+
 const SUPABASE_URL = (process.env.INKFLOW_URL || 'https://kod.liangshubo.top').replace(/\/$/, '')
 // anon key 是公开密钥（浏览器包里也带着），非秘密
 const ANON_KEY = process.env.INKFLOW_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg5NzQ3MzQ5LCJleHAiOjIxMDUxMDczNDl9.4JLhxMCKeW--vLgZLnb8LGUx4B51PTt56TPgEGF_ZX4'
@@ -30,20 +38,23 @@ const fileArg = args.find((a, i) => !a.startsWith('--') && (i === 0 || !VALUE_FL
 const useStdin = args.includes('--stdin')
 const dryRun = args.includes('--dry-run')
 const loginOnly = args.includes('--login')
-const folderPath = opt('folder') // 支持 a/b 多级
-const tags = (opt('tags') || '').split(',').map((s) => s.trim()).filter(Boolean)
+const findQuery = opt('find')
+const folderPath = opt('folder') // 支持 a/b 多级；undefined = 更新时保留原文件夹
+const tagsArg = opt('tags') // undefined = 更新时保留原标签；'' = 显式清空
+const tags = (tagsArg || '').split(',').map((s) => s.trim()).filter(Boolean)
 const noteId = opt('id') // 提供则更新已有笔记
 
-if (loginOnly) {
-  // --login：只做认证并缓存 token（不写笔记），用于首次一次性配置
+if (loginOnly || findQuery !== undefined) {
+  // --login / --find：不走写笔记主流程
 } else if ((!fileArg && !useStdin) || (!title && !useStdin)) {
   console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid] [--dry-run]')
   console.error('   或: cat 笔记.md | node write-note.mjs --title "标题" --stdin [--folder a/b]')
+  console.error('搜索笔记: node write-note.mjs --find "关键词"   （拿 id 用于 --id 更新）')
   console.error('首次配置认证: INKFLOW_EMAIL=x INKFLOW_PASSWORD=y node write-note.mjs --login')
   process.exit(1)
 }
 
-const mdText = loginOnly ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
+const mdText = loginOnly || findQuery !== undefined ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
 const mdDir = fileArg ? dirname(resolve(fileArg)) : process.cwd()
 
 
@@ -156,10 +167,63 @@ if (loginOnly) {
   console.log(`登录成功，token 已缓存到 ${AUTH_FILE}`)
   console.log(`user_id: ${userId}`)
   console.log('之后调用本脚本无需再提供邮箱密码；token 过期会自动续期。')
-  process.exit(0)
 }
 
 const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+// ---------- --find：搜索笔记（标题/正文/标签），输出更新所需的 id ----------
+if (findQuery !== undefined) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/notes?select=id,title,content,folder_id,tags,updated_at&deleted_at=is.null&order=updated_at.desc&limit=500`,
+    { headers },
+  )
+  if (!res.ok) {
+    console.error('查询笔记失败:', res.status, await res.text())
+    process.exit(1)
+  }
+  const rows = await res.json()
+  // 文件夹 id → 路径（a/b），一次拉全量在本地拼
+  const fres = await fetch(`${SUPABASE_URL}/rest/v1/folders?select=id,name,parent_id&limit=1000`, { headers })
+  const folders = fres.ok ? await fres.json() : []
+  const byId = new Map(folders.map((f) => [f.id, f]))
+  const pathOf = (id) => {
+    const names = []
+    let cur = id ? byId.get(id) : null
+    while (cur) {
+      names.unshift(cur.name)
+      cur = cur.parent_id ? byId.get(cur.parent_id) : null
+    }
+    return names.join('/') || '(无文件夹)'
+  }
+  // TipTap doc 深度优先取第一段纯文本做摘要
+  const firstText = (node, depth = 0) => {
+    if (!node || depth > 8) return ''
+    if (node.type === 'text') return node.text || ''
+    for (const c of node.content ?? []) {
+      const t = firstText(c, depth + 1)
+      if (t) return t
+    }
+    return ''
+  }
+  const q = String(findQuery).toLowerCase()
+  const hits = rows.filter(
+    (r) =>
+      (r.title || '').toLowerCase().includes(q) ||
+      JSON.stringify(r.content ?? {}).toLowerCase().includes(q) ||
+      (r.tags ?? []).some((t) => String(t).toLowerCase().includes(q)),
+  )
+  if (!hits.length) {
+    console.log(`没有匹配「${findQuery}」的笔记`)
+  } else {
+    console.log(`匹配 ${hits.length} 篇（按更新时间倒序，最多显示 20）：`)
+    for (const h of hits.slice(0, 20)) {
+      const summary = firstText(h.content).replace(/\s+/g, ' ').slice(0, 50)
+      console.log(`${h.id} | ${h.title || '(无标题)'} | ${pathOf(h.folder_id)} | ${h.updated_at.slice(0, 16)} | ${summary}`)
+    }
+    if (hits.length > 20) console.log(`…另有 ${hits.length - 20} 篇未显示`)
+    console.log('更新某篇: node write-note.mjs --title "新标题" 内容.md --id <上面的 uuid>')
+  }
+}
 
 // ---------- 图片上传（本地路径 → images 公共桶） ----------
 async function uploadImage(localPath) {
@@ -170,7 +234,11 @@ async function uploadImage(localPath) {
   }
   const buf = readFileSync(abs)
   const ext = (extname(abs).slice(1) || 'png').toLowerCase()
-  const mime = ext === 'png' ? 'image/png' : 'image/jpeg'
+  const IMG_MIME = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+    gif: 'image/gif', svg: 'image/svg+xml', bmp: 'image/bmp',
+  }
+  const mime = IMG_MIME[ext] || 'image/png'
   const name = `${randomUUID()}.${ext === 'jpg' ? 'jpg' : ext}`
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/images/${name}`, {
     method: 'POST',
@@ -397,50 +465,57 @@ async function resolveFolder(path) {
 
 
 
-// ---------- 写入笔记 ----------
-const content = await mdToDoc(mdText)
-const folderId = await resolveFolder(folderPath)
-const now = new Date().toISOString()
+// process.exit 在 Windows 上与 libuv 清理竞态会触发断言崩溃，
+// --login/--find 分支靠这个条件让模块自然结束
+if (!loginOnly && findQuery === undefined) {
+  // ---------- 写入笔记 ----------
+  const content = await mdToDoc(mdText)
+  const folderId = await resolveFolder(folderPath)
+  const now = new Date().toISOString()
 
-let result
-if (noteId) {
-  // 更新已有笔记：version + 1（与客户端 LWW 冲突逻辑一致）
-  const cur = await fetch(`${SUPABASE_URL}/rest/v1/notes?id=eq.${noteId}&select=version`, { headers })
-  if (!cur.ok) throw new Error(`查询笔记失败: ${cur.status} ${await cur.text()}`)
-  const rows = await cur.json()
-  if (!rows.length) throw new Error(`笔记 ${noteId} 不存在`)
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/notes?id=eq.${noteId}`, {
-    method: 'PATCH',
-    headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify({
-      title,
-      content,
-      tags,
-      folder_id: folderId,
-      version: rows[0].version + 1,
-      updated_at: now,
-      deleted_at: null,
-    }),
-  })
-  if (!res.ok) throw new Error(`更新笔记失败: ${res.status} ${await res.text()}`)
-  result = (await res.json())[0]
-} else {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
-    method: 'POST',
-    headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify({
-      id: randomUUID(),
-      user_id: userId,
-      title,
-      content,
-      tags,
-      folder_id: folderId,
-      version: 1,
-      updated_at: now,
-    }),
-  })
-  if (!res.ok) throw new Error(`创建笔记失败: ${res.status} ${await res.text()}`)
-  result = (await res.json())[0]
+  let result
+  if (noteId) {
+    // 更新已有笔记：version + 1（与客户端 LWW 冲突逻辑一致）
+    const cur = await fetch(`${SUPABASE_URL}/rest/v1/notes?id=eq.${noteId}&select=version`, { headers })
+    if (!cur.ok) throw new Error(`查询笔记失败: ${cur.status} ${await cur.text()}`)
+    const rows = await cur.json()
+    if (!rows.length) throw new Error(`笔记 ${noteId} 不存在`)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/notes?id=eq.${noteId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      // 只覆盖显式提供的字段：没传 --folder/--tags/--title 时保留原值，
+      // 避免更新正文时把笔记悄悄移出文件夹、清空标签或标题
+      body: JSON.stringify({
+        ...(title ? { title } : {}),
+        content,
+        ...(folderPath !== undefined ? { folder_id: folderId } : {}),
+        ...(tagsArg !== undefined ? { tags } : {}),
+        version: rows[0].version + 1,
+        updated_at: now,
+        deleted_at: null,
+      }),
+    })
+    if (!res.ok) throw new Error(`更新笔记失败: ${res.status} ${await res.text()}`)
+    result = (await res.json())[0]
+  } else {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        id: randomUUID(),
+        user_id: userId,
+        title,
+        content,
+        tags,
+        folder_id: folderId,
+        version: 1,
+        updated_at: now,
+      }),
+    })
+    if (!res.ok) throw new Error(`创建笔记失败: ${res.status} ${await res.text()}`)
+    result = (await res.json())[0]
+  }
+
+  console.log(JSON.stringify({ id: result.id, title: result.title, folder_id: result.folder_id, updated_at: result.updated_at }))
+
 }
-
-console.log(JSON.stringify({ id: result.id, title: result.title, folder_id: result.folder_id, updated_at: result.updated_at }))
