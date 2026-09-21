@@ -23,3 +23,16 @@
   border-radius: var(--radius);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--ink-900) 12%, transparent);
 }
+
+/* 手机端：编辑器工具栏是横向滚动容器，absolute 下拉会被裁进工具栏条里。
+   改为 fixed 底部卡片（与分享卡同策略），脱离裁剪。 */
+@media (max-width: 767px) {
+  .tag-picker-pop {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+}

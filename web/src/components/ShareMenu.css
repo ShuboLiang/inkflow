@@ -64,3 +64,16 @@
     background: var(--qing-50);
   }
 }
+
+/* 手机端：编辑器工具栏是横向滚动容器（overflow-x: auto 会连带把 overflow-y 变成 auto），
+   absolute 弹卡会被裁进 40px 高的工具栏条里点不到。改为 fixed 底部卡片，脱离裁剪。 */
+@media (max-width: 767px) {
+  .share-card {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+}

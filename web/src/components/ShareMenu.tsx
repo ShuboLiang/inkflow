@@ -128,6 +128,12 @@ export function ShareMenu({
             <>
               <input className="share-link" readOnly value={shareUrl(share.token)} onFocus={(e) => e.target.select()} />
               <div className="share-actions">
+                <button
+                  type="button"
+                  onClick={() => window.open(shareUrl(share.token), '_blank', 'noopener')}
+                >
+                  打开
+                </button>
                 <button type="button" onClick={() => void copy(share.token)}>
                   {copied ? '已复制 ✓' : '复制链接'}
                 </button>
