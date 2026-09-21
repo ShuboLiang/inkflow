@@ -93,6 +93,7 @@ function IconMinimize() {
 
 const DESKTOP_SIDEBAR_KEY = 'inkflow:desktop:sidebarCollapsed'
 const DESKTOP_NOTELIST_KEY = 'inkflow:desktop:noteListCollapsed'
+const READING_MODE_KEY = 'inkflow:readingMode'
 
 // 文件夹的祖先路径名（如「课程 / 数学」），找不到返回 null
 function folderPathNames(id: string, folders: { id: string; name: string; parentId: string | null }[]): string | null {
@@ -118,6 +119,14 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
+  // 阅读模式：持久化保存在 localStorage 中，跨笔记保持
+  const [readingMode, setReadingMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(READING_MODE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
   // 电脑端侧栏折叠状态：默认从 localStorage 读取
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -479,7 +488,7 @@ export default function App() {
     }, 500)
   }
 
-  const flushSave = () => {
+  const flushSave = useCallback(() => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current)
       saveTimer.current = null
@@ -487,7 +496,32 @@ export default function App() {
     const pending = pendingSave.current
     pendingSave.current = null
     if (pending) void updateNote(pending.id, pending.patch).then(requestPush)
-  }
+  }, [requestPush])
+
+  const toggleReadingMode = useCallback(() => {
+    flushSave()
+    setReadingMode((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(READING_MODE_KEY, String(next))
+      } catch {}
+      return next
+    })
+  }, [flushSave])
+
+  // Ctrl/Cmd + E 切换阅读模式 / 编辑模式
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+        if (activeId) {
+          e.preventDefault()
+          toggleReadingMode()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeId, toggleReadingMode])
 
   const handleCreate = async () => {
     flushSave()
@@ -1071,14 +1105,37 @@ export default function App() {
             <>
               <button
                 type="button"
-                className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
-                title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                aria-pressed={toolbarHidden}
-                onClick={toggleToolbar}
+                className={readingMode ? 'tool-btn active-tool' : 'tool-btn'}
+                title={readingMode ? '切换为编辑模式 (Ctrl+E)' : '切换为阅读模式 (Ctrl+E)'}
+                aria-label={readingMode ? '切换为编辑模式' : '切换为阅读模式'}
+                aria-pressed={readingMode}
+                onClick={toggleReadingMode}
               >
-                Aa
+                {readingMode ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                )}
+                <span>{readingMode ? '编辑' : '阅读'}</span>
               </button>
+              {readingMode ? null : (
+                <button
+                  type="button"
+                  className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
+                  title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                  aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                  aria-pressed={toolbarHidden}
+                  onClick={toggleToolbar}
+                >
+                  Aa
+                </button>
+              )}
               <TagPicker
                 tags={active.tags ?? []}
                 suggestions={[...tagCounts.keys()]}
@@ -1093,6 +1150,8 @@ export default function App() {
                 onToggleFullscreen={toggleFullscreen}
                 onDeleteNote={() => void handleDelete()}
                 isExportingImage={isExportingImage}
+                readingMode={readingMode}
+                onToggleReadingMode={toggleReadingMode}
               />
             </>
           ) : null}
@@ -1192,31 +1251,46 @@ export default function App() {
             <>
               <div className="editor-scroll">
                 <div className="editor-head">
-                  <textarea
-                    key={`title-${active.id}`}
-                    ref={titleRef}
-                    rows={1}
-                    className="editor-title"
-                    defaultValue={active.title}
-                    placeholder="无标题"
-                    aria-label="笔记标题"
-                    onChange={(e) => {
-                      autosizeTitle()
-                      // 标题保持单段语义：粘贴带来的换行折成空格入库
-                      scheduleSave(active.id, { title: e.target.value.replace(/\r?\n/g, ' ') })
-                    }}
-                    onBlur={(e) => {
-                      e.target.value = e.target.value.replace(/\s*\r?\n\s*/g, ' ')
-                      autosizeTitle()
-                    }}
-                    onKeyDown={(e) => {
-                      // 标题内 Enter 不换行：转去正文开头继续写（常见笔记行为）
-                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                        e.preventDefault()
-                        document.querySelector<HTMLElement>('.editor-body .ProseMirror')?.focus()
-                      }
-                    }}
-                  />
+                  {readingMode ? (
+                    <h1
+                      className={`editor-title-static ${!active.title?.trim() ? 'untitled' : ''}`}
+                      title="双击进入编辑模式"
+                      onDoubleClick={() => {
+                        toggleReadingMode()
+                        setTimeout(() => {
+                          titleRef.current?.focus()
+                        }, 50)
+                      }}
+                    >
+                      {active.title?.trim() || '无标题'}
+                    </h1>
+                  ) : (
+                    <textarea
+                      key={`title-${active.id}`}
+                      ref={titleRef}
+                      rows={1}
+                      className="editor-title"
+                      defaultValue={active.title}
+                      placeholder="无标题"
+                      aria-label="笔记标题"
+                      onChange={(e) => {
+                        autosizeTitle()
+                        // 标题保持单段语义：粘贴带来的换行折成空格入库
+                        scheduleSave(active.id, { title: e.target.value.replace(/\r?\n/g, ' ') })
+                      }}
+                      onBlur={(e) => {
+                        e.target.value = e.target.value.replace(/\s*\r?\n\s*/g, ' ')
+                        autosizeTitle()
+                      }}
+                      onKeyDown={(e) => {
+                        // 标题内 Enter 不换行：转去正文开头继续写（常见笔记行为）
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                          e.preventDefault()
+                          document.querySelector<HTMLElement>('.editor-body .ProseMirror')?.focus()
+                        }
+                      }}
+                    />
+                  )}
                 </div>
                 <EditorBoundary>
                   <Editor
@@ -1224,6 +1298,7 @@ export default function App() {
                     content={active.content}
                     onUpdate={(content) => scheduleSave(active.id, { content })}
                     toolbarHidden={toolbarHidden}
+                    readOnly={readingMode}
                   />
                 </EditorBoundary>
               </div>

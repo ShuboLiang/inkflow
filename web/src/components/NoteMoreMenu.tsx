@@ -9,6 +9,8 @@ interface NoteMoreMenuProps {
   onToggleFullscreen: () => void
   onDeleteNote: () => void
   isExportingImage?: boolean
+  readingMode?: boolean
+  onToggleReadingMode?: () => void
 }
 
 export function NoteMoreMenu({
@@ -19,6 +21,8 @@ export function NoteMoreMenu({
   onToggleFullscreen,
   onDeleteNote,
   isExportingImage = false,
+  readingMode = false,
+  onToggleReadingMode,
 }: NoteMoreMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -113,6 +117,24 @@ export function NoteMoreMenu({
           </button>
 
           <div className="note-more-divider" />
+
+          {onToggleReadingMode && (
+            <button
+              type="button"
+              className="note-more-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onToggleReadingMode()
+              }}
+            >
+              <span className="note-more-icon">{readingMode ? '✏️' : '📖'}</span>
+              <div className="note-more-text">
+                <span className="note-more-label">{readingMode ? '切换为编辑模式' : '切换为阅读模式'}</span>
+                <span className="note-more-hint">Ctrl+E</span>
+              </div>
+            </button>
+          )}
 
           <button
             type="button"

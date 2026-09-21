@@ -13,6 +13,7 @@ interface EditorProps {
   onUpdate: (content: unknown) => void
   // 格式栏隐藏（全局偏好由 App 持有并持久化到云端）
   toolbarHidden?: boolean
+  readOnly?: boolean
 }
 
 // 规范化外部内容：新建笔记和数据库默认值存的是 {}，不是合法 TipTap 文档
@@ -23,7 +24,7 @@ function toDoc(content: unknown): object {
   return { type: 'doc', content: [] }
 }
 
-export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
+export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: EditorProps) {
   // 记录编辑器最近一次发出的内容：prop 落后于它说明有未保存的本地输入（防抖未落盘），
   // 此时绝不能用旧 prop setContent 回滚（打开浮层/切换焦点导致 blur 时会触发）。
   const lastEmitted = useRef<string | null>(null)
@@ -45,6 +46,7 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
 
   const editor = useEditor({
     extensions: buildExtensions(),
+    editable: !readOnly,
     editorProps: {
       // 拦截图片粘贴：clipboard 里的文件走自己的插入逻辑（压缩 + data URL），
       // 不拦截的粘贴（纯文本/HTML）继续走 ProseMirror 默认路径
@@ -125,6 +127,44 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
     }
   }, [editor])
 
+  // 动态同步编辑 / 阅读模式
+  useEffect(() => {
+    if (!editor) return
+    editor.setEditable(!readOnly)
+  }, [editor, readOnly])
+
+  // 代码块右上角注入一键复制按钮
+  useEffect(() => {
+    if (!editor) return
+    const dom = editor.view.dom
+    const injectCopyButtons = () => {
+      const pres = dom.querySelectorAll('pre')
+      pres.forEach((pre) => {
+        if (!pre.querySelector('.code-copy-btn')) {
+          const btn = document.createElement('button')
+          btn.className = 'code-copy-btn'
+          btn.type = 'button'
+          btn.contentEditable = 'false'
+          btn.tabIndex = -1
+          btn.setAttribute('aria-label', '复制代码')
+          btn.innerText = '复制'
+          pre.appendChild(btn)
+        }
+      })
+    }
+
+    injectCopyButtons()
+
+    const observer = new MutationObserver(() => {
+      injectCopyButtons()
+    })
+    observer.observe(dom, { childList: true, subtree: true })
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [editor])
+
   const [outlineOpen, setOutlineOpen] = useState(false)
 
   // 文档大纲：每次变更后重取标题列表（带位置，点击跳转）
@@ -148,11 +188,79 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
   // 只在"真正点击"时干预：mousedown 与 mouseup 位移 >5px 视为拖拽，不动选区。
   const downPos = useRef<{ x: number; y: number } | null>(null)
   const handleShellMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (readOnly) return
     downPos.current = { x: e.clientX, y: e.clientY }
   }
   const handleShellClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!editor) return
     const target = e.target as HTMLElement
+
+    // 代码块一键复制按钮（编辑模式与阅读模式通用）
+    const copyBtn = target.closest<HTMLButtonElement>('.code-copy-btn')
+    if (copyBtn) {
+      e.preventDefault()
+      e.stopPropagation()
+      const pre = copyBtn.closest('pre')
+      if (pre) {
+        const code = pre.querySelector('code')
+        const text = code ? code.innerText : pre.innerText
+        const copySuccess = () => {
+          copyBtn.textContent = '已复制 ✓'
+          copyBtn.classList.add('copied')
+          setTimeout(() => {
+            if (copyBtn.isConnected) {
+              copyBtn.textContent = '复制'
+              copyBtn.classList.remove('copied')
+            }
+          }, 2000)
+        }
+
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(text).then(copySuccess).catch(() => {
+            try {
+              const ta = document.createElement('textarea')
+              ta.value = text
+              ta.style.position = 'fixed'
+              ta.style.opacity = '0'
+              document.body.appendChild(ta)
+              ta.select()
+              document.execCommand('copy')
+              document.body.removeChild(ta)
+              copySuccess()
+            } catch (err) {
+              console.error('Copy failed', err)
+            }
+          })
+        } else {
+          try {
+            const ta = document.createElement('textarea')
+            ta.value = text
+            ta.style.position = 'fixed'
+            ta.style.opacity = '0'
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+            copySuccess()
+          } catch (err) {
+            console.error('Copy failed', err)
+          }
+        }
+      }
+      return
+    }
+
+    // 阅读模式下：点击超链接直接在新标签页打开
+    if (readOnly) {
+      const link = target.closest<HTMLAnchorElement>('a')
+      if (link && link.href) {
+        e.preventDefault()
+        e.stopPropagation()
+        window.open(link.href, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
+
+    if (!editor) return
     if (target.closest('.fmt-wrap') || target.closest('button') || target.closest('input')) return
     if (target.closest('.ProseMirror')) return // ProseMirror 自己处理内容区点击
     const down = downPos.current
@@ -204,8 +312,12 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
 
   return (
     <>
-      {toolbarHidden ? null : <Toolbar editor={editor} />}
-      <div className="editor-shell" onMouseDown={handleShellMouseDown} onClick={handleShellClick}>
+      {toolbarHidden || readOnly ? null : <Toolbar editor={editor} />}
+      <div
+        className={`editor-shell ${readOnly ? 'editor-reading-mode' : ''}`}
+        onMouseDown={handleShellMouseDown}
+        onClick={handleShellClick}
+      >
         <div className="editor-body">
           <EditorContent editor={editor} />
         </div>
@@ -236,14 +348,14 @@ export function Editor({ content, onUpdate, toolbarHidden }: EditorProps) {
                 className={`outline-item lv${h.level}`}
                 title={h.text}
                 onClick={() => {
-                  // pos 是节点起点，+1 落到标题文本内。触屏设备不抢焦点：
+                  // pos 是节点起点，+1 落到标题文本内。触屏设备或阅读模式不抢焦点：
                   // focus() 会拉起输入法键盘挡住半屏。但 ProseMirror 未聚焦时
                   // 不会把选区滚动同步到 DOM，chain 的 scrollIntoView 会失效，
                   // 因此改用 domAtPos 拿到标题元素后原生滚动定位；桌面精确
-                  // 指针保留「滚动 + 聚焦」，跳完可立即续写
+                  // 指针且编辑模式下保留「滚动 + 聚焦」，跳完可立即续写
                   if (!editor) return
                   const precise = window.matchMedia('(hover: hover) and (pointer: fine)').matches
-                  if (precise) {
+                  if (precise && !readOnly) {
                     editor.chain().focus().setTextSelection(h.pos + 1).run()
                   } else {
                     editor.commands.setTextSelection(h.pos + 1)

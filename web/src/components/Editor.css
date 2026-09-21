@@ -123,7 +123,8 @@
   flex-direction: column;
 }
 
-.editor-title {
+.editor-title,
+.editor-title-static {
   display: block;
   width: 100%;
   box-sizing: border-box;
@@ -134,14 +135,29 @@
   font-size: 32px;
   line-height: 1.25;
   color: var(--ink-900);
-  caret-color: var(--ink-900);
   padding: 0;
+}
+
+.editor-title {
+  caret-color: var(--ink-900);
   outline-offset: 4px;
   /* textarea 自动增高的配套：禁拖拽手柄、不滚、随内容长高 */
   resize: none;
   overflow: hidden;
   /* 支持的浏览器原生内容自适应（其余由 JS autosize 兜底） */
   field-sizing: content;
+}
+
+.editor-title-static {
+  font-weight: 700;
+  cursor: default;
+  user-select: text;
+  word-break: break-word;
+}
+
+.editor-title-static.untitled {
+  color: var(--ink-500);
+  opacity: 0.6;
 }
 
 .editor-shell {
@@ -156,6 +172,34 @@
 
 .editor-shell:focus-within {
   background: color-mix(in srgb, var(--qing-50) 30%, var(--paper));
+}
+
+.editor-shell.editor-reading-mode {
+  cursor: default;
+}
+
+.editor-shell.editor-reading-mode:focus-within {
+  background: none;
+}
+
+.editor-reading-mode .ProseMirror {
+  caret-color: transparent;
+  cursor: default;
+  line-height: 2;
+}
+
+.editor-reading-mode .ProseMirror a {
+  color: var(--qing);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--qing-200);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.editor-reading-mode .ProseMirror a:hover {
+  color: var(--qing-hover, #087f5b);
+  text-decoration-color: currentColor;
 }
 
 .editor-title::placeholder {
@@ -184,6 +228,7 @@
 }
 
 .editor-body .ProseMirror pre {
+  position: relative;
   font-family: var(--font-mono);
   font-size: 14px;
   background: var(--qing-50);
@@ -195,6 +240,51 @@
      一行代码一行显示，超宽交给自身横向滚动 */
   white-space: pre;
   overflow-wrap: normal;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: var(--ink-600);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  opacity: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.editor-body .ProseMirror pre:hover .code-copy-btn,
+.code-copy-btn:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  /* 触屏设备无 hover，保持轻微可见方便轻触复制 */
+  .code-copy-btn {
+    opacity: 0.75;
+  }
+}
+
+.code-copy-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+.code-copy-btn.copied {
+  opacity: 1;
+  background: var(--qing);
+  color: #fff;
+  border-color: var(--qing);
 }
 
 .editor-body .ProseMirror .tableWrapper {
@@ -413,7 +503,8 @@
     padding: 6px 20px;
   }
 
-  .editor-title {
+  .editor-title,
+  .editor-title-static {
     font-size: 26px;
   }
 
