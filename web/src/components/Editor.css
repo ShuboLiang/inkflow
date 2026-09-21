@@ -104,7 +104,7 @@
 
 /* 顶部固定区：标题 + 标签，不随正文滚动 */
 .editor-head {
-  padding: 28px 48px 0;
+  padding: 28px 48px 16px;
 }
 
 .editor-scroll {
@@ -133,7 +133,7 @@
   line-height: 1.35;
   color: var(--ink-900);
   caret-color: var(--ink-900);
-  padding: 0 0 20px;
+  padding: 0 0 6px;
   outline-offset: 4px;
   /* textarea 自动增高的配套：禁拖拽手柄、不滚、随内容长高 */
   resize: none;
@@ -404,7 +404,7 @@
   }
 
   .editor-head {
-    padding: 20px 20px 0;
+    padding: 20px 20px 14px;
   }
 
   .fmt-wrap {

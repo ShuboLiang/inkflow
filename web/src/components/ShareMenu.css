@@ -66,14 +66,16 @@
 }
 
 /* 手机端：编辑器工具栏是横向滚动容器（overflow-x: auto 会连带把 overflow-y 变成 auto），
-   absolute 弹卡会被裁进 40px 高的工具栏条里点不到。改为 fixed 底部卡片，脱离裁剪。 */
+   absolute 弹卡会被裁进 40px 高的工具栏条里点不到。改为 fixed 脱离裁剪；
+   锚在顶部工具栏下方而不是底部——底部卡会被软键盘盖住（iOS 键盘不缩视口，
+   fixed 元素不上移），链接输入框点选时会拉键盘。 */
 @media (max-width: 767px) {
   .share-card {
     position: fixed;
-    top: auto;
+    top: 88px;
     right: 12px;
     left: 12px;
-    bottom: 12px;
+    bottom: auto;
     width: auto;
   }
 }
