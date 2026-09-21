@@ -111,6 +111,8 @@ export function ShareMenu({
       <button
         type="button"
         className="tool-btn share-btn"
+        title="分享"
+        aria-label="分享"
         onClick={() => void toggle()}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -118,7 +120,7 @@ export function ShareMenu({
           <path d="m7 8 5-5 5 5" />
           <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
         </svg>
-        分享
+        <span>分享</span>
       </button>
       {open && (
         <div className="share-card">

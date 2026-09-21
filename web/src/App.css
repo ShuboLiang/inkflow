@@ -9,20 +9,81 @@
 
 .app-topbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
+  align-items: stretch;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px 0 8px;
   border-bottom: 1px solid var(--ink-200);
-  min-height: 34px;
+  background: var(--paper);
+  box-sizing: border-box;
+  gap: 6px;
+  user-select: none;
+}
+
+.app-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.app-topbar-back {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--qing);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+  white-space: nowrap;
+}
+
+.app-topbar-center {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.app-topbar-mobile-title {
+  display: none;
+}
+
+.app-topbar-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 1px solid var(--ink-200);
+  padding-left: 10px;
+  height: 100%;
+}
+
+.app-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.app-topbar-right .tool-btn {
+  padding: 4px 8px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.app-topbar-right .tool-btn.fullscreen-toggle {
+  display: inline-flex;
 }
 
 /* 顶栏中间的当前位置（全部笔记 / 文件夹名 / #标签） */
 .app-view-title {
-  flex: 1;
-  min-width: 0;
-  margin: 0 12px;
-  text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-500);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,8 +100,6 @@
   padding: 4px 8px;
   border-radius: var(--radius-s);
 }
-
-
 
 .app-topbar-desktop-tools {
   display: flex;
@@ -114,6 +173,58 @@
 }
 
 @media (max-width: 767px) {
+  .app-topbar {
+    padding: 0 8px;
+    height: 36px;
+    min-height: 36px;
+    gap: 4px;
+  }
+
+  .app-shell.mobile-list .app-topbar-center .tab-bar-container {
+    display: none;
+  }
+
+  .app-shell.mobile-list .app-topbar-mobile-title {
+    display: block;
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-shell.mobile-list .app-topbar-right .tool-btn,
+  .app-shell.mobile-list .app-topbar-right .tag-picker,
+  .app-shell.mobile-list .app-topbar-right .share-menu {
+    display: none;
+  }
+
+  .app-shell.mobile-list .app-topbar-back {
+    display: none !important;
+  }
+
+  .app-shell.mobile-editor .app-menu {
+    display: none !important;
+  }
+
+  .app-shell.mobile-editor .app-topbar-back {
+    display: inline-flex;
+  }
+
+  .app-topbar-right .tool-btn span {
+    display: none;
+  }
+
+  .app-topbar-right .tool-btn.fullscreen-toggle {
+    display: none !important;
+  }
+
+  .app-topbar-right .tool-btn {
+    padding: 4px 6px;
+  }
+
   .app-main .note-list {
     width: 100%;
     border-right: none;

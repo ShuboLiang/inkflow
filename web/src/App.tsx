@@ -912,46 +912,172 @@ export default function App() {
   if (!user) return <Auth />
 
   return (
-    <div className="app-shell">
+    <div className={['app-shell', mobileView === 'editor' ? 'mobile-editor' : 'mobile-list'].join(' ')}>
       <header className="app-topbar">
-        <button
-          type="button"
-          className="app-menu"
-          aria-label="打开侧栏"
-          onClick={() => setSidebarOpen((v) => !v)}
-        >
-          ☰
-        </button>
-        <div className="app-topbar-desktop-tools">
+        <div className="app-topbar-left">
           <button
             type="button"
-            className={desktopSidebarCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
-            title={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
-            aria-label={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
-            aria-pressed={desktopSidebarCollapsed}
-            onClick={toggleDesktopSidebar}
+            className="app-menu"
+            aria-label="打开侧栏"
+            onClick={() => setSidebarOpen((v) => !v)}
           >
-            <IconSidebar />
+            ☰
           </button>
           <button
             type="button"
-            className={isNoteListEffectivelyCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
-            title={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
-            aria-label={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
-            aria-pressed={isNoteListEffectivelyCollapsed}
-            onClick={toggleDesktopNoteList}
+            className="app-topbar-back"
+            onClick={() => setMobileView('list')}
           >
-            <IconNoteList />
+            ← 列表
           </button>
+          <div className="app-topbar-desktop-tools">
+            <button
+              type="button"
+              className={desktopSidebarCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
+              title={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
+              aria-label={desktopSidebarCollapsed ? '展开文件夹侧栏' : '折叠文件夹侧栏'}
+              aria-pressed={desktopSidebarCollapsed}
+              onClick={toggleDesktopSidebar}
+            >
+              <IconSidebar />
+            </button>
+            <button
+              type="button"
+              className={isNoteListEffectivelyCollapsed ? 'app-topbar-btn active' : 'app-topbar-btn'}
+              title={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
+              aria-label={isNoteListEffectivelyCollapsed ? '展开笔记列表' : '折叠笔记列表'}
+              aria-pressed={isNoteListEffectivelyCollapsed}
+              onClick={toggleDesktopNoteList}
+            >
+              <IconNoteList />
+            </button>
+          </div>
         </div>
-        <span className="app-view-title">
-          {activeTag
-            ? `# ${activeTag}`
-            : activeFolderId === 'all'
-              ? '默认'
-              : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
-        </span>
-        <SyncIndicator status={syncStatus} />
+
+        <div className="app-topbar-center">
+          <span className="app-topbar-mobile-title">
+            {activeTag
+              ? `# ${activeTag}`
+              : activeFolderId === 'all'
+                ? '默认'
+                : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
+          </span>
+          {validTabs.length > 0 ? (
+            <TabBar
+              tabs={validTabs}
+              activeTabId={activeFileId || activeId}
+              notes={notes}
+              files={files}
+              onSelectTab={handleSelectTab}
+              onCloseTab={handleCloseTab}
+              onCloseOtherTabs={handleCloseOtherTabs}
+              onCloseAllTabs={handleCloseAllTabs}
+              onNewNote={() => void handleCreate()}
+            />
+          ) : (
+            <div className="app-topbar-empty">
+              <span className="app-view-title">
+                {activeTag
+                  ? `# ${activeTag}`
+                  : activeFolderId === 'all'
+                    ? '默认'
+                    : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
+              </span>
+              <button
+                type="button"
+                className="tab-new-btn"
+                title="新建笔记"
+                onClick={() => void handleCreate()}
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="app-topbar-right">
+          {activeFile ? (
+            <>
+              <TagPicker
+                tags={activeFile.tags ?? []}
+                suggestions={[...tagCounts.keys()]}
+                onChange={handleFileTagsChange}
+              />
+              <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
+              {activeFile.dataUrl && (
+                <a
+                  className="tool-btn"
+                  href={activeFile.dataUrl}
+                  download={activeFile.filename}
+                  title="下载"
+                >
+                  <IconDownload />
+                  <span>下载</span>
+                </a>
+              )}
+              <button
+                type="button"
+                className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
+                title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
+                aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
+                aria-pressed={isContentFullScreen}
+                onClick={toggleFullscreen}
+              >
+                {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
+                <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
+              </button>
+              <button
+                type="button"
+                className="tool-btn danger"
+                title="删除"
+                onClick={() => void handleDeleteFile()}
+              >
+                <IconTrash />
+                <span>删除</span>
+              </button>
+            </>
+          ) : active ? (
+            <>
+              <button
+                type="button"
+                className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
+                title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                aria-pressed={toolbarHidden}
+                onClick={toggleToolbar}
+              >
+                Aa
+              </button>
+              <TagPicker
+                tags={active.tags ?? []}
+                suggestions={[...tagCounts.keys()]}
+                onChange={handleNoteTagsChange}
+              />
+              <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
+              <button
+                type="button"
+                className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
+                title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
+                aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
+                aria-pressed={isContentFullScreen}
+                onClick={toggleFullscreen}
+              >
+                {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
+                <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
+              </button>
+              <button
+                type="button"
+                className="tool-btn danger"
+                title="删除"
+                onClick={() => void handleDelete()}
+              >
+                <IconTrash />
+                <span>删除</span>
+              </button>
+            </>
+          ) : null}
+          <SyncIndicator status={syncStatus} />
+        </div>
       </header>
       <div
         className={[
@@ -1028,115 +1154,22 @@ export default function App() {
             for (const f of Array.from(e.dataTransfer.files)) void handleUpload(f)
           }}
         >
-          <TabBar
-            tabs={validTabs}
-            activeTabId={activeFileId || activeId}
-            notes={notes}
-            files={files}
-            onSelectTab={handleSelectTab}
-            onCloseTab={handleCloseTab}
-            onCloseOtherTabs={handleCloseOtherTabs}
-            onCloseAllTabs={handleCloseAllTabs}
-            onNewNote={() => void handleCreate()}
-          />
           {activeFile ? (
-            <>
-              <div className="editor-toolbar">
-                <button type="button" className="editor-back" onClick={() => setMobileView('list')}>
-                  ← 返回列表
-                </button>
-                <span className="editor-file-name" title={activeFile.filename}>
-                  {activeFile.filename}
-                </span>
-                <TagPicker
-                  tags={activeFile.tags ?? []}
-                  suggestions={[...tagCounts.keys()]}
-                  onChange={handleFileTagsChange}
-                />
-                <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
-                {activeFile.dataUrl && (
-                  <a
-                    className="tool-btn"
-                    href={activeFile.dataUrl}
-                    download={activeFile.filename}
-                  >
-                    <IconDownload />
-                    下载
-                  </a>
-                )}
-                <button
-                  type="button"
-                  className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
-                  title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
-                  aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
-                  aria-pressed={isContentFullScreen}
-                  onClick={toggleFullscreen}
-                >
-                  {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
-                  <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
-                </button>
-                <button
-                  type="button"
-                  className="tool-btn danger"
-                  onClick={() => void handleDeleteFile()}
-                >
-                  <IconTrash />
-                  删除
-                </button>
-              </div>
-              <div className="file-view">
-                {activeFile.dataUrl ? (
-                  kindOfName(activeFile.filename) === 'html' ? (
-                    <HtmlViewer src={activeFile.dataUrl} />
-                  ) : (
-                    <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                      <PdfViewer src={activeFile.dataUrl} />
-                    </Suspense>
-                  )
+            <div className="file-view">
+              {activeFile.dataUrl ? (
+                kindOfName(activeFile.filename) === 'html' ? (
+                  <HtmlViewer src={activeFile.dataUrl} />
                 ) : (
-                  <p className="file-view-fallback">正在从云端加载文件…</p>
-                )}
-              </div>
-            </>
+                  <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
+                    <PdfViewer src={activeFile.dataUrl} />
+                  </Suspense>
+                )
+              ) : (
+                <p className="file-view-fallback">正在从云端加载文件…</p>
+              )}
+            </div>
           ) : active ? (
             <>
-              <div className="editor-toolbar">
-                <button type="button" className="editor-back" onClick={() => setMobileView('list')}>
-                  ← 返回列表
-                </button>
-                <span className="toolbar-spacer" />
-                <button
-                  type="button"
-                  className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
-                  title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                  aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                  aria-pressed={toolbarHidden}
-                  onClick={toggleToolbar}
-                >
-                  Aa
-                </button>
-                <TagPicker
-                  tags={active.tags ?? []}
-                  suggestions={[...tagCounts.keys()]}
-                  onChange={handleNoteTagsChange}
-                />
-                <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
-                <button
-                  type="button"
-                  className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
-                  title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
-                  aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
-                  aria-pressed={isContentFullScreen}
-                  onClick={toggleFullscreen}
-                >
-                  {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
-                  <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
-                </button>
-                <button type="button" className="tool-btn danger" onClick={() => void handleDelete()}>
-                  <IconTrash />
-                  删除
-                </button>
-              </div>
               <div className="editor-scroll">
                 <div className="editor-head">
                   <textarea

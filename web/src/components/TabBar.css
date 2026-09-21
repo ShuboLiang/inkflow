@@ -1,11 +1,14 @@
 .tab-bar-container {
   display: flex;
   align-items: stretch;
-  background: var(--paper);
-  border-bottom: 1px solid var(--ink-200);
-  height: 35px;
-  min-height: 35px;
-  flex-shrink: 0;
+  background: transparent;
+  border-bottom: none;
+  border-left: 1px solid var(--ink-200);
+  height: 100%;
+  min-height: 100%;
+  flex: 1;
+  min-width: 0;
+  flex-shrink: 1;
   position: relative;
   z-index: 5;
   box-sizing: border-box;
@@ -126,10 +129,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
+  width: 32px;
   height: 100%;
   border: none;
   border-left: 1px solid var(--ink-200);
+  border-right: 1px solid var(--ink-200);
   background: none;
   color: var(--ink-500);
   font-size: 18px;
@@ -146,18 +150,18 @@
 
 @media (max-width: 767px) {
   .tab-bar-container {
-    height: 33px;
-    min-height: 33px;
+    height: 100%;
+    min-height: 100%;
   }
 
   .tab-item {
-    min-width: 70px;
-    max-width: 140px;
-    padding: 0 6px 0 8px;
+    min-width: 60px;
+    max-width: 120px;
+    padding: 0 4px 0 6px;
     font-size: 11px;
   }
 
   .tab-new-btn {
-    width: 30px;
+    width: 28px;
   }
 }
