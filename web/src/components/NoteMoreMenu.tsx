@@ -1,4 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  FileText,
+  FileDown,
+  Image as ImageIcon,
+  Edit3,
+  BookOpen,
+  Maximize2,
+  Minimize2,
+  Trash2,
+  MoreHorizontal,
+} from 'lucide-react'
 import './NoteMoreMenu.css'
 
 interface NoteMoreMenuProps {
@@ -57,11 +68,7 @@ export function NoteMoreMenu({
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="12" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="19" cy="12" r="2" />
-        </svg>
+        <MoreHorizontal size={15} />
       </button>
 
       {open && (
@@ -76,7 +83,9 @@ export function NoteMoreMenu({
               onExportMarkdown()
             }}
           >
-            <span className="note-more-icon">📄</span>
+            <span className="note-more-icon">
+              <FileText size={16} />
+            </span>
             <div className="note-more-text">
               <span className="note-more-label">导出为 Markdown</span>
               <span className="note-more-hint">.md 格式</span>
@@ -92,7 +101,9 @@ export function NoteMoreMenu({
               onExportPdf()
             }}
           >
-            <span className="note-more-icon">📑</span>
+            <span className="note-more-icon">
+              <FileDown size={16} />
+            </span>
             <div className="note-more-text">
               <span className="note-more-label">导出为 PDF</span>
               <span className="note-more-hint">矢量打印排版</span>
@@ -109,7 +120,9 @@ export function NoteMoreMenu({
               onExportImage()
             }}
           >
-            <span className="note-more-icon">🖼️</span>
+            <span className="note-more-icon">
+              <ImageIcon size={16} />
+            </span>
             <div className="note-more-text">
               <span className="note-more-label">{isExportingImage ? '正在生成图片…' : '导出为高清长图'}</span>
               <span className="note-more-hint">2x 视网膜高清 PNG</span>
@@ -128,7 +141,9 @@ export function NoteMoreMenu({
                 onToggleReadingMode()
               }}
             >
-              <span className="note-more-icon">{readingMode ? '✏️' : '📖'}</span>
+              <span className="note-more-icon">
+                {readingMode ? <Edit3 size={16} /> : <BookOpen size={16} />}
+              </span>
               <div className="note-more-text">
                 <span className="note-more-label">{readingMode ? '切换为编辑模式' : '切换为阅读模式'}</span>
                 <span className="note-more-hint">Ctrl+E</span>
@@ -145,7 +160,9 @@ export function NoteMoreMenu({
               onToggleFullscreen()
             }}
           >
-            <span className="note-more-icon">⛶</span>
+            <span className="note-more-icon">
+              {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </span>
             <div className="note-more-text">
               <span className="note-more-label">{isFullScreen ? '退出全屏' : '全屏 / 专注模式'}</span>
               <span className="note-more-hint">Ctrl+\</span>
@@ -163,7 +180,9 @@ export function NoteMoreMenu({
               onDeleteNote()
             }}
           >
-            <span className="note-more-icon">🗑️</span>
+            <span className="note-more-icon">
+              <Trash2 size={16} />
+            </span>
             <div className="note-more-text">
               <span className="note-more-label">删除笔记</span>
             </div>

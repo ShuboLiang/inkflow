@@ -58,9 +58,12 @@
 }
 
 .note-more-icon {
-  font-size: 15px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-500);
   flex-shrink: 0;
+  transition: color 0.15s ease;
 }
 
 .note-more-text {
@@ -89,7 +92,8 @@
   margin: 4px 2px;
 }
 
-.note-more-item.danger .note-more-label {
+.note-more-item.danger .note-more-label,
+.note-more-item.danger .note-more-icon {
   color: var(--danger, #dc2626);
 }
 
@@ -98,8 +102,16 @@
     background: var(--qing-50);
   }
 
+  .note-more-item:hover:not(:disabled) .note-more-icon {
+    color: var(--qing);
+  }
+
   .note-more-item.danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  }
+
+  .note-more-item.danger:hover:not(:disabled) .note-more-icon {
+    color: var(--danger, #dc2626);
   }
 }
 

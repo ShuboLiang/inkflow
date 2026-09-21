@@ -37,59 +37,23 @@ import { migrateInlineImages, noteImageSrcs } from './store/images'
 import './App.css'
 
 const lastOpenKey = (userId: string) => `inkflow:lastOpen:${userId}`
+import {
+  Menu,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeft,
+  LayoutList,
+  Plus,
+  Download,
+  Maximize2,
+  Minimize2,
+  Trash2,
+  Edit3,
+  BookOpen,
+} from 'lucide-react'
+
+// 本地临时持久化 tabs 的 storage key
 const tabsStorageKey = (userId: string) => `inkflow:tabs:${userId}`
-
-function IconTrash() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" />
-    </svg>
-  )
-}
-
-function IconDownload() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 5v14M5 12l7 7 7-7" />
-      <path d="M4 21h16" />
-    </svg>
-  )
-}
-
-function IconSidebar() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-    </svg>
-  )
-}
-
-function IconNoteList() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-      <path d="M15 3v18" />
-    </svg>
-  )
-}
-
-function IconMaximize() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-    </svg>
-  )
-}
-
-function IconMinimize() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-    </svg>
-  )
-}
 
 const DESKTOP_SIDEBAR_KEY = 'inkflow:desktop:sidebarCollapsed'
 const DESKTOP_NOTELIST_KEY = 'inkflow:desktop:noteListCollapsed'
@@ -986,14 +950,15 @@ export default function App() {
             aria-label="打开侧栏"
             onClick={() => setSidebarOpen((v) => !v)}
           >
-            ☰
+            <Menu size={18} />
           </button>
           <button
             type="button"
             className="app-topbar-back"
             onClick={() => setMobileView('list')}
           >
-            ← 列表
+            <ChevronLeft size={16} />
+            <span>列表</span>
           </button>
           <div className="app-topbar-desktop-tools">
             <button
@@ -1004,7 +969,7 @@ export default function App() {
               aria-pressed={desktopSidebarCollapsed}
               onClick={toggleDesktopSidebar}
             >
-              <IconSidebar />
+              {desktopSidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
             </button>
             <button
               type="button"
@@ -1014,7 +979,7 @@ export default function App() {
               aria-pressed={isNoteListEffectivelyCollapsed}
               onClick={toggleDesktopNoteList}
             >
-              <IconNoteList />
+              <LayoutList size={16} />
             </button>
           </div>
         </div>
@@ -1054,7 +1019,7 @@ export default function App() {
                 title="新建笔记"
                 onClick={() => void handleCreate()}
               >
-                +
+                <Plus size={14} />
               </button>
             </div>
           )}
@@ -1076,7 +1041,7 @@ export default function App() {
                   download={fileDownloadName(activeFile)}
                   title="下载"
                 >
-                  <IconDownload />
+                  <Download size={14} />
                   <span>下载</span>
                 </a>
               )}
@@ -1088,7 +1053,7 @@ export default function App() {
                 aria-pressed={isContentFullScreen}
                 onClick={toggleFullscreen}
               >
-                {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
+                {isContentFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                 <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
               </button>
               <button
@@ -1097,7 +1062,7 @@ export default function App() {
                 title="删除"
                 onClick={() => void handleDeleteFile()}
               >
-                <IconTrash />
+                <Trash2 size={14} />
                 <span>删除</span>
               </button>
             </>
@@ -1111,17 +1076,7 @@ export default function App() {
                 aria-pressed={readingMode}
                 onClick={toggleReadingMode}
               >
-                {readingMode ? (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                  </svg>
-                )}
+                {readingMode ? <Edit3 size={14} /> : <BookOpen size={14} />}
                 <span>{readingMode ? '编辑' : '阅读'}</span>
               </button>
               {readingMode ? null : (
@@ -1168,6 +1123,13 @@ export default function App() {
           .filter(Boolean)
           .join(' ')}
       >
+        {sidebarOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="关闭侧栏"
+          />
+        )}
         <Sidebar
           email={user.email ?? ''}
           collapsed={!sidebarOpen}
@@ -1204,6 +1166,7 @@ export default function App() {
           folders={folders ?? []}
           folderHits={folderHits}
           activeId={activeId}
+          currentFolderId={activeFolderId}
           search={search}
           userId={user.id}
           onSearch={setSearch}

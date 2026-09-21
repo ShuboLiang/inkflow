@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  Link2,
+  CheckSquare,
+  Highlighter,
+  Table as TableIcon,
+  Heading,
+} from 'lucide-react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import { promptDialog } from '../lib/dialog'
@@ -155,7 +162,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
     editor.commands.focus()
   }
 
-  const items: { key: keyof ActiveMap; label: string; title: string; run: () => void }[] = [
+  const items: { key: keyof ActiveMap; label: ReactNode; title: string; run: () => void }[] = [
     { key: 'h1', label: 'H1', title: '标题 1', run: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
     { key: 'h2', label: 'H2', title: '标题 2', run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
     { key: 'h3', label: 'H3', title: '标题 3', run: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
@@ -171,7 +178,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
     { key: 'blockMath', label: '∫', title: '块级公式（也可用 $$…$$ 输入）', run: () => openMath('blockMath') },
     {
       key: 'link',
-      label: '🔗',
+      label: <Link2 size={13} />,
       title: '链接',
       run: () => {
         if (editor.isActive('link')) {
@@ -216,7 +223,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleTaskList().run()}
         >
-          ☑
+          <CheckSquare size={13} />
         </button>
         <button
           type="button"
@@ -246,7 +253,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
             setTablePick(false)
           }}
         >
-          ▨
+          <Highlighter size={13} />
         </button>
         <button
           type="button"
@@ -261,7 +268,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
             setMarkPick(false)
           }}
         >
-          ▦
+          <TableIcon size={13} />
         </button>
         {active.table && (
           <>
@@ -269,7 +276,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
             <button type="button" className="fmt-btn" title="删除当前行" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteRow().run()}>－行</button>
             <button type="button" className="fmt-btn" title="右侧插入列" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().addColumnAfter().run()}>＋列</button>
             <button type="button" className="fmt-btn" title="删除当前列" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteColumn().run()}>－列</button>
-            <button type="button" className="fmt-btn" title="切换表头单元格" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleHeaderCell().run()}>⌗</button>
+            <button type="button" className="fmt-btn" title="切换表头单元格" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleHeaderCell().run()}><Heading size={13} /></button>
             <button type="button" className="fmt-btn" title="删除表格" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().deleteTable().run()}>删表</button>
           </>
         )}

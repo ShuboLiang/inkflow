@@ -1,4 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  LogOut,
+} from 'lucide-react'
 import type { Folder } from '../lib/db'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { ThemePicker } from './ThemePicker'
@@ -31,30 +40,6 @@ interface SidebarProps {
   theme: string
   onThemeChange: (id: string) => void
   onSignOut: () => void
-}
-
-function IconPencil() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    </svg>
-  )
-}
-
-function IconCross() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  )
-}
-
-function IconPlus() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
 }
 
 // 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消。
@@ -268,7 +253,7 @@ export function Sidebar({
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
 
-  // 触屏设备没有右键：行尾「⋯」打开同一个菜单，锚在按钮下方
+  // 触屏设备没有右键：行尾按钮打开同一个菜单，锚在按钮下方
   const moreButton = (items: MenuItem[], label: string) => (
     <button
       type="button"
@@ -279,7 +264,7 @@ export function Sidebar({
         setMenu({ x: r.left, y: r.bottom + 4, items })
       }}
     >
-      ⋯
+      <MoreHorizontal size={14} />
     </button>
   )
 
@@ -365,7 +350,7 @@ export function Sidebar({
                     toggleCollapse(folder.id)
                   }}
                 >
-                  {isCollapsed ? '▸' : '▾'}
+                  {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
               ) : (
                 <span className="sidebar-tree-toggle-placeholder" aria-hidden="true" />
@@ -394,7 +379,7 @@ export function Sidebar({
                     setCreatingChildOf(folder.id)
                   }}
                 >
-                  <IconPlus />
+                  <Plus size={12} />
                 </button>
                 <button
                   type="button"
@@ -407,7 +392,7 @@ export function Sidebar({
                     setEditingId(folder.id)
                   }}
                 >
-                  <IconPencil />
+                  <Pencil size={12} />
                 </button>
                 <button
                   type="button"
@@ -416,7 +401,7 @@ export function Sidebar({
                   aria-label={`删除 ${folder.name}`}
                   onClick={() => onDeleteFolder(folder.id)}
                 >
-                  <IconCross />
+                  <Trash2 size={12} />
                 </button>
               </span>
               {moreButton(folderMenuItems(folder), folder.name)}
@@ -451,7 +436,7 @@ export function Sidebar({
             setCreating(true)
           }}
         >
-          <IconPlus />
+          <Plus size={12} />
         </button>
       </div>
       {creating && (
@@ -511,7 +496,7 @@ export function Sidebar({
                   aria-label={`重命名标签 ${name}`}
                   onClick={() => setEditingTag(name)}
                 >
-                  <IconPencil />
+                  <Pencil size={12} />
                 </button>
                 <button
                   type="button"
@@ -520,7 +505,7 @@ export function Sidebar({
                   aria-label={`删除标签 ${name}`}
                   onClick={() => onDeleteTag(name)}
                 >
-                  <IconCross />
+                  <Trash2 size={12} />
                 </button>
               </span>
               {moreButton(tagMenuItems(name), name)}
@@ -534,7 +519,8 @@ export function Sidebar({
           {email}
         </span>
         <button type="button" className="sidebar-signout" onClick={onSignOut}>
-          退出登录
+          <LogOut size={13} />
+          <span>退出登录</span>
         </button>
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Tag } from 'lucide-react'
 import { TagInput } from './TagInput'
 import './TagPicker.css'
 
@@ -44,10 +45,7 @@ export function TagPicker({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 2H2v10l9.3 9.3a1.7 1.7 0 0 0 2.4 0l7.6-7.6a1.7 1.7 0 0 0 0-2.4Z" />
-          <circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none" />
-        </svg>
+        <Tag size={14} />
         {tags.length > 0 ? tags.length : ''}
       </button>
       {open && (

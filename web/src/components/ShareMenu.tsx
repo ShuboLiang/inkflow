@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Share2 } from 'lucide-react'
 import {
   createFileShare,
   createNoteShare,
@@ -115,11 +116,7 @@ export function ShareMenu({
         aria-label="分享"
         onClick={() => void toggle()}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 3v13" />
-          <path d="m7 8 5-5 5 5" />
-          <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
-        </svg>
+        <Share2 size={14} />
         <span>分享</span>
       </button>
       {open && (

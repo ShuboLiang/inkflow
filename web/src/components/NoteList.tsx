@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  FileText,
+  Folder as FolderIcon,
+  Search,
+  X,
+  MoreHorizontal,
+} from 'lucide-react'
 import type { FileEntry, Folder, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
 import { deleteFile, ensureFileData } from '../store/files'
 import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { MoveFolderModal } from './MoveFolderModal'
 import { confirmDialog } from '../lib/dialog'
 import { matchSnippet } from '../lib/search'
 import { fileDownloadName, isHtmlFile } from '../lib/importFile'
@@ -16,6 +24,7 @@ interface NoteListProps {
   folders: Folder[]
   folderHits: { id: string; name: string; path: string }[]
   activeId: string | null
+  currentFolderId?: string | null
   search: string
   userId: string
   onSearch: (value: string) => void
@@ -79,37 +88,13 @@ function formatSize(size: number | null): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
-function IconFile() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-    </svg>
-  )
-}
-
-function IconFolder() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </svg>
-  )
-}
-
-function IconFolderSmall() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </svg>
-  )
-}
-
 export function NoteList({
   notes,
   files,
   folders,
   folderHits,
   activeId,
+  currentFolderId,
   search,
   userId,
   onSearch,
@@ -129,8 +114,13 @@ export function NoteList({
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
-  // 「移动到文件夹…」的级联菜单（与 card 菜单同一定位策略）
-  const [moveMenu, setMoveMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
+  // 「移动到文件夹…」弹窗目标
+  const [movingTarget, setMovingTarget] = useState<{
+    kind: 'note' | 'file'
+    id: string
+    title: string
+    folderId: string | null
+  } | null>(null)
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
   // 增量渲染：一次只渲染前 RENDER_PAGE 条，滚近底部再追加，避免大列表全量挂 DOM
   const [renderLimit, setRenderLimit] = useState(RENDER_PAGE)
@@ -226,20 +216,39 @@ export function NoteList({
   const menuItems = (m: { x: number; y: number; kind: 'note' | 'file'; id: string }): MenuItem[] => {
     const target =
       m.kind === 'note' ? notes.find((n) => n.id === m.id) : files.find((f) => f.id === m.id)
+
+    // 非搜索状态下，若目标文件/笔记已在当前文件夹，跳到所在文件夹是多余的，予以隐藏
+    const isAlreadyInSameFolder =
+      !search.trim() &&
+      target?.folderId &&
+      currentFolderId === target.folderId
+
     const gotoFolderItem: MenuItem | null =
-      target?.folderId
+      target?.folderId && !isAlreadyInSameFolder
         ? {
             key: 'goto',
             label: '跳到所在文件夹',
             onClick: () => onGotoFolder(target.folderId as string),
           }
         : null
-    // 在原菜单位置换成文件夹列表（ContextMenu 自带视口避让）
+
     const moveItem: MenuItem = {
       key: 'move',
       label: '移动到文件夹…',
-      onClick: () => setMoveMenu({ x: m.x, y: m.y, kind: m.kind, id: m.id }),
+      onClick: () => {
+        const title =
+          m.kind === 'note'
+            ? (target as Note)?.title || firstLine((target as Note)?.content) || '无标题'
+            : (target as FileEntry)?.filename || '文件'
+        setMovingTarget({
+          kind: m.kind,
+          id: m.id,
+          title,
+          folderId: target?.folderId ?? null,
+        })
+      },
     }
+
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
@@ -260,26 +269,6 @@ export function NoteList({
           { key: 'd1', label: '', divider: true, onClick: () => {} },
           { key: 'del', label: '删除', danger: true, onClick: () => void deleteFileById(m.id) },
         ]
-  }
-
-  // 文件夹列表（按路径拼音排序），当前所在位置打 ✓
-  const moveToItems = (m: { kind: 'note' | 'file'; id: string }): MenuItem[] => {
-    const target =
-      m.kind === 'note' ? notes.find((n) => n.id === m.id) : files.find((f) => f.id === m.id)
-    const cur = target?.folderId ?? null
-    const move = (folderId: string | null) => () =>
-      m.kind === 'note' ? onMoveNote(m.id, folderId) : onMoveFile(m.id, folderId)
-    const entries = folders
-      .map((f) => ({ id: f.id, label: folderPathOf(f.id) ?? f.name }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'))
-    return [
-      { key: 'none', label: cur === null ? '✓ 无文件夹' : '无文件夹', onClick: move(null) },
-      ...entries.map((f) => ({
-        key: f.id,
-        label: cur === f.id ? `✓ ${f.label}` : f.label,
-        onClick: move(f.id),
-      })),
-    ]
   }
 
   const openMenu = (e: React.MouseEvent, kind: 'note' | 'file', id: string) => {
@@ -303,18 +292,19 @@ export function NoteList({
     )
   }
 
-  // 触屏设备没有右键：卡片右上角的「⋯」按钮打开同一个菜单，锚在按钮下方
+  // 触屏设备没有右键：卡片右上角按钮打开同一个菜单，锚在按钮下方
   const moreButton = (kind: 'note' | 'file', id: string, label: string) => (
     <button
       type="button"
       className="card-more"
       aria-label={`${label} 更多操作`}
       onClick={(e) => {
+        e.stopPropagation()
         const r = e.currentTarget.getBoundingClientRect()
         setMenu({ x: r.left, y: r.bottom + 4, kind, id })
       }}
     >
-      ⋯
+      <MoreHorizontal size={15} />
     </button>
   )
 
@@ -342,14 +332,27 @@ export function NoteList({
       }}
     >
       <div className="note-list-search">
-        <input
-          id="note-search"
-          type="search"
-          placeholder="搜索全部笔记"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          aria-label="搜索笔记"
-        />
+        <div className="note-list-search-inner">
+          <Search size={14} className="note-list-search-icon" aria-hidden="true" />
+          <input
+            id="note-search"
+            type="search"
+            placeholder="搜索全部笔记"
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            aria-label="搜索笔记"
+          />
+          {search && (
+            <button
+              type="button"
+              className="note-list-search-clear"
+              onClick={() => onSearch('')}
+              aria-label="清空搜索"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="note-list-items">
         {notes.length === 0 && files.length === 0 && folderHits.length === 0 ? (
@@ -369,7 +372,7 @@ export function NoteList({
                     onClick={() => onSelectFolderHit(hit.id)}
                   >
                     <div className="note-card-title folder-hit-title">
-                      <IconFolder />
+                      <FolderIcon size={16} />
                       <span className="folder-hit-name">{hit.name}</span>
                     </div>
                     <div className="note-card-time folder-hit-path">{hit.path}</div>
@@ -409,7 +412,7 @@ export function NoteList({
                     onContextMenu={(e) => openMenu(e, 'file', file.id)}
                   >
                     <div className="note-card-title file-card-title">
-                      <IconFile />
+                      <FileText size={16} />
                       <span className="file-card-name" title={file.filename}>
                         {file.filename}
                       </span>
@@ -439,7 +442,7 @@ export function NoteList({
                           onGotoFolder(file.folderId as string)
                         }}
                       >
-                        <IconFolderSmall />
+                        <FolderIcon size={12} />
                         {folderPathOf(file.folderId)}
                       </span>
                     )}
@@ -472,7 +475,7 @@ export function NoteList({
                         onGotoFolder(note.folderId as string)
                       }}
                     >
-                      <IconFolderSmall />
+                      <FolderIcon size={12} />
                       {folderPathOf(note.folderId)}
                     </span>
                   )}
@@ -502,12 +505,21 @@ export function NoteList({
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
-      {moveMenu && (
-        <ContextMenu
-          x={moveMenu.x}
-          y={moveMenu.y}
-          items={moveToItems(moveMenu)}
-          onClose={() => setMoveMenu(null)}
+      {movingTarget && (
+        <MoveFolderModal
+          isOpen={true}
+          targetTitle={movingTarget.title}
+          currentFolderId={movingTarget.folderId}
+          folders={folders}
+          onSelectFolder={(targetFolderId) => {
+            if (movingTarget.kind === 'note') {
+              onMoveNote(movingTarget.id, targetFolderId)
+            } else {
+              onMoveFile(movingTarget.id, targetFolderId)
+            }
+            setMovingTarget(null)
+          }}
+          onClose={() => setMovingTarget(null)}
         />
       )}
       {fileDragDepth > 0 && (

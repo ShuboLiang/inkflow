@@ -204,6 +204,10 @@
 }
 
 .sidebar-signout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 10px;
   border: 1px solid var(--ink-200);
   border-radius: var(--radius-s);
@@ -211,6 +215,7 @@
   font-size: 13px;
   color: var(--ink-900);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 @media (max-width: 1023px) {

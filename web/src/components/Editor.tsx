@@ -3,6 +3,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import { marked } from 'marked'
 import 'katex/dist/katex.min.css'
 import { useEffect, useRef, useState } from 'react'
+import { ListTree, X } from 'lucide-react'
 import { Toolbar } from './Toolbar'
 import { insertPastedImages, pastedImageFiles } from '../lib/pasteImage'
 import { buildExtensions } from '../lib/editorExtensions'
@@ -147,7 +148,7 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
           btn.contentEditable = 'false'
           btn.tabIndex = -1
           btn.setAttribute('aria-label', '复制代码')
-          btn.innerText = '复制'
+          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>复制</span>`
           pre.appendChild(btn)
         }
       })
@@ -204,11 +205,11 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
         const code = pre.querySelector('code')
         const text = code ? code.innerText : pre.innerText
         const copySuccess = () => {
-          copyBtn.textContent = '已复制 ✓'
+          copyBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>已复制</span>`
           copyBtn.classList.add('copied')
           setTimeout(() => {
             if (copyBtn.isConnected) {
-              copyBtn.textContent = '复制'
+              copyBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>复制</span>`
               copyBtn.classList.remove('copied')
             }
           }, 2000)
@@ -330,14 +331,14 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
         aria-pressed={outlineOpen}
         onClick={() => setOutlineOpen((v) => !v)}
       >
-        ☰
+        <ListTree size={18} />
       </button>
       {outlineOpen && (
         <nav className="outline-panel" aria-label="文档大纲">
           <div className="outline-head">
             <span>大纲</span>
             <button type="button" className="outline-close" aria-label="关闭大纲" onClick={() => setOutlineOpen(false)}>
-              ✕
+              <X size={16} />
             </button>
           </div>
           {headings && headings.length > 0 ? (

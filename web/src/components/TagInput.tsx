@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Search, X, Plus, Check } from 'lucide-react'
 import './TagInput.css'
 
 interface TagInputProps {
@@ -117,27 +118,13 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
             aria-label="关闭标签面板"
             title="关闭"
           >
-            ×
+            <X size={15} />
           </button>
         )}
       </div>
 
       <div className="tag-search-wrap">
-        <svg
-          className="tag-search-icon"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
+        <Search className="tag-search-icon" size={14} aria-hidden="true" />
         <input
           id={inputId}
           ref={inputRef}
@@ -175,7 +162,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
               inputRef.current?.focus()
             }}
           >
-            ×
+            <X size={13} />
           </button>
         )}
       </div>
@@ -190,7 +177,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
           }}
         >
           <span className="tag-create-text">
-            <span className="tag-create-plus">+</span>
+            <Plus size={13} className="tag-create-plus" />
             创建新标签 <strong>"{query}"</strong>
           </span>
           <span className="tag-key-hint">回车 ↵</span>
@@ -212,7 +199,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
                   aria-label={`移除标签 ${tag}`}
                   onClick={() => removeAt(i)}
                 >
-                  ×
+                  <X size={11} />
                 </button>
               </span>
             ))}
@@ -242,7 +229,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
                   onClick={() => toggleTag(s)}
                 >
                   <span className="tag-choice-icon" aria-hidden="true">
-                    {isSelected ? '✓' : '+'}
+                    {isSelected ? <Check size={12} /> : <Plus size={12} />}
                   </span>
                   <span className="tag-choice-name">{s}</span>
                 </button>
