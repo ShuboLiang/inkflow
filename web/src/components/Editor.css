@@ -130,10 +130,10 @@
   background: none;
   font-family: var(--font-note);
   font-size: 32px;
-  line-height: 1.35;
+  line-height: 1.25;
   color: var(--ink-900);
   caret-color: var(--ink-900);
-  padding: 0 0 6px;
+  padding: 0;
   outline-offset: 4px;
   /* textarea 自动增高的配套：禁拖拽手柄、不滚、随内容长高 */
   resize: none;
