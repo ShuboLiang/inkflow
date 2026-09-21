@@ -122,16 +122,24 @@
 }
 
 .editor-title {
-  width: auto;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   border: none;
   background: none;
   font-family: var(--font-note);
   font-size: 32px;
+  line-height: 1.35;
   color: var(--ink-900);
   caret-color: var(--ink-900);
   padding: 0 0 20px;
   outline-offset: 4px;
+  /* textarea 自动增高的配套：禁拖拽手柄、不滚、随内容长高 */
+  resize: none;
+  overflow: hidden;
+  /* 支持的浏览器原生内容自适应（其余由 JS autosize 兜底） */
+  field-sizing: content;
 }
 
 .editor-shell {

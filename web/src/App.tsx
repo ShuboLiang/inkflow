@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
@@ -176,7 +176,7 @@ export default function App() {
   const [toolbarHidden, setToolbarHidden] = useState(false)
   // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
   const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
-  const titleRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingSave = useRef<{ id: string; patch: { title?: string; content?: unknown } } | null>(null)
@@ -370,12 +370,28 @@ export default function App() {
     }
   }, [titleFocusReq, activeId, active])
 
+  // 标题输入框自动增高：长标题换行后撑高，始终完整可见
+  const autosizeTitle = useCallback(() => {
+    const el = titleRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [])
+
   useEffect(() => {
     const el = titleRef.current
     if (el && active && el.value !== active.title) {
       el.value = active.title
     }
-  }, [active])
+    autosizeTitle()
+  }, [active, autosizeTitle])
+
+  // 宽度变化（窗口缩放/折叠侧栏）时行数会变，重算高度
+  useEffect(() => {
+    const onResize = () => autosizeTitle()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [autosizeTitle])
 
   useEffect(() => {
     return () => {
@@ -966,14 +982,30 @@ export default function App() {
               </div>
               <div className="editor-scroll">
                 <div className="editor-head">
-                  <input
+                  <textarea
                     key={`title-${active.id}`}
                     ref={titleRef}
+                    rows={1}
                     className="editor-title"
                     defaultValue={active.title}
                     placeholder="无标题"
                     aria-label="笔记标题"
-                    onChange={(e) => scheduleSave(active.id, { title: e.target.value })}
+                    onChange={(e) => {
+                      autosizeTitle()
+                      // 标题保持单段语义：粘贴带来的换行折成空格入库
+                      scheduleSave(active.id, { title: e.target.value.replace(/\r?\n/g, ' ') })
+                    }}
+                    onBlur={(e) => {
+                      e.target.value = e.target.value.replace(/\s*\r?\n\s*/g, ' ')
+                      autosizeTitle()
+                    }}
+                    onKeyDown={(e) => {
+                      // 标题内 Enter 不换行：转去正文开头继续写（常见笔记行为）
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                        e.preventDefault()
+                        document.querySelector<HTMLElement>('.editor-body .ProseMirror')?.focus()
+                      }
+                    }}
                   />
                 </div>
                 <EditorBoundary>
