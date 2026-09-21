@@ -17,7 +17,8 @@ import { common, createLowlight } from 'lowlight'
 import 'highlight.js/styles/github.css'
 import { InputRule, type Extensions } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import { TextSelection } from '@tiptap/pm/state'
+import { TextSelection, Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { cacheImageFromUrl, cachedImageDataUrl, imagePathFromUrl } from '../store/images'
 import { openImageLightbox } from './lightbox'
 
@@ -172,6 +173,64 @@ const BlockMathRule = BlockMath.extend({
   },
 }).configure({ katexOptions: { throwOnError: false, displayMode: true }, onClick: mathEditHandler('blockMath') })
 
+// 代码块复制按钮：ProseMirror widget decoration。
+// 此前用 MutationObserver 往 pre 末尾 appendChild，ProseMirror 的 DOMObserver 会把
+// 按钮解析为外部 DOM 修改并重写 pre → observer 再注入 → 主线程同步死循环
+// （打开含代码块的笔记整页卡死）。widget 由 ProseMirror 自己渲染管理、不会被
+// parse 回文档，从机制上杜绝乒乓。按钮的点击、复制与「已复制」反馈仍由
+// Editor 的 shell 点击代理处理（事件冒泡到 .editor-shell）。
+const codeCopyBtnHtml =
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>复制</span>'
+
+const codeCopyKey = new PluginKey('codeBlockCopyButton')
+
+function copyButtonDecorations(doc: PMNode, name: string): DecorationSet {
+  const decos: Decoration[] = []
+  doc.descendants((node, pos) => {
+    if (node.type.name !== name) return
+    decos.push(
+      Decoration.widget(
+        // 指到代码块内容末尾：widget 渲染为 pre 的最后一个子元素，
+        // 与 Editor.css 的 pre:hover .code-copy-btn 定位规则配套
+        pos + node.nodeSize - 1,
+        () => {
+          const btn = document.createElement('button')
+          btn.className = 'code-copy-btn'
+          btn.type = 'button'
+          btn.contentEditable = 'false'
+          btn.tabIndex = -1
+          btn.setAttribute('aria-label', '复制代码')
+          btn.innerHTML = codeCopyBtnHtml
+          return btn
+        },
+        { side: -1 },
+      ),
+    )
+  })
+  return DecorationSet.create(doc, decos)
+}
+
+const CodeBlockWithCopy = CodeBlockLowlight.extend({
+  addProseMirrorPlugins() {
+    return [
+      ...(this.parent?.() || []),
+      new Plugin({
+        key: codeCopyKey,
+        state: {
+          init: (_, { doc }) => copyButtonDecorations(doc, this.name),
+          apply: (tr, value) =>
+            tr.docChanged ? copyButtonDecorations(tr.doc, this.name) : value.map(tr.mapping, tr.doc),
+        },
+        props: {
+          decorations(state) {
+            return codeCopyKey.getState(state)
+          },
+        },
+      }),
+    ]
+  },
+})
+
 // 编辑器实例和文件导入管线共用同一组扩展，保证导入生成的文档和手动编辑的一致。
 // Typography 里与 LaTeX 语法冲突的规则全部禁用：^2 ^3（上下标）、1/2 1/4 3/4（分数）、
 // +- != 2x3 << >> -> <-（数学常用符号序列）。保留 --、...、引号、版权符号等散文排版规则。
@@ -211,7 +270,7 @@ export function buildExtensions(): Extensions {
     Highlight.configure({ multicolor: true }),
     TextStyle,
     Color,
-    // 代码块语法高亮（common 语言集，约 40 种常用语言）
-    CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
+    // 代码块语法高亮（common 语言集，约 40 种常用语言）+ 右上角复制按钮（widget）
+    CodeBlockWithCopy.configure({ lowlight: createLowlight(common) }),
   ]
 }

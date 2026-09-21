@@ -134,37 +134,8 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
     editor.setEditable(!readOnly)
   }, [editor, readOnly])
 
-  // 代码块右上角注入一键复制按钮
-  useEffect(() => {
-    if (!editor) return
-    const dom = editor.view.dom
-    const injectCopyButtons = () => {
-      const pres = dom.querySelectorAll('pre')
-      pres.forEach((pre) => {
-        if (!pre.querySelector('.code-copy-btn')) {
-          const btn = document.createElement('button')
-          btn.className = 'code-copy-btn'
-          btn.type = 'button'
-          btn.contentEditable = 'false'
-          btn.tabIndex = -1
-          btn.setAttribute('aria-label', '复制代码')
-          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>复制</span>`
-          pre.appendChild(btn)
-        }
-      })
-    }
-
-    injectCopyButtons()
-
-    const observer = new MutationObserver(() => {
-      injectCopyButtons()
-    })
-    observer.observe(dom, { childList: true, subtree: true })
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [editor])
+  // 代码块复制按钮由 editorExtensions 的 widget decoration 渲染（见 CodeBlockWithCopy）；
+  // 按钮点击通过事件冒泡到 handleShellClick 的 .code-copy-btn 分支处理。
 
   const [outlineOpen, setOutlineOpen] = useState(false)
 
