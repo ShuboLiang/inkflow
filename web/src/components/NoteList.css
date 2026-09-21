@@ -79,9 +79,12 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--ink-900);
+  /* 最多两行，超出省略号：单行截断对长标题不友好，两行在列表密度与可读间取中 */
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: break-word;
 }
 
 .note-card-excerpt {
@@ -147,9 +150,12 @@
 .file-card-name {
   flex: 1;
   min-width: 0;
+  /* 与笔记标题同策略：两行封顶；文件名常是无空格长串，anywhere 允许串内折行 */
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .file-card-badge {
