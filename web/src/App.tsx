@@ -25,7 +25,9 @@ import { deleteFile, ensureFileData, moveFile, renameFile, saveFile, setFileTags
 import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
+import { NoteMoreMenu } from './components/NoteMoreMenu'
 import { fileDownloadName, fileToDocJson, isHtmlFile, kindOfFile } from './lib/importFile'
+import { exportNoteToImage, exportNoteToMarkdown, printNoteToPdf } from './lib/exportNote'
 import { countWords } from './lib/wordCount'
 import { setActiveEdit } from './sync/syncEngine'
 import { DialogHost } from './components/Dialog'
@@ -905,6 +907,35 @@ export default function App() {
     handleCloseTab(delId)
   }
 
+  const [isExportingImage, setIsExportingImage] = useState(false)
+
+  const handleExportMarkdown = () => {
+    if (!active) return
+    exportNoteToMarkdown(active.title || '无标题', active.content)
+  }
+
+  const handleExportPdf = () => {
+    if (!active) return
+    const bodyEl = document.querySelector<HTMLElement>('.editor-body .ProseMirror')
+    if (!bodyEl) return
+    printNoteToPdf(active.title || '无标题', bodyEl)
+  }
+
+  const handleExportImage = async () => {
+    if (!active) return
+    const bodyEl = document.querySelector<HTMLElement>('.editor-body .ProseMirror')
+    if (!bodyEl) return
+    setIsExportingImage(true)
+    try {
+      await exportNoteToImage(active.title || '无标题', bodyEl)
+    } catch (err) {
+      console.error('export image failed', err)
+      await alertDialog({ title: '导出失败', message: '生成高清长图失败，请重试' })
+    } finally {
+      setIsExportingImage(false)
+    }
+  }
+
   if (loading) {
     return <div className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>载入中…</div>
   }
@@ -1054,26 +1085,15 @@ export default function App() {
                 onChange={handleNoteTagsChange}
               />
               <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
-              <button
-                type="button"
-                className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
-                title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
-                aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
-                aria-pressed={isContentFullScreen}
-                onClick={toggleFullscreen}
-              >
-                {isContentFullScreen ? <IconMinimize /> : <IconMaximize />}
-                <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
-              </button>
-              <button
-                type="button"
-                className="tool-btn danger"
-                title="删除"
-                onClick={() => void handleDelete()}
-              >
-                <IconTrash />
-                <span>删除</span>
-              </button>
+              <NoteMoreMenu
+                onExportMarkdown={handleExportMarkdown}
+                onExportPdf={handleExportPdf}
+                onExportImage={() => void handleExportImage()}
+                isFullScreen={isContentFullScreen}
+                onToggleFullscreen={toggleFullscreen}
+                onDeleteNote={() => void handleDelete()}
+                isExportingImage={isExportingImage}
+              />
             </>
           ) : null}
           <SyncIndicator status={syncStatus} />

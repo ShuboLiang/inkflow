@@ -210,7 +210,8 @@
 
   .app-shell.mobile-list .app-topbar-right .tool-btn,
   .app-shell.mobile-list .app-topbar-right .tag-picker,
-  .app-shell.mobile-list .app-topbar-right .share-menu {
+  .app-shell.mobile-list .app-topbar-right .share-menu,
+  .app-shell.mobile-list .app-topbar-right .note-more-container {
     display: none;
   }
 
