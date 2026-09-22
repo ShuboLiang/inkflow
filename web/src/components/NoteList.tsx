@@ -129,6 +129,7 @@ function excerptOf(content: unknown): string {
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric',
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
