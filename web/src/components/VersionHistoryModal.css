@@ -603,6 +603,70 @@
   color: var(--ink-900);
 }
 
+.vhm-preview-editor .ProseMirror p {
+  margin: 0 0 0.6em;
+}
+
+.vhm-preview-editor .ProseMirror blockquote {
+  margin: 0.6em 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--qing);
+  color: var(--ink-500);
+}
+
+.vhm-preview-editor .ProseMirror pre {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  background: var(--qing-50);
+  border-radius: var(--radius-s);
+  padding: 10px 14px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.vhm-preview-editor .ProseMirror code {
+  font-family: var(--font-mono);
+}
+
+.vhm-preview-editor .ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.vhm-preview-editor .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: auto;
+  width: 100%;
+  margin: 0;
+}
+
+.vhm-preview-editor .ProseMirror td,
+.vhm-preview-editor .ProseMirror th {
+  border: 1px solid var(--ink-200);
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+/* 只读预览中的图片：控制最大宽度与高度，居中如插画，防止原图过大撑破弹窗 */
+.vhm-preview-editor .ProseMirror img {
+  display: block;
+  max-width: min(100%, 520px);
+  max-height: 380px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 12px auto 16px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink-900) 6%, transparent);
+  cursor: zoom-in;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vhm-preview-editor .ProseMirror img:hover {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--ink-900) 12%, transparent);
+}
+
 /* 变更对比区域 */
 .vhm-diff-pane {
   display: flex;
@@ -1062,6 +1126,12 @@
   .vhm-preview-editor .ProseMirror {
     font-size: 14.5px;
     line-height: 1.65;
+  }
+
+  .vhm-preview-editor .ProseMirror img {
+    max-width: 100%;
+    max-height: 240px;
+    margin: 8px auto 12px;
   }
 
   /* 变更对比排版与紧凑行号优化 */

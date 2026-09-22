@@ -20,6 +20,7 @@ import { buildExtensions } from '../lib/editorExtensions'
 import { plainTextOf } from '../lib/search'
 import { computeLineDiff } from '../lib/diff'
 import { confirmDialog, promptDialog } from '../lib/dialog'
+import { openImageLightbox } from '../lib/lightbox'
 import {
   listNoteVersions,
   fetchRemoteVersions,
@@ -77,8 +78,18 @@ function VersionPreviewEditor({ content }: { content: unknown }) {
     }
   }, [editor, content])
 
+  const handlePreviewClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'IMG') {
+      const src = (target as HTMLImageElement).src
+      if (src) {
+        openImageLightbox(src)
+      }
+    }
+  }, [])
+
   return (
-    <div className="vhm-preview-shell">
+    <div className="vhm-preview-shell" onClick={handlePreviewClick}>
       <EditorContent editor={editor} className="vhm-preview-editor" />
     </div>
   )
