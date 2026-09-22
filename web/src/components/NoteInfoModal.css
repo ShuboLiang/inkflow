@@ -255,3 +255,65 @@
 .note-info-ok-btn:hover {
   background: var(--qing-hover);
 }
+
+/* 历史快照交互栏 */
+.note-info-snapshot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  color: var(--ink-900);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.note-info-snapshot-btn:hover {
+  background: var(--qing-50);
+  border-color: var(--qing);
+}
+
+.note-info-snapshot-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--ink-900);
+}
+
+.note-info-snapshot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--ink-900);
+}
+
+.note-info-snapshot-btn:hover .note-info-snapshot-badge {
+  color: var(--qing);
+}
+
+.note-info-snapshot-action {
+  font-size: 12px;
+  color: var(--qing);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transition: transform 0.15s ease;
+}
+
+.note-info-snapshot-btn:hover .note-info-snapshot-action {
+  transform: translateX(2px);
+}
+

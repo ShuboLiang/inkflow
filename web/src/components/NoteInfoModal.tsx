@@ -3,6 +3,7 @@ import { Info, Copy, Check, X, History } from 'lucide-react'
 import type { Note } from '../lib/db'
 import { countWords, firstLine } from '../lib/wordCount'
 import { plainTextOf } from '../lib/search'
+import { listNoteVersions, fetchRemoteVersions } from '../store/versions'
 import './NoteInfoModal.css'
 
 interface NoteInfoModalProps {
@@ -28,6 +29,7 @@ function formatDateTime(ts?: number | null): string {
 
 export function NoteInfoModal({ isOpen, note, folderPath, onClose, onOpenVersionHistory }: NoteInfoModalProps) {
   const [copied, setCopied] = useState(false)
+  const [snapshotCount, setSnapshotCount] = useState<number | null>(null)
 
   // ESC 键关闭
   useEffect(() => {
@@ -38,6 +40,28 @@ export function NoteInfoModal({ isOpen, note, folderPath, onClose, onOpenVersion
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
+
+  // 查询历史快照数量
+  useEffect(() => {
+    if (!isOpen || !note?.id) return
+    let active = true
+
+    // 1. 本地快速获取
+    void listNoteVersions(note.id).then((list) => {
+      if (active) setSnapshotCount(list.length)
+    })
+
+    // 2. 远端尝试同步刷新（若有网络/已登录）
+    void fetchRemoteVersions(note.id)
+      .then((list) => {
+        if (active) setSnapshotCount(list.length)
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
+  }, [isOpen, note?.id])
 
   if (!isOpen || !note) return null
 
@@ -142,7 +166,40 @@ export function NoteInfoModal({ isOpen, note, folderPath, onClose, onOpenVersion
             </div>
             <div className="note-info-stat-item" title="底层同步修订轮次（每次打字落盘保存自动递增）">
               <span className="note-info-stat-label">保存轮次</span>
-              <span className="note-info-stat-val">第 {note.version} 次</span>
+              <span className="note-info-stat-val">第 {note.version} 次落盘</span>
+            </div>
+          </div>
+
+          {/* 历史快照 */}
+          <div className="note-info-row">
+            <span className="note-info-label">历史快照</span>
+            <div className="note-info-value">
+              {onOpenVersionHistory ? (
+                <button
+                  type="button"
+                  className="note-info-snapshot-btn"
+                  onClick={() => {
+                    onClose()
+                    onOpenVersionHistory(note)
+                  }}
+                  title="点击打开版本历史面板"
+                >
+                  <span className="note-info-snapshot-badge">
+                    <History size={14} color="var(--qing)" />
+                    <span>
+                      {snapshotCount === null ? '查询中...' : `共 ${snapshotCount} 个快照`}
+                    </span>
+                  </span>
+                  <span className="note-info-snapshot-action">打开版本面板 →</span>
+                </button>
+              ) : (
+                <div className="note-info-snapshot-static">
+                  <History size={14} color="var(--qing)" />
+                  <span>
+                    {snapshotCount === null ? '查询中...' : `共 ${snapshotCount} 个快照`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
