@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   LogOut,
   X,
+  Settings,
 } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import type { Folder } from '../lib/db'
@@ -69,6 +70,7 @@ interface SidebarProps {
   theme: string
   onThemeChange: (id: string) => void
   onSignOut: () => void
+  onOpenSettings?: () => void
 }
 
 // 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消。
@@ -138,6 +140,7 @@ export function Sidebar({
   theme,
   onThemeChange,
   onSignOut,
+  onOpenSettings,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
   const [creatingChildOf, setCreatingChildOf] = useState<string | null>(null)
@@ -606,6 +609,12 @@ export function Sidebar({
         <span className="sidebar-email" title={email}>
           {email}
         </span>
+        {onOpenSettings && (
+          <button type="button" className="sidebar-signout" onClick={onOpenSettings}>
+            <Settings size={13} />
+            <span>偏好设置</span>
+          </button>
+        )}
         <button type="button" className="sidebar-signout" onClick={onSignOut}>
           <LogOut size={13} />
           <span>退出登录</span>

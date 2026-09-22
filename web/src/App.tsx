@@ -25,6 +25,7 @@ import { EditorBoundary } from './components/EditorBoundary'
 import { EmptyState } from './components/EmptyState'
 import { NoteList } from './components/NoteList'
 import { NoteInfoModal } from './components/NoteInfoModal'
+import { SettingsModal } from './components/SettingsModal'
 
 // PDF 查看器（pdf.js 体积大，懒加载：只在打开 PDF 时才下载）
 const PdfViewer = lazy(() =>
@@ -175,6 +176,16 @@ export default function App() {
   const [toolbarHidden, setToolbarHidden] = useState(false)
   // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
   const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
+  // 偏好：是否在父文件夹中包含子文件夹内容（默认 false = 严格直属模式）
+  const [includeSubfolders, setIncludeSubfolders] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('inkflow:prefs:includeSubfolders') === 'true'
+    } catch {
+      return false
+    }
+  })
+  // 偏好设置弹窗状态
+  const [settingsOpen, setSettingsOpen] = useState(false)
   // 笔记信息弹窗目标（null = 关闭）
   const [noteInfoTarget, setNoteInfoTarget] = useState<Note | null>(null)
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -196,6 +207,13 @@ export default function App() {
           applyTheme(p.theme)
           setTheme(p.theme)
         }
+        // 若云端包含子文件夹偏好设置，采用云端设置
+        if (p.includeSubfolders !== undefined) {
+          setIncludeSubfolders(p.includeSubfolders)
+          try {
+            localStorage.setItem('inkflow:prefs:includeSubfolders', String(p.includeSubfolders))
+          } catch {}
+        }
         // 若云端有 tabs，且本地尚未有有效 tabs，则从云端恢复
         if (Array.isArray(p.tabs) && p.tabs.length > 0) {
           setTabs((cur) => {
@@ -210,10 +228,18 @@ export default function App() {
     }
   }, [user])
 
+  const handleToggleIncludeSubfolders = (val: boolean) => {
+    setIncludeSubfolders(val)
+    try {
+      localStorage.setItem('inkflow:prefs:includeSubfolders', String(val))
+    } catch {}
+    void savePrefs({ toolbarHidden, theme, includeSubfolders: val }).catch(() => {})
+  }
+
   const toggleToolbar = () => {
     setToolbarHidden((cur) => {
       const next = !cur
-      void savePrefs({ toolbarHidden: next, theme }).catch(() => {})
+      void savePrefs({ toolbarHidden: next, theme, includeSubfolders }).catch(() => {})
       return next
     })
   }
@@ -223,7 +249,7 @@ export default function App() {
     if (id === theme) return
     applyTheme(id)
     setTheme(id)
-    void savePrefs({ toolbarHidden, theme: id }).catch(() => {})
+    void savePrefs({ toolbarHidden, theme: id, includeSubfolders }).catch(() => {})
   }
 
   const folders = useLiveQuery(async () => {
@@ -368,9 +394,12 @@ export default function App() {
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
     const q = search.trim().toLowerCase()
-    // 「默认」= 未归入任何文件夹的笔记；文件夹视图 = 该文件夹（含子树）
-    const inScope = (n: (typeof all)[number]) =>
-      activeFolderSubtree === null ? n.folderId === null : activeFolderSubtree.has(n.folderId ?? '')
+    // 「默认」= 未归入任何文件夹的笔记；文件夹视图 = 根据 includeSubfolders 决定是仅直接归属还是整棵子树
+    const inScope = (n: (typeof all)[number]) => {
+      if (activeFolderSubtree === null) return n.folderId === null
+      if (includeSubfolders) return activeFolderSubtree.has(n.folderId ?? '')
+      return n.folderId === activeFolderId
+    }
     let scoped = q || activeTag ? all : all.filter(inScope)
     if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
     if (q) {
@@ -391,7 +420,7 @@ export default function App() {
           (a.position ?? Infinity) - (b.position ?? Infinity) ||
           (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
       )
-  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree, positionOverrides])
+  }, [notes, search, activeFolderSubtree, includeSubfolders, activeFolderId, activeTag, folderHitSubtree, positionOverrides])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
 
@@ -946,8 +975,11 @@ export default function App() {
         .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
         .sort(byPosition)
     }
-    const inScope = (folderId: string | null) =>
-      activeFolderSubtree === null ? folderId === null : folderId !== null && activeFolderSubtree.has(folderId)
+    const inScope = (folderId: string | null) => {
+      if (activeFolderSubtree === null) return folderId === null
+      if (includeSubfolders) return folderId !== null && activeFolderSubtree.has(folderId)
+      return folderId === activeFolderId
+    }
     return (files ?? [])
       .filter((f) => !f.deletedAt)
       .filter((f) => (q ? true : inScope(f.folderId ?? null)))
@@ -959,7 +991,7 @@ export default function App() {
       )
       .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
       .sort(byPosition)
-  }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag, positionOverrides])
+  }, [files, activeFolderSubtree, includeSubfolders, activeFolderId, search, folderHitSubtree, activeTag, positionOverrides])
 
   // ---------- 统一列表手动排序（笔记与文件共用 position 数轴） ----------
   type OrderItem = { kind: 'note' | 'file'; id: string; position: number | null }
@@ -1507,7 +1539,7 @@ export default function App() {
           email={user.email ?? ''}
           collapsed={!sidebarOpen}
           folders={folders ?? []}
-          counts={subtreeCounts}
+          counts={includeSubfolders ? subtreeCounts : folderCounts}
           allCount={
             (notes ?? []).filter((n) => n.folderId === null).length +
             (files ?? []).filter((f) => f.folderId === null).length
@@ -1529,6 +1561,7 @@ export default function App() {
           theme={theme}
           onThemeChange={changeTheme}
           onSignOut={() => void signOut()}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <NoteList
           notes={visibleNotes}
@@ -1674,6 +1707,25 @@ export default function App() {
             : null
         }
         onClose={() => setNoteInfoTarget(null)}
+      />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        includeSubfolders={includeSubfolders}
+        onToggleIncludeSubfolders={handleToggleIncludeSubfolders}
+        toolbarHidden={toolbarHidden}
+        onToggleToolbarHidden={(hidden) => {
+          setToolbarHidden(hidden)
+          void savePrefs({ toolbarHidden: hidden, theme, includeSubfolders }).catch(() => {})
+        }}
+        readingMode={readingMode}
+        onToggleReadingMode={(rm) => {
+          setReadingMode(rm)
+          try {
+            localStorage.setItem(READING_MODE_KEY, String(rm))
+          } catch {}
+        }}
+        email={user?.email}
       />
       {/* 跟手拖影：被拖卡片的简化克隆（投影+微缩放），原位留空槽由 SortableCard 处理 */}
       <DragOverlay dropAnimation={isOverZone ? null : dropAnimationConfig}>

@@ -547,7 +547,9 @@ export function NoteList({
                           )}
                         </div>
                       )}
-                      {search.trim() && file.folderId && (
+                      {(search.trim() ||
+                        (currentFolderId && currentFolderId !== 'all' && file.folderId !== currentFolderId)) &&
+                        file.folderId && (
                         <span
                           className="note-card-loc"
                           title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
@@ -585,7 +587,9 @@ export function NoteList({
                   >
                     <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
                     {excerptFor(note)}
-                    {search.trim() && note.folderId && (
+                    {(search.trim() ||
+                      (currentFolderId && currentFolderId !== 'all' && note.folderId !== currentFolderId)) &&
+                      note.folderId && (
                       <span
                         className="note-card-loc"
                         title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}

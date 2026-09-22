@@ -13,6 +13,7 @@ export interface Prefs {
   theme: string
   tabs?: TabItem[]
   activeTabId?: string | null
+  includeSubfolders?: boolean
 }
 
 export async function loadPrefs(): Promise<Prefs> {
@@ -22,12 +23,14 @@ export async function loadPrefs(): Promise<Prefs> {
     theme?: string
     tabs?: TabItem[]
     activeTabId?: string | null
+    includeSubfolders?: boolean
   }
   return {
     toolbarHidden: !!p.toolbarHidden,
     theme: p.theme ?? '',
     tabs: Array.isArray(p.tabs) ? p.tabs : [],
     activeTabId: p.activeTabId ?? null,
+    includeSubfolders: p.includeSubfolders !== undefined ? !!p.includeSubfolders : false,
   }
 }
 
