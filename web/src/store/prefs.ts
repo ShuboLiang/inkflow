@@ -18,29 +18,26 @@ export interface Prefs {
 
 export async function loadPrefs(): Promise<Prefs> {
   const { data } = await supabase.from('user_prefs').select('prefs').maybeSingle()
-  const p = (data?.prefs ?? {}) as {
-    toolbarHidden?: boolean
-    theme?: string
-    tabs?: TabItem[]
-    activeTabId?: string | null
-    includeSubfolders?: boolean
-  }
+  const p = (data?.prefs ?? {}) as Partial<Prefs>
   return {
     toolbarHidden: !!p.toolbarHidden,
     theme: p.theme ?? '',
     tabs: Array.isArray(p.tabs) ? p.tabs : [],
     activeTabId: p.activeTabId ?? null,
-    includeSubfolders: p.includeSubfolders !== undefined ? !!p.includeSubfolders : false,
+    includeSubfolders: typeof p.includeSubfolders === 'boolean' ? p.includeSubfolders : undefined,
   }
 }
 
-export async function savePrefs(prefs: Prefs): Promise<void> {
+export async function savePrefs(patch: Partial<Prefs>): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return
+  const { data } = await supabase.from('user_prefs').select('prefs').maybeSingle()
+  const existing = (data?.prefs ?? {}) as Record<string, unknown>
+  const merged = { ...existing, ...patch }
   await supabase.from('user_prefs').upsert(
-    { user_id: user.id, prefs, updated_at: new Date().toISOString() },
+    { user_id: user.id, prefs: merged, updated_at: new Date().toISOString() },
     { onConflict: 'user_id' },
   )
 }

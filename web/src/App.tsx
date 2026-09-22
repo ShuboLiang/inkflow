@@ -310,7 +310,7 @@ export default function App() {
           setTheme(p.theme)
         }
         // 若云端包含子文件夹偏好设置，采用云端设置
-        if (p.includeSubfolders !== undefined) {
+        if (typeof p.includeSubfolders === 'boolean') {
           setIncludeSubfolders(p.includeSubfolders)
           try {
             localStorage.setItem('inkflow:prefs:includeSubfolders', String(p.includeSubfolders))
@@ -1185,13 +1185,14 @@ export default function App() {
         theme,
         tabs: validTabs,
         activeTabId,
+        includeSubfolders,
       }).catch(() => {})
     }, 600)
 
     return () => {
       if (savePrefsTimer.current) clearTimeout(savePrefsTimer.current)
     }
-  }, [user, restored, validTabs, activeId, activeFileId, toolbarHidden, theme])
+  }, [user, restored, validTabs, activeId, activeFileId, toolbarHidden, theme, includeSubfolders])
 
   // 监听浏览器前进/后退，无缝同步导航现场
   useEffect(() => {
