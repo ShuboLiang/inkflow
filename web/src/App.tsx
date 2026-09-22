@@ -420,6 +420,24 @@ export default function App() {
     return set
   }, [activeFolderId, folderChildren])
 
+  // 当开启包含子文件夹时，计算文件夹呈现排位：当前文件夹居首(0)，子孙文件夹按前序深度优先遍历各占一段(1, 2, 3...)
+  const folderGroupRanks = useMemo(() => {
+    if (activeFolderId === 'all' || activeFolderId === 'trash' || !includeSubfolders) return null
+    const ranks = new Map<string, number>()
+    ranks.set(activeFolderId, 0)
+    let seq = 0
+    const walk = (id: string) => {
+      for (const ch of folderChildren.get(id) ?? []) {
+        ranks.set(ch.id, ++seq)
+        walk(ch.id)
+      }
+    }
+    walk(activeFolderId)
+    return ranks
+  }, [activeFolderId, includeSubfolders, folderChildren])
+
+  const isGroupedByFolder = folderGroupRanks !== null && !search.trim() && !activeTag
+
   // 搜索命中文件夹名时，其整棵子树的内容也进结果；命中的文件夹单独列出供点击跳转
   const folderHitSubtree = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -528,16 +546,23 @@ export default function App() {
           (n.folderId !== null && folderHitSubtree !== null && folderHitSubtree.has(n.folderId)),
       )
     }
-    // 统一列表排序：position 升序（默认=创建时间新→旧的初始化顺序，拖拽过的固定不动）；
-    // 无 position 的兜底排后。文件夹/标签视图沿用同一相对顺序
+    // 统一列表排序：
+    // 若处于按文件夹轻量分组模式，首先按文件夹层级分组，组内按 position 排序；
+    // 无 position 的兜底排后。
     return [...scoped]
       .map((n) => (positionOverrides[n.id] !== undefined ? { ...n, position: positionOverrides[n.id] } : n))
-      .sort(
-        (a, b) =>
+      .sort((a, b) => {
+        if (isGroupedByFolder && folderGroupRanks) {
+          const rankA = folderGroupRanks.get(a.folderId ?? '') ?? 999999
+          const rankB = folderGroupRanks.get(b.folderId ?? '') ?? 999999
+          if (rankA !== rankB) return rankA - rankB
+        }
+        return (
           (a.position ?? Infinity) - (b.position ?? Infinity) ||
-          (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
-      )
-  }, [activeFolderId, deletedNotes, notes, search, activeFolderSubtree, includeSubfolders, activeTag, folderHitSubtree, positionOverrides])
+          (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt)
+        )
+      })
+  }, [activeFolderId, deletedNotes, notes, search, activeFolderSubtree, includeSubfolders, activeTag, folderHitSubtree, positionOverrides, isGroupedByFolder, folderGroupRanks])
 
   const active =
     (notes?.find((n) => n.id === activeId) ?? deletedNotes?.find((n) => n.id === activeId)) ?? null
@@ -1210,10 +1235,19 @@ export default function App() {
   // 标签视图 = 全库范围内挂了该标签的文件（与笔记共用标签命名空间）
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
-    // 统一列表排序：position 升序（与笔记同一数轴），无 position 的按创建时间兜底排后
-    const byPosition = (a: FileEntry, b: FileEntry) =>
-      (a.position ?? Infinity) - (b.position ?? Infinity) ||
-      (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt)
+    // 统一列表排序：
+    // 若处于按文件夹轻量分组模式，首先按文件夹层级分组，组内按 position 排序
+    const byPosition = (a: FileEntry, b: FileEntry) => {
+      if (isGroupedByFolder && folderGroupRanks) {
+        const rankA = folderGroupRanks.get(a.folderId ?? '') ?? 999999
+        const rankB = folderGroupRanks.get(b.folderId ?? '') ?? 999999
+        if (rankA !== rankB) return rankA - rankB
+      }
+      return (
+        (a.position ?? Infinity) - (b.position ?? Infinity) ||
+        (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt)
+      )
+    }
     if (activeFolderId === 'trash') {
       const all = deletedFiles ?? []
       if (!q) return all
@@ -1241,20 +1275,27 @@ export default function App() {
       )
       .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
       .sort(byPosition)
-  }, [files, deletedFiles, activeFolderId, activeFolderSubtree, includeSubfolders, search, folderHitSubtree, activeTag, positionOverrides])
+  }, [files, deletedFiles, activeFolderId, activeFolderSubtree, includeSubfolders, search, folderHitSubtree, activeTag, positionOverrides, isGroupedByFolder, folderGroupRanks])
 
   // ---------- 统一列表手动排序（笔记与文件共用 position 数轴） ----------
-  type OrderItem = { kind: 'note' | 'file'; id: string; position: number | null }
+  type OrderItem = { kind: 'note' | 'file'; id: string; folderId: string | null; position: number | null }
 
-  // 当前可见顺序：笔记与文件按 position 合并（与列表渲染一致）
-  const visibleOrder: OrderItem[] = useMemo(
-    () =>
-      [
-        ...visibleNotes.map((n) => ({ kind: 'note' as const, id: n.id, position: n.position })),
-        ...filesInView.map((f) => ({ kind: 'file' as const, id: f.id, position: f.position })),
-      ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity)),
-    [visibleNotes, filesInView],
-  )
+  // 当前可见顺序：笔记与文件按分组与 position 合并（与列表渲染一致）
+  const visibleOrder: OrderItem[] = useMemo(() => {
+    const items: OrderItem[] = [
+      ...visibleNotes.map((n) => ({ kind: 'note' as const, id: n.id, folderId: n.folderId, position: n.position })),
+      ...filesInView.map((f) => ({ kind: 'file' as const, id: f.id, folderId: f.folderId, position: f.position })),
+    ]
+    if (isGroupedByFolder && folderGroupRanks) {
+      return items.sort((a, b) => {
+        const rankA = folderGroupRanks.get(a.folderId ?? '') ?? 999999
+        const rankB = folderGroupRanks.get(b.folderId ?? '') ?? 999999
+        if (rankA !== rankB) return rankA - rankB
+        return (a.position ?? Infinity) - (b.position ?? Infinity)
+      })
+    }
+    return items.sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
+  }, [visibleNotes, filesInView, isGroupedByFolder, folderGroupRanks])
 
   // 全量重整：按给定完整顺序等距重编（跨两张表），只写有变化的行
   const applyManualOrder = async (ordered: OrderItem[]) => {
@@ -1290,7 +1331,20 @@ export default function App() {
     place: 'before' | 'after',
   ) => {
     if (dragged.id === target.id) return
-    const order = visibleOrder.filter((it) => it.id !== dragged.id)
+    const draggedItem = visibleOrder.find((it) => it.id === dragged.id)
+    const targetItem = visibleOrder.find((it) => it.id === target.id)
+    if (!draggedItem || !targetItem) return
+
+    // 分组视图下跨文件夹拖拽卡片：忽略，防止打乱各自文件夹的排列
+    if (isGroupedByFolder && draggedItem.folderId !== targetItem.folderId) {
+      return
+    }
+
+    const orderScope = isGroupedByFolder
+      ? visibleOrder.filter((it) => it.folderId === draggedItem.folderId)
+      : visibleOrder
+
+    const order = orderScope.filter((it) => it.id !== dragged.id)
     const idx = order.findIndex((it) => it.id === target.id)
     if (idx < 0) return
     const insertAt = place === 'before' ? idx : idx + 1
@@ -1298,21 +1352,30 @@ export default function App() {
     const nextPos = order[insertAt]?.position ?? null
 
     if (prevPos !== null && nextPos !== null && nextPos - prevPos < 1) {
-      // 中点精度耗尽：全局按现有顺序重整为等距序列，拖拽项落进目标位
-      const all: OrderItem[] = [
-        ...(notes ?? [])
-          .filter((n) => n.deletedAt === null)
-          .map((n) => ({ kind: 'note' as const, id: n.id, position: n.position })),
-        ...(files ?? [])
-          .filter((f) => f.deletedAt === null)
-          .map((f) => ({ kind: 'file' as const, id: f.id, position: f.position })),
-      ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
-      const draggedItem = all.find((it) => it.id === dragged.id)
+      // 中点精度耗尽：在当前同文件夹作用域内按现有顺序重整为等距序列
+      const all: OrderItem[] = isGroupedByFolder
+        ? [
+            ...(notes ?? [])
+              .filter((n) => n.deletedAt === null && n.folderId === draggedItem.folderId)
+              .map((n) => ({ kind: 'note' as const, id: n.id, folderId: n.folderId, position: n.position })),
+            ...(files ?? [])
+              .filter((f) => f.deletedAt === null && f.folderId === draggedItem.folderId)
+              .map((f) => ({ kind: 'file' as const, id: f.id, folderId: f.folderId, position: f.position })),
+          ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
+        : [
+            ...(notes ?? [])
+              .filter((n) => n.deletedAt === null)
+              .map((n) => ({ kind: 'note' as const, id: n.id, folderId: n.folderId, position: n.position })),
+            ...(files ?? [])
+              .filter((f) => f.deletedAt === null)
+              .map((f) => ({ kind: 'file' as const, id: f.id, folderId: f.folderId, position: f.position })),
+          ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
+      const draggedFull = all.find((it) => it.id === dragged.id)
       const rest = all.filter((it) => it.id !== dragged.id)
       const fullIdx = rest.findIndex((it) => it.id === target.id)
-      if (draggedItem && fullIdx >= 0) {
+      if (draggedFull && fullIdx >= 0) {
         const at = place === 'before' ? fullIdx : fullIdx + 1
-        void applyManualOrder([...rest.slice(0, at), draggedItem, ...rest.slice(at)])
+        void applyManualOrder([...rest.slice(0, at), draggedFull, ...rest.slice(at)])
       }
       return
     }
@@ -1328,15 +1391,25 @@ export default function App() {
 
   // 长按菜单「上移/下移」：与相邻项换位（跨类型也生效，如文件移到笔记前）
   const handleMoveStep = (kind: 'note' | 'file', id: string, dir: -1 | 1) => {
-    const idx = visibleOrder.findIndex((it) => it.id === id)
-    const target = visibleOrder[idx + dir]
+    const current = visibleOrder.find((it) => it.id === id)
+    if (!current) return
+    const scope = isGroupedByFolder
+      ? visibleOrder.filter((it) => it.folderId === current.folderId)
+      : visibleOrder
+    const idx = scope.findIndex((it) => it.id === id)
+    const target = scope[idx + dir]
     if (idx < 0 || !target) return
     handleReorderItem({ kind, id }, { kind: target.kind, id: target.id }, dir < 0 ? 'before' : 'after')
   }
 
   // 菜单「移到顶部/底部」：挪到首/尾邻居旁
   const handleMoveEdge = (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => {
-    const rest = visibleOrder.filter((it) => it.id !== id)
+    const current = visibleOrder.find((it) => it.id === id)
+    if (!current) return
+    const scope = isGroupedByFolder
+      ? visibleOrder.filter((it) => it.folderId === current.folderId)
+      : visibleOrder
+    const rest = scope.filter((it) => it.id !== id)
     if (!rest.length) return
     if (edge === 'top') {
       const first = rest[0]
@@ -1972,6 +2045,7 @@ export default function App() {
           folderHits={activeFolderId === 'trash' ? [] : folderHits}
           activeId={activeId}
           currentFolderId={activeFolderId}
+          isGrouped={isGroupedByFolder}
           search={search}
           userId={user.id}
           onSearch={handleSearch}
