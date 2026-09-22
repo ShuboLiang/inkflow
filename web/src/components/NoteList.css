@@ -11,6 +11,121 @@
   transition: width 0.2s ease, opacity 0.2s ease;
 }
 
+/* 回收站头部 */
+.trash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink-200);
+  background: var(--surface);
+}
+
+.trash-header-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.trash-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.trash-header-count {
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.trash-empty-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: #e03131;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.trash-empty-btn:hover {
+  background: #fff5f5;
+  border-color: #ffa8a8;
+}
+
+/* 回收站卡片类型标签与快捷操作 */
+.trash-type-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--ink-100);
+  color: var(--ink-600);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.trash-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--ink-100);
+  font-size: 11px;
+}
+
+.trash-orig-loc {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.trash-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.trash-card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: var(--ink-700);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.trash-card-action-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+.trash-card-action-btn.danger {
+  color: var(--ink-500);
+}
+
+.trash-card-action-btn.danger:hover {
+  background: #fff5f5;
+  color: #e03131;
+  border-color: #ffa8a8;
+}
+
 .note-list-search {
   display: flex;
   align-items: center;

@@ -1,4 +1,5 @@
 import { db, type Note } from '../lib/db'
+import { supabase } from '../lib/supabase'
 import { imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from './images'
 
 export async function listNotes(): Promise<Note[]> {
@@ -88,6 +89,33 @@ export async function softDeleteNote(id: string): Promise<void> {
     dirty: 1,
     updatedAt: Date.now(),
   })
-  // 笔记删除后它的图片不再被引用，清理（其他笔记共用的图会被引用检查保住）
-  void removeImagesIfUnreferenced(imagePathsOf(noteImageSrcs(existing.content)))
+}
+
+// 从回收站恢复笔记
+export async function restoreNote(id: string): Promise<void> {
+  const existing = await db.notes.get(id)
+  if (!existing) return
+  let folderId = existing.folderId
+  if (folderId) {
+    const f = await db.folders.get(folderId)
+    if (!f || f.deletedAt) folderId = null
+  }
+  await db.notes.update(id, {
+    deletedAt: null,
+    folderId,
+    version: existing.version + 1,
+    dirty: 1,
+    updatedAt: Date.now(),
+  })
+}
+
+// 从回收站永久删除笔记（物理清理本地、云端及图片）
+export async function permanentlyDeleteNote(id: string): Promise<void> {
+  const existing = await db.notes.get(id)
+  if (existing) {
+    void removeImagesIfUnreferenced(imagePathsOf(noteImageSrcs(existing.content)))
+  }
+  await db.notes.delete(id)
+  const { error } = await supabase.from('notes').delete().eq('id', id)
+  if (error) console.error('permanently delete note from server failed', error)
 }

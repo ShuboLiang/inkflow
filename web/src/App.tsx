@@ -38,10 +38,20 @@ import { Sidebar } from './components/Sidebar'
 import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
-import { createNote, softDeleteNote, updateNote } from './store/notes'
+import { createNote, permanentlyDeleteNote, restoreNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { acquireFileUrl, deleteFile, moveFile, renameFile, saveFile, setFilePosition, setFileTags } from './store/files'
+import {
+  acquireFileUrl,
+  deleteFile,
+  moveFile,
+  permanentlyDeleteFile,
+  renameFile,
+  restoreFile,
+  saveFile,
+  setFilePosition,
+  setFileTags,
+} from './store/files'
 import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
@@ -68,6 +78,7 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
+  RotateCcw,
   Edit3,
   BookOpen,
   FileText,
@@ -257,8 +268,13 @@ export default function App() {
     return all.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
   }, [])
 
-  const files = useLiveQuery(() => db.files.toArray(), [])
-  const activeFile = files?.find((f) => f.id === activeFileId) ?? null
+  const files = useLiveQuery(() => db.files.filter((f) => f.deletedAt === null).toArray(), [])
+  const deletedNotes = useLiveQuery(() => db.notes.filter((n) => n.deletedAt !== null).toArray(), [])
+  const deletedFiles = useLiveQuery(() => db.files.filter((f) => f.deletedAt !== null).toArray(), [])
+  const trashCount = (deletedNotes?.length ?? 0) + (deletedFiles?.length ?? 0)
+  const activeFile =
+    (files?.find((f) => f.id === activeFileId) ?? deletedFiles?.find((f) => f.id === activeFileId)) ?? null
+  const isTrashFile = activeFile?.deletedAt != null
 
   const folderCounts = useMemo(() => {
     const m = new Map<string, number>()
@@ -392,6 +408,16 @@ export default function App() {
   }
 
   const visibleNotes = useMemo(() => {
+    if (activeFolderId === 'trash') {
+      const all = deletedNotes ?? []
+      const q = search.trim().toLowerCase()
+      if (!q) return all
+      return all.filter(
+        (n) =>
+          n.title.toLowerCase().includes(q) ||
+          plainTextOf(n.content).toLowerCase().includes(q),
+      )
+    }
     const all = notes ?? []
     const q = search.trim().toLowerCase()
     // 「默认」= 未归入任何文件夹的笔记；文件夹视图 = 根据 includeSubfolders 决定是仅直接归属还是整棵子树
@@ -420,9 +446,11 @@ export default function App() {
           (a.position ?? Infinity) - (b.position ?? Infinity) ||
           (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
       )
-  }, [notes, search, activeFolderSubtree, includeSubfolders, activeFolderId, activeTag, folderHitSubtree, positionOverrides])
+  }, [activeFolderId, deletedNotes, notes, search, activeFolderSubtree, includeSubfolders, activeTag, folderHitSubtree, positionOverrides])
 
-  const active = notes?.find((n) => n.id === activeId) ?? null
+  const active =
+    (notes?.find((n) => n.id === activeId) ?? deletedNotes?.find((n) => n.id === activeId)) ?? null
+  const isTrashNote = active?.deletedAt != null
 
   useEffect(() => {
     setActiveEdit(activeId)
@@ -863,17 +891,23 @@ export default function App() {
   const activeFileUrl = fileUrlState.id === activeFileId ? fileUrlState.url : null
   const fileLoadError = fileUrlState.id === activeFileId ? fileUrlState.error : false
 
-  // 过滤掉已被删除或不存在的笔记/文件标签项
+  // 过滤掉已被彻底删除或不存在的笔记/文件标签项（在回收站中的保留有效）
   const validTabs = useMemo(() => {
     if (!notes && !files) return tabs
     return tabs.filter((t) => {
       if (t.kind === 'note') {
-        return !notes || notes.some((x) => x.id === t.id && x.deletedAt === null)
+        return (
+          (!notes || notes.some((x) => x.id === t.id && x.deletedAt === null)) ||
+          Boolean(deletedNotes?.some((x) => x.id === t.id))
+        )
       } else {
-        return !files || files.some((x) => x.id === t.id && !x.deletedAt)
+        return (
+          (!files || files.some((x) => x.id === t.id && !x.deletedAt)) ||
+          Boolean(deletedFiles?.some((x) => x.id === t.id))
+        )
       }
     })
-  }, [tabs, notes, files])
+  }, [tabs, notes, files, deletedNotes, deletedFiles])
 
   // 启动时恢复上次打开的标签页（localStorage + Dexie 都是渲染期外部数据，
   // 用「渲染期调整状态」模式一次性恢复，避免 effect 里 setState 触发额外渲染）
@@ -961,6 +995,7 @@ export default function App() {
   }, [user, restored, validTabs, activeId, activeFileId, toolbarHidden, theme])
 
   // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
+  // 回收站视图 = 已删除的文件；
   // 有搜索词时跨全部范围：文件名命中，或所属文件夹（含子树）名命中；
   // 标签视图 = 全库范围内挂了该标签的文件（与笔记共用标签命名空间）
   const filesInView = useMemo(() => {
@@ -969,6 +1004,11 @@ export default function App() {
     const byPosition = (a: FileEntry, b: FileEntry) =>
       (a.position ?? Infinity) - (b.position ?? Infinity) ||
       (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt)
+    if (activeFolderId === 'trash') {
+      const all = deletedFiles ?? []
+      if (!q) return all
+      return all.filter((f) => f.filename.toLowerCase().includes(q))
+    }
     if (activeTag) {
       return (files ?? [])
         .filter((f) => !f.deletedAt && (f.tags ?? []).includes(activeTag))
@@ -991,7 +1031,7 @@ export default function App() {
       )
       .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
       .sort(byPosition)
-  }, [files, activeFolderSubtree, includeSubfolders, activeFolderId, search, folderHitSubtree, activeTag, positionOverrides])
+  }, [files, deletedFiles, activeFolderId, activeFolderSubtree, includeSubfolders, search, folderHitSubtree, activeTag, positionOverrides])
 
   // ---------- 统一列表手动排序（笔记与文件共用 position 数轴） ----------
   type OrderItem = { kind: 'note' | 'file'; id: string; position: number | null }
@@ -1155,6 +1195,18 @@ export default function App() {
       } else if (zoneId === 'zone:all') {
         if (info.kind === 'note') handleDropNote(info.id, null)
         else handleDropFile(info.id, null)
+      } else if (zoneId === 'zone:trash') {
+        if (info.kind === 'note') {
+          void softDeleteNote(info.id).then(() => {
+            requestPush()
+            handleCloseTab(info.id)
+          })
+        } else {
+          void deleteFile(info.id).then(() => {
+            requestPush()
+            handleCloseTab(info.id)
+          })
+        }
       } else if (zoneId.startsWith('tag-zone:')) {
         const tag = zoneId.slice('tag-zone:'.length)
         if (info.kind === 'note') {
@@ -1257,7 +1309,68 @@ export default function App() {
     if (!ok) return
     const delId = activeFile.id
     await deleteFile(delId)
+    requestPush()
     handleCloseTab(delId)
+    setMobileView('list')
+  }
+
+  const handleRestoreNote = async (id: string) => {
+    await restoreNote(id)
+    requestPush()
+  }
+
+  const handlePermanentlyDeleteNote = async (id: string) => {
+    const note = (notes ?? []).concat(deletedNotes ?? []).find((n) => n.id === id)
+    const ok = await confirmDialog({
+      title: '彻底删除笔记',
+      message: `彻底删除笔记「${note?.title || '无标题'}」？此操作无法撤销。`,
+      confirmText: '彻底删除',
+      danger: true,
+    })
+    if (!ok) return
+    handleCloseTab(id)
+    await permanentlyDeleteNote(id)
+    requestPush()
+  }
+
+  const handleRestoreFile = async (id: string) => {
+    await restoreFile(id)
+    requestPush()
+  }
+
+  const handlePermanentlyDeleteFile = async (id: string) => {
+    const file = (files ?? []).concat(deletedFiles ?? []).find((f) => f.id === id)
+    const ok = await confirmDialog({
+      title: '彻底删除文件',
+      message: `彻底删除文件「${file?.filename ?? ''}」？此操作无法撤销。`,
+      confirmText: '彻底删除',
+      danger: true,
+    })
+    if (!ok) return
+    handleCloseTab(id)
+    await permanentlyDeleteFile(id)
+    requestPush()
+  }
+
+  const handleEmptyTrash = async () => {
+    const total = (deletedNotes?.length ?? 0) + (deletedFiles?.length ?? 0)
+    if (total === 0) return
+    const ok = await confirmDialog({
+      title: '清空回收站',
+      message: `确定要清空回收站吗？将彻底删除 ${total} 个项目，此操作无法撤销。`,
+      confirmText: '清空',
+      danger: true,
+    })
+    if (!ok) return
+    for (const n of deletedNotes ?? []) {
+      handleCloseTab(n.id)
+      await permanentlyDeleteNote(n.id)
+    }
+    for (const f of deletedFiles ?? []) {
+      handleCloseTab(f.id)
+      await permanentlyDeleteFile(f.id)
+    }
+    requestPush()
   }
 
   const [isExportingImage, setIsExportingImage] = useState(false)
@@ -1389,16 +1502,18 @@ export default function App() {
           <span className="app-topbar-mobile-title">
             {activeTag
               ? `# ${activeTag}`
-              : activeFolderId === 'all'
-                ? '默认'
-                : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
+              : activeFolderId === 'trash'
+                ? '回收站'
+                : activeFolderId === 'all'
+                  ? '默认'
+                  : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
           </span>
           {validTabs.length > 0 ? (
             <TabBar
               tabs={validTabs}
               activeTabId={activeFileId || activeId}
-              notes={notes}
-              files={files}
+              notes={[...(notes ?? []), ...(deletedNotes ?? [])]}
+              files={[...(files ?? []), ...(deletedFiles ?? [])]}
               onSelectTab={handleSelectTab}
               onCloseTab={handleCloseTab}
               onCloseOtherTabs={handleCloseOtherTabs}
@@ -1410,107 +1525,177 @@ export default function App() {
               <span className="app-view-title">
                 {activeTag
                   ? `# ${activeTag}`
-                  : activeFolderId === 'all'
-                    ? '默认'
-                    : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
+                  : activeFolderId === 'trash'
+                    ? '回收站'
+                    : activeFolderId === 'all'
+                      ? '默认'
+                      : (folderPathNames(activeFolderId, folders ?? []) ?? '默认')}
               </span>
-              <button
-                type="button"
-                className="tab-new-btn"
-                title="新建笔记"
-                onClick={() => void handleCreate()}
-              >
-                <Plus size={14} />
-              </button>
+              {activeFolderId !== 'trash' && (
+                <button
+                  type="button"
+                  className="tab-new-btn"
+                  title="新建笔记"
+                  onClick={() => void handleCreate()}
+                >
+                  <Plus size={14} />
+                </button>
+              )}
             </div>
           )}
         </div>
 
         <div className="app-topbar-right">
           {activeFile ? (
-            <>
-              <TagPicker
-                tags={activeFile.tags ?? []}
-                suggestions={[...tagCounts.keys()]}
-                onChange={handleFileTagsChange}
-              />
-              <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
-              {activeFileUrl && (
-                <a
-                  className="tool-btn"
-                  href={activeFileUrl}
-                  download={fileDownloadName(activeFile)}
-                  title="下载"
-                >
-                  <Download size={14} />
-                  <span>下载</span>
-                </a>
-              )}
-              <button
-                type="button"
-                className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
-                title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
-                aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
-                aria-pressed={isContentFullScreen}
-                onClick={toggleFullscreen}
-              >
-                {isContentFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
-              </button>
-              <button
-                type="button"
-                className="tool-btn danger"
-                title="删除"
-                onClick={() => void handleDeleteFile()}
-              >
-                <Trash2 size={14} />
-                <span>删除</span>
-              </button>
-            </>
-          ) : active ? (
-            <>
-              <button
-                type="button"
-                className={readingMode ? 'tool-btn active-tool' : 'tool-btn'}
-                title={readingMode ? '切换为编辑模式 (Ctrl+E)' : '切换为阅读模式 (Ctrl+E)'}
-                aria-label={readingMode ? '切换为编辑模式' : '切换为阅读模式'}
-                aria-pressed={readingMode}
-                onClick={toggleReadingMode}
-              >
-                {readingMode ? <Edit3 size={14} /> : <BookOpen size={14} />}
-                <span>{readingMode ? '编辑' : '阅读'}</span>
-              </button>
-              {readingMode ? null : (
+            isTrashFile ? (
+              <>
+                {activeFileUrl && (
+                  <a
+                    className="tool-btn"
+                    href={activeFileUrl}
+                    download={fileDownloadName(activeFile)}
+                    title="下载"
+                  >
+                    <Download size={14} />
+                    <span>下载</span>
+                  </a>
+                )}
                 <button
                   type="button"
-                  className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
-                  title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                  aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
-                  aria-pressed={toolbarHidden}
-                  onClick={toggleToolbar}
+                  className="tool-btn"
+                  title="恢复文件"
+                  onClick={() => void handleRestoreFile(activeFile.id)}
                 >
-                  Aa
+                  <RotateCcw size={14} />
+                  <span>恢复</span>
                 </button>
-              )}
-              <TagPicker
-                tags={active.tags ?? []}
-                suggestions={[...tagCounts.keys()]}
-                onChange={handleNoteTagsChange}
-              />
-              <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
-              <NoteMoreMenu
-                onExportMarkdown={handleExportMarkdown}
-                onExportPdf={handleExportPdf}
-                onExportImage={() => void handleExportImage()}
-                isFullScreen={isContentFullScreen}
-                onToggleFullscreen={toggleFullscreen}
-                onDeleteNote={() => void handleDelete()}
-                isExportingImage={isExportingImage}
-                readingMode={readingMode}
-                onToggleReadingMode={toggleReadingMode}
-                onOpenInfo={() => setNoteInfoTarget(active)}
-              />
-            </>
+                <button
+                  type="button"
+                  className="tool-btn danger"
+                  title="彻底删除"
+                  onClick={() => void handlePermanentlyDeleteFile(activeFile.id)}
+                >
+                  <Trash2 size={14} />
+                  <span>彻底删除</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <TagPicker
+                  tags={activeFile.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleFileTagsChange}
+                />
+                <ShareMenu userId={user.id} target={{ kind: 'file', fileId: activeFile.id }} />
+                {activeFileUrl && (
+                  <a
+                    className="tool-btn"
+                    href={activeFileUrl}
+                    download={fileDownloadName(activeFile)}
+                    title="下载"
+                  >
+                    <Download size={14} />
+                    <span>下载</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className={isContentFullScreen ? 'tool-btn active-tool fullscreen-toggle' : 'tool-btn fullscreen-toggle'}
+                  title={isContentFullScreen ? '退出全屏 (展开侧栏) (Esc)' : '全屏显示 (折叠侧栏) (Ctrl+\\)'}
+                  aria-label={isContentFullScreen ? '退出全屏' : '全屏显示'}
+                  aria-pressed={isContentFullScreen}
+                  onClick={toggleFullscreen}
+                >
+                  {isContentFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                  <span>{isContentFullScreen ? '退出全屏' : '全屏'}</span>
+                </button>
+                <button
+                  type="button"
+                  className="tool-btn danger"
+                  title="删除"
+                  onClick={() => void handleDeleteFile()}
+                >
+                  <Trash2 size={14} />
+                  <span>删除</span>
+                </button>
+              </>
+            )
+          ) : active ? (
+            isTrashNote ? (
+              <>
+                <button
+                  type="button"
+                  className="tool-btn"
+                  title="恢复笔记"
+                  onClick={() => void handleRestoreNote(active.id)}
+                >
+                  <RotateCcw size={14} />
+                  <span>恢复</span>
+                </button>
+                <button
+                  type="button"
+                  className="tool-btn danger"
+                  title="彻底删除"
+                  onClick={() => void handlePermanentlyDeleteNote(active.id)}
+                >
+                  <Trash2 size={14} />
+                  <span>彻底删除</span>
+                </button>
+                <button
+                  type="button"
+                  className="tool-btn"
+                  title="查看笔记信息"
+                  onClick={() => setNoteInfoTarget(active)}
+                >
+                  <Info size={14} />
+                  <span>信息</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={readingMode ? 'tool-btn active-tool' : 'tool-btn'}
+                  title={readingMode ? '切换为编辑模式 (Ctrl+E)' : '切换为阅读模式 (Ctrl+E)'}
+                  aria-label={readingMode ? '切换为编辑模式' : '切换为阅读模式'}
+                  aria-pressed={readingMode}
+                  onClick={toggleReadingMode}
+                >
+                  {readingMode ? <Edit3 size={14} /> : <BookOpen size={14} />}
+                  <span>{readingMode ? '编辑' : '阅读'}</span>
+                </button>
+                {readingMode ? null : (
+                  <button
+                    type="button"
+                    className={toolbarHidden ? 'tool-btn active-tool' : 'tool-btn'}
+                    title={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                    aria-label={toolbarHidden ? '显示格式栏' : '隐藏格式栏'}
+                    aria-pressed={toolbarHidden}
+                    onClick={toggleToolbar}
+                  >
+                    Aa
+                  </button>
+                )}
+                <TagPicker
+                  tags={active.tags ?? []}
+                  suggestions={[...tagCounts.keys()]}
+                  onChange={handleNoteTagsChange}
+                />
+                <ShareMenu userId={user.id} target={{ kind: 'note', noteId: active.id }} />
+                <NoteMoreMenu
+                  onExportMarkdown={handleExportMarkdown}
+                  onExportPdf={handleExportPdf}
+                  onExportImage={() => void handleExportImage()}
+                  isFullScreen={isContentFullScreen}
+                  onToggleFullscreen={toggleFullscreen}
+                  onDeleteNote={() => void handleDelete()}
+                  isExportingImage={isExportingImage}
+                  readingMode={readingMode}
+                  onToggleReadingMode={toggleReadingMode}
+                  onOpenInfo={() => setNoteInfoTarget(active)}
+                />
+              </>
+            )
           ) : null}
           <SyncIndicator status={syncStatus} />
         </div>
@@ -1547,6 +1732,7 @@ export default function App() {
           tags={tagCounts}
           activeFolderId={activeFolderId}
           activeTag={activeTag}
+          trashCount={trashCount}
           onSelectFolder={handleSelectFolder}
           onCreateFolder={(name, parentId) => void handleCreateFolder(name, parentId)}
           onRenameFolder={(id, name) => void handleRenameFolder(id, name)}
@@ -1567,7 +1753,7 @@ export default function App() {
           notes={visibleNotes}
           files={filesInView}
           folders={folders ?? []}
-          folderHits={folderHits}
+          folderHits={activeFolderId === 'trash' ? [] : folderHits}
           activeId={activeId}
           currentFolderId={activeFolderId}
           search={search}
@@ -1590,7 +1776,19 @@ export default function App() {
           onMoveStep={handleMoveStep}
           onMoveEdge={handleMoveEdge}
           onShowNoteInfo={(note) => setNoteInfoTarget(note)}
-          emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
+          emptyHint={
+            activeFolderId === 'trash'
+              ? '回收站是空的'
+              : activeFolderId === 'all'
+                ? '暂无内容'
+                : '此文件夹还没有内容'
+          }
+          isTrash={activeFolderId === 'trash'}
+          onRestoreNote={handleRestoreNote}
+          onPermanentlyDeleteNote={handlePermanentlyDeleteNote}
+          onRestoreFile={handleRestoreFile}
+          onPermanentlyDeleteFile={handlePermanentlyDeleteFile}
+          onEmptyTrash={handleEmptyTrash}
         />
         <main
           className="editor-pane"
@@ -1604,6 +1802,37 @@ export default function App() {
             for (const f of Array.from(e.dataTransfer.files)) void handleUpload(f)
           }}
         >
+          {(isTrashNote || isTrashFile) && (
+            <div className="trash-banner">
+              <div className="trash-banner-text">
+                <span>此{isTrashNote ? '笔记' : '文件'}已在回收站中</span>
+              </div>
+              <div className="trash-banner-actions">
+                <button
+                  type="button"
+                  className="trash-banner-btn restore"
+                  onClick={() => {
+                    if (isTrashNote && active) void handleRestoreNote(active.id)
+                    else if (isTrashFile && activeFile) void handleRestoreFile(activeFile.id)
+                  }}
+                >
+                  <RotateCcw size={13} />
+                  <span>恢复</span>
+                </button>
+                <button
+                  type="button"
+                  className="trash-banner-btn delete"
+                  onClick={() => {
+                    if (isTrashNote && active) void handlePermanentlyDeleteNote(active.id)
+                    else if (isTrashFile && activeFile) void handlePermanentlyDeleteFile(activeFile.id)
+                  }}
+                >
+                  <Trash2 size={13} />
+                  <span>彻底删除</span>
+                </button>
+              </div>
+            </div>
+          )}
           {activeFile ? (
             <div className="file-view">
               {activeFileUrl ? (
@@ -1624,11 +1853,12 @@ export default function App() {
             <>
               <div className="editor-scroll">
                 <div className="editor-head">
-                  {readingMode ? (
+                  {readingMode || isTrashNote ? (
                     <h1
                       className={`editor-title-static ${!active.title?.trim() ? 'untitled' : ''}`}
-                      title="双击进入编辑模式"
+                      title={isTrashNote ? undefined : '双击进入编辑模式'}
                       onDoubleClick={() => {
+                        if (isTrashNote) return
                         toggleReadingMode()
                         setTimeout(() => {
                           titleRef.current?.focus()
@@ -1671,7 +1901,7 @@ export default function App() {
                     content={active.content}
                     onUpdate={(content) => scheduleSave(active.id, { content })}
                     toolbarHidden={toolbarHidden}
-                    readOnly={readingMode}
+                    readOnly={readingMode || isTrashNote}
                   />
                 </EditorBoundary>
               </div>

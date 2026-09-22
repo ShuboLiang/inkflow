@@ -273,38 +273,11 @@ export const syncEngine = {
       pushed++
     }
 
-    // 文件：先按需把本地内容上传到 Storage，再同步元数据行；软删除则删对象+删行
+    // 文件：先按需把本地内容上传到 Storage，再同步元数据行（软删除仅同步 deleted_at 元数据，保留在回收站）
     const dirtyFiles = await db.files.where('dirty').equals(1).toArray()
     for (const snapshot of dirtyFiles) {
       const file = await db.files.get(snapshot.id)
       if (!file || file.dirty === 0) continue
-
-      if (file.deletedAt) {
-        if (file.storagePath) {
-          const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
-          if (rmErr) console.error('remove storage object failed', rmErr)
-        }
-        // 清理引用此文件的分享（公共桶对象 + shares 行）
-        const { data: shares, error: shareErr } = await supabase
-          .from('shares')
-          .select('token')
-          .eq('file_id', file.id)
-        if (shareErr) console.error('select shares failed', shareErr)
-        const tokens = (shares ?? []).map((s) => s.token as string)
-        if (tokens.length) {
-          const { error: rmShareErr } = await supabase.storage.from('shares').remove(tokens)
-          if (rmShareErr) console.error('remove share objects failed', rmShareErr)
-          const { error: delShareErr } = await supabase.from('shares').delete().eq('file_id', file.id)
-          if (delShareErr) console.error('delete shares failed', delShareErr)
-        }
-        // 关键修复：以软删除方式将带有 deleted_at 和最新 updated_at 的元数据 upsert 到 files 表，保留墓碑供其他端消费
-        const { error } = await supabase.from('files').upsert(fileToRow(file, userId))
-        if (error) throw error
-        await db.files.delete(file.id)
-        revokeFileUrl(file.id)
-        pushed++
-        continue
-      }
 
       if (file.dataUrl && !file.storagePath) {
         const path = `${userId}/${file.id}`
@@ -319,14 +292,13 @@ export const syncEngine = {
         file.storagePath = path
       }
 
-      const { data: server, error: readErr } = await supabase
+      const { data: server } = await supabase
         .from('files')
         .select('*')
         .eq('id', file.id)
         .maybeSingle()
-      if (readErr) throw readErr
-      // 本地只有元数据（内容尚未下载）时，沿用服务器上的 storage_path，别把 null 覆盖上去
-      if (!file.storagePath && server?.storage_path) {
+
+      if (server) {
         file.storagePath = (server as FileRow).storage_path
       }
       if (
@@ -365,16 +337,6 @@ export const syncEngine = {
       const local = await db.notes.get(row.id)
       if (local?.dirty === 1) continue
       if (local && local.version === row.version) continue
-      if (row.deleted_at) {
-        if (local) {
-          // 物理删除前收集图片引用，删后清理无引用图片
-          const paths = imagePathsOf(noteImageSrcs(local.content))
-          await db.notes.delete(row.id)
-          if (paths.length) void removeImagesIfUnreferenced(paths)
-        }
-        pulled++
-        continue
-      }
       await db.notes.put(rowToNote(row))
       pulled++
     }
@@ -411,35 +373,41 @@ export const syncEngine = {
       const local = await db.files.get(row.id)
       if (local?.dirty === 1) continue
       const remoteTs = new Date(row.updated_at).getTime()
-      if (row.deleted_at) {
-        if (local) {
-          await db.files.delete(row.id)
-          revokeFileUrl(row.id)
-        }
-        pulled++
-        continue
-      }
       if (local && local.updatedAt >= remoteTs) continue
-      // 纯元数据同步：不存 dataUrl
+      // 纯元数据同步：不存 dataUrl，软删除记录存入回收站
       await db.files.put(rowToFile(row))
       pulled++
     }
 
-    // 孤儿文件对齐清理：解决云端已物理抹除（或已被软删除）的历史文件在本地残留的问题
-    // 查询云端当前用户未删除的全部文件 ID
-    const { data: activeServerFiles, error: activeErr } = await supabase
+    // 孤儿文件与笔记对齐清理：解决云端已物理永久删除的历史项目在本地残留的问题
+    const { data: serverFiles, error: sfErr } = await supabase
       .from('files')
       .select('id')
       .eq('user_id', userId)
-      .is('deleted_at', null)
-    if (!activeErr && activeServerFiles) {
-      const activeIds = new Set(activeServerFiles.map((s) => s.id as string))
+    if (!sfErr && serverFiles) {
+      const serverIds = new Set(serverFiles.map((s) => s.id as string))
       const localFiles = await db.files.toArray()
       for (const lf of localFiles) {
-        // 本地标记已同步（非未保存新文件）但不在云端有效列表中，即为孤儿文件，本地物理清除
-        if (lf.dirty === 0 && lf.syncedAt !== null && !activeIds.has(lf.id)) {
+        if (lf.dirty === 0 && lf.syncedAt !== null && !serverIds.has(lf.id)) {
           await db.files.delete(lf.id)
           revokeFileUrl(lf.id)
+          pulled++
+        }
+      }
+    }
+
+    const { data: serverNotes, error: snErr } = await supabase
+      .from('notes')
+      .select('id')
+      .eq('user_id', userId)
+    if (!snErr && serverNotes) {
+      const serverNoteIds = new Set(serverNotes.map((s) => s.id as string))
+      const localNotes = await db.notes.toArray()
+      for (const ln of localNotes) {
+        if (ln.dirty === 0 && ln.syncedAt !== null && !serverNoteIds.has(ln.id)) {
+          const paths = imagePathsOf(noteImageSrcs(ln.content))
+          await db.notes.delete(ln.id)
+          if (paths.length) void removeImagesIfUnreferenced(paths)
           pulled++
         }
       }

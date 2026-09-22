@@ -71,6 +71,7 @@ interface SidebarProps {
   onThemeChange: (id: string) => void
   onSignOut: () => void
   onOpenSettings?: () => void
+  trashCount?: number
 }
 
 // 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消。
@@ -141,6 +142,7 @@ export function Sidebar({
   onThemeChange,
   onSignOut,
   onOpenSettings,
+  trashCount = 0,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
   const [creatingChildOf, setCreatingChildOf] = useState<string | null>(null)
@@ -604,6 +606,21 @@ export function Sidebar({
             )}
           </>
         ))}
+      <div className="sidebar-trash-wrap">
+        <DropZone dndId="zone:trash" accept={['item']} className="sidebar-zone-trash">
+          <button
+            type="button"
+            className={`sidebar-item sidebar-trash ${activeFolderId === 'trash' ? 'active' : ''}`}
+            onClick={() => onSelectFolder('trash')}
+          >
+            <span className="sidebar-trash-inner">
+              <Trash2 size={15} />
+              <span>回收站</span>
+            </span>
+            {trashCount > 0 && <span className="sidebar-count">{trashCount}</span>}
+          </button>
+        </DropZone>
+      </div>
       <div className="sidebar-footer">
         <ThemePicker theme={theme} onChange={onThemeChange} />
         <span className="sidebar-email" title={email}>

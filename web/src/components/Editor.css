@@ -9,6 +9,67 @@
   background: var(--paper);
 }
 
+/* 回收站顶部警示横幅 */
+.trash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, #e03131 8%, var(--paper));
+  border-bottom: 1px solid color-mix(in srgb, #e03131 25%, transparent);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-800);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.trash-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c92a2a;
+  font-weight: 500;
+}
+
+.trash-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trash-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--ink-200);
+  background: var(--paper);
+  color: var(--ink-800);
+}
+
+.trash-banner-btn.restore:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+.trash-banner-btn.delete {
+  color: #e03131;
+}
+
+.trash-banner-btn.delete:hover {
+  background: #fff5f5;
+  border-color: #ffa8a8;
+}
+
 .editor-toolbar {
   display: flex;
   align-items: center;

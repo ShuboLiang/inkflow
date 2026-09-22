@@ -271,6 +271,36 @@
   outline: none;
 }
 
+.sidebar-trash-wrap {
+  margin-top: auto;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--ink-200);
+}
+
+.sidebar-zone-trash {
+  border-radius: var(--radius-s);
+}
+
+.sidebar-trash {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-700);
+}
+
+.sidebar-trash-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-trash.active {
+  background: var(--qing-50);
+  color: var(--qing);
+  font-weight: 500;
+}
+
 .sidebar-footer {
   margin-top: auto;
   border-top: 1px solid var(--ink-200);

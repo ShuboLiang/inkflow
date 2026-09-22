@@ -104,6 +104,54 @@ export async function deleteFile(id: string): Promise<void> {
   })
 }
 
+// 从回收站恢复文件
+export async function restoreFile(id: string): Promise<void> {
+  const existing = await db.files.get(id)
+  if (!existing) return
+  let folderId = existing.folderId
+  if (folderId) {
+    const f = await db.folders.get(folderId)
+    if (!f || f.deletedAt) folderId = null
+  }
+  await db.files.update(id, {
+    deletedAt: null,
+    folderId,
+    dirty: 1,
+    updatedAt: Date.now(),
+  })
+}
+
+// 从回收站永久删除文件（物理清理本地、云端文件对象及元数据）
+export async function permanentlyDeleteFile(id: string): Promise<void> {
+  const file = await db.files.get(id)
+  if (!file) return
+
+  revokeFileUrl(id)
+
+  if (file.storagePath) {
+    const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
+    if (rmErr) console.error('remove storage object failed', rmErr)
+  }
+
+  // 清理引用此文件的分享（公共桶对象 + shares 行）
+  const { data: shares, error: shareErr } = await supabase
+    .from('shares')
+    .select('token')
+    .eq('file_id', file.id)
+  if (shareErr) console.error('select shares failed', shareErr)
+  const tokens = (shares ?? []).map((s) => s.token as string)
+  if (tokens.length) {
+    const { error: rmShareErr } = await supabase.storage.from('shares').remove(tokens)
+    if (rmShareErr) console.error('remove share objects failed', rmShareErr)
+    const { error: delShareErr } = await supabase.from('shares').delete().eq('file_id', file.id)
+    if (delShareErr) console.error('delete shares failed', delShareErr)
+  }
+
+  await db.files.delete(id)
+  const { error } = await supabase.from('files').delete().eq('id', id)
+  if (error) console.error('permanently delete file from server failed', error)
+}
+
 export async function moveFile(id: string, folderId: string | null): Promise<void> {
   const existing = await db.files.get(id)
   if (!existing || existing.deletedAt) return

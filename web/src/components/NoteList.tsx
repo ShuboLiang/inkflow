@@ -5,6 +5,8 @@ import {
   Search,
   X,
   MoreHorizontal,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -51,6 +53,12 @@ interface NoteListProps {
   onMoveEdge: (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => void
   onShowNoteInfo?: (note: Note) => void
   emptyHint?: string
+  isTrash?: boolean
+  onRestoreNote?: (id: string) => void
+  onPermanentlyDeleteNote?: (id: string) => void
+  onRestoreFile?: (id: string) => void
+  onPermanentlyDeleteFile?: (id: string) => void
+  onEmptyTrash?: () => void
 }
 
 // 可排序卡片外壳：dnd-kit sortable 挂在 .card-wrap 上。拖起时用 DragOverlay 显示
@@ -159,6 +167,12 @@ export function NoteList({
   onMoveEdge,
   onShowNoteInfo,
   emptyHint,
+  isTrash,
+  onRestoreNote,
+  onPermanentlyDeleteNote,
+  onRestoreFile,
+  onPermanentlyDeleteFile,
+  onEmptyTrash,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
@@ -311,6 +325,27 @@ export function NoteList({
       },
     }
 
+    if (isTrash) {
+      if (m.kind === 'note') {
+        return [
+          { key: 'open', label: '查看', onClick: () => onSelect(m.id) },
+          { key: 'restore', label: '恢复', onClick: () => onRestoreNote?.(m.id) },
+          ...(onShowNoteInfo && target
+            ? [{ key: 'info', label: '笔记信息', onClick: () => onShowNoteInfo(target as Note) }]
+            : []),
+          { key: 'd1', label: '', divider: true, onClick: () => {} },
+          { key: 'del', label: '彻底删除', danger: true, onClick: () => onPermanentlyDeleteNote?.(m.id) },
+        ]
+      }
+      return [
+        { key: 'open', label: '查看', onClick: () => onSelectFile(m.id) },
+        { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
+        { key: 'restore', label: '恢复', onClick: () => onRestoreFile?.(m.id) },
+        { key: 'd1', label: '', divider: true, onClick: () => {} },
+        { key: 'del', label: '彻底删除', danger: true, onClick: () => onPermanentlyDeleteFile?.(m.id) },
+      ]
+    }
+
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
@@ -382,7 +417,8 @@ export function NoteList({
     </button>
   )
 
-  // 统一列表：文件与笔记按 position 合并成同一顺序（无 position 的按创建时间兜底排后）
+  // 统一列表：文件与笔记合并排序
+  // 在回收站按删除时间倒序排列；普通文件夹按 position 顺序（无 position 的按创建时间兜底排后）
   const listItems = useMemo(
     () =>
       [
@@ -391,15 +427,21 @@ export function NoteList({
           id: f.id,
           position: f.position ?? Infinity,
           createdAt: f.createdAt ?? f.updatedAt,
+          deletedAt: f.deletedAt ?? 0,
         })),
         ...notes.map((n) => ({
           kind: 'note' as const,
           id: n.id,
           position: n.position ?? Infinity,
           createdAt: n.createdAt ?? n.updatedAt,
+          deletedAt: n.deletedAt ?? 0,
         })),
-      ].sort((a, b) => a.position - b.position || b.createdAt - a.createdAt),
-    [files, notes],
+      ].sort((a, b) =>
+        isTrash
+          ? b.deletedAt - a.deletedAt
+          : a.position - b.position || b.createdAt - a.createdAt,
+      ),
+    [files, notes, isTrash],
   )
 
   // 拖拽中放开增量渲染：全部项挂上 sortable，未挂载的项没有碰撞矩形没法排
@@ -409,36 +451,55 @@ export function NoteList({
   return (
     <section
       className="note-list"
-      aria-label="文件夹内容"
+      aria-label={isTrash ? '回收站' : '文件夹内容'}
       onDragEnter={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         e.preventDefault()
         setFileDragDepth((d) => d + 1)
       }}
       onDragOver={(e) => {
-        if (isFileDrag(e)) e.preventDefault()
+        if (isFileDrag(e) && !isTrash) e.preventDefault()
       }}
       onDragLeave={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         setFileDragDepth((d) => Math.max(0, d - 1))
       }}
       onDrop={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         e.preventDefault()
         setFileDragDepth(0)
         for (const file of Array.from(e.dataTransfer.files)) onUpload(file)
       }}
     >
+      {isTrash && (
+        <div className="trash-header">
+          <div className="trash-header-info">
+            <span className="trash-header-title">回收站</span>
+            <span className="trash-header-count">{notes.length + files.length} 个项目</span>
+          </div>
+          {notes.length + files.length > 0 && onEmptyTrash && (
+            <button
+              type="button"
+              className="trash-empty-btn"
+              onClick={onEmptyTrash}
+              title="清空回收站中所有项目"
+            >
+              <Trash2 size={13} />
+              <span>清空回收站</span>
+            </button>
+          )}
+        </div>
+      )}
       <div className="note-list-search">
         <div className="note-list-search-inner">
           <Search size={14} className="note-list-search-icon" aria-hidden="true" />
           <input
             id="note-search"
             type="search"
-            placeholder="搜索全部笔记"
+            placeholder={isTrash ? '搜索回收站' : '搜索全部笔记'}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            aria-label="搜索笔记"
+            aria-label={isTrash ? '搜索回收站' : '搜索笔记'}
           />
           {search && (
             <button
@@ -478,11 +539,11 @@ export function NoteList({
                 ))}
               </>
             )}
-            <SortableContext items={renderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={isTrash ? [] : renderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
             {renderedItems.map((it) => {
               if (it.kind === 'file') {
                 const file = files.find((f) => f.id === it.id)!
-                return renamingFileId === file.id ? (
+                const cardContent = renamingFileId === file.id ? (
                   <input
                     key={file.id}
                     className="note-card file-rename-input"
@@ -500,7 +561,7 @@ export function NoteList({
                     }}
                   />
                 ) : (
-                  <SortableCard key={file.id} id={file.id} kind="file" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+                  <>
                     <button
                       type="button"
                       className="note-card file-card"
@@ -522,12 +583,16 @@ export function NoteList({
                         <span className="file-card-name" title={file.filename}>
                           {file.filename}
                         </span>
-                        <span className="file-card-badge">{isHtmlFile(file) ? 'HTML' : 'PDF'}</span>
+                        <span className={isTrash ? 'trash-type-badge' : 'file-card-badge'}>
+                          {isHtmlFile(file) ? 'HTML' : 'PDF'}
+                        </span>
                       </div>
                       <div className="note-card-time">
-                        {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
+                        {isTrash && file.deletedAt
+                          ? `删除于 ${formatTime(file.deletedAt)}`
+                          : [formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
                       </div>
-                      {(file.tags ?? []).length > 0 && (
+                      {!isTrash && (file.tags ?? []).length > 0 && (
                         <div className="note-card-tags">
                           {(file.tags ?? []).slice(0, 3).map((t) => (
                             <span
@@ -547,8 +612,9 @@ export function NoteList({
                           )}
                         </div>
                       )}
-                      {(search.trim() ||
-                        (currentFolderId && currentFolderId !== 'all' && file.folderId !== currentFolderId)) &&
+                      {!isTrash &&
+                        (search.trim() ||
+                          (currentFolderId && currentFolderId !== 'all' && file.folderId !== currentFolderId)) &&
                         file.folderId && (
                         <span
                           className="note-card-loc"
@@ -562,14 +628,61 @@ export function NoteList({
                           {folderPathOf(file.folderId)}
                         </span>
                       )}
+                      {isTrash && (
+                        <div className="trash-card-footer">
+                          <span
+                            className="trash-orig-loc"
+                            title={file.folderId ? `原位置：${folderPathOf(file.folderId) ?? ''}` : '原位置：根目录'}
+                          >
+                            <FolderIcon size={11} />
+                            <span>{file.folderId ? (folderPathOf(file.folderId) ?? '未知文件夹') : '根目录'}</span>
+                          </span>
+                          <div className="trash-card-actions">
+                            <button
+                              type="button"
+                              className="trash-card-action-btn"
+                              title="恢复"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onRestoreFile?.(file.id)
+                              }}
+                            >
+                              <RotateCcw size={11} />
+                              <span>恢复</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="trash-card-action-btn danger"
+                              title="彻底删除"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onPermanentlyDeleteFile?.(file.id)
+                              }}
+                            >
+                              <Trash2 size={11} />
+                              <span>彻底删除</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </button>
                     {moreButton('file', file.id, file.filename)}
+                  </>
+                )
+
+                return isTrash ? (
+                  <div key={file.id} className="card-wrap">
+                    {cardContent}
+                  </div>
+                ) : (
+                  <SortableCard key={file.id} id={file.id} kind="file" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+                    {cardContent}
                   </SortableCard>
                 )
               }
               const note = notes.find((n) => n.id === it.id)!
-              return (
-                <SortableCard key={note.id} id={note.id} kind="note" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+              const noteCardContent = (
+                <>
                   <button
                     type="button"
                     className={note.id === activeId ? 'note-card active' : 'note-card'}
@@ -585,10 +698,14 @@ export function NoteList({
                       openMenu(e, 'note', note.id)
                     }}
                   >
-                    <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
+                    <div className="note-card-title">
+                      <span>{note.title || firstLine(note.content) || '无标题'}</span>
+                      {isTrash && <span className="trash-type-badge">笔记</span>}
+                    </div>
                     {excerptFor(note)}
-                    {(search.trim() ||
-                      (currentFolderId && currentFolderId !== 'all' && note.folderId !== currentFolderId)) &&
+                    {!isTrash &&
+                      (search.trim() ||
+                        (currentFolderId && currentFolderId !== 'all' && note.folderId !== currentFolderId)) &&
                       note.folderId && (
                       <span
                         className="note-card-loc"
@@ -602,7 +719,7 @@ export function NoteList({
                         {folderPathOf(note.folderId)}
                       </span>
                     )}
-                    {(note.tags ?? []).length > 0 && (
+                    {!isTrash && (note.tags ?? []).length > 0 && (
                       <div className="note-card-tags">
                         {(note.tags ?? []).slice(0, 3).map((t) => (
                           <span
@@ -622,9 +739,60 @@ export function NoteList({
                         )}
                       </div>
                     )}
-                    <div className="note-card-time">{formatTime(note.updatedAt)}</div>
+                    <div className="note-card-time">
+                      {isTrash && note.deletedAt
+                        ? `删除于 ${formatTime(note.deletedAt)}`
+                        : formatTime(note.updatedAt)}
+                    </div>
+                    {isTrash && (
+                      <div className="trash-card-footer">
+                        <span
+                          className="trash-orig-loc"
+                          title={note.folderId ? `原位置：${folderPathOf(note.folderId) ?? ''}` : '原位置：根目录'}
+                        >
+                          <FolderIcon size={11} />
+                          <span>{note.folderId ? (folderPathOf(note.folderId) ?? '未知文件夹') : '根目录'}</span>
+                        </span>
+                        <div className="trash-card-actions">
+                          <button
+                            type="button"
+                            className="trash-card-action-btn"
+                            title="恢复"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onRestoreNote?.(note.id)
+                            }}
+                          >
+                            <RotateCcw size={11} />
+                            <span>恢复</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="trash-card-action-btn danger"
+                            title="彻底删除"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onPermanentlyDeleteNote?.(note.id)
+                            }}
+                          >
+                            <Trash2 size={11} />
+                            <span>彻底删除</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </button>
                   {moreButton('note', note.id, note.title || '无标题')}
+                </>
+              )
+
+              return isTrash ? (
+                <div key={note.id} className="card-wrap">
+                  {noteCardContent}
+                </div>
+              ) : (
+                <SortableCard key={note.id} id={note.id} kind="note" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+                  {noteCardContent}
                 </SortableCard>
               )
             })}
@@ -663,30 +831,32 @@ export function NoteList({
           {toast}
         </div>
       )}
-      <div className="note-list-footer">
-        <button type="button" className="note-list-new" onClick={onCreate}>
-          新建笔记
-        </button>
-        <button
-          type="button"
-          className="note-list-upload"
-          title="上传文件到当前文件夹（md/html 新建笔记，pdf 存为文件）"
-          onClick={() => uploadRef.current?.click()}
-        >
-          上传文件
-        </button>
-        <input
-          ref={uploadRef}
-          type="file"
-          hidden
-          accept=".md,.markdown,.html,.htm,.pdf"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            e.target.value = ''
-            if (file) onUpload(file)
-          }}
-        />
-      </div>
+      {!isTrash && (
+        <div className="note-list-footer">
+          <button type="button" className="note-list-new" onClick={onCreate}>
+            新建笔记
+          </button>
+          <button
+            type="button"
+            className="note-list-upload"
+            title="上传文件到当前文件夹（md/html 新建笔记，pdf 存为文件）"
+            onClick={() => uploadRef.current?.click()}
+          >
+            上传文件
+          </button>
+          <input
+            ref={uploadRef}
+            type="file"
+            hidden
+            accept=".md,.markdown,.html,.htm,.pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) onUpload(file)
+            }}
+          />
+        </div>
+      )}
     </section>
   )
 }
