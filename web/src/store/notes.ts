@@ -40,9 +40,29 @@ export async function createNote(
 export async function updateNote(
   id: string,
   patch: Partial<Pick<Note, 'title' | 'content' | 'folderId' | 'tags' | 'position'>>,
-): Promise<void> {
+): Promise<boolean> {
   const existing = await db.notes.get(id)
-  if (!existing) return
+  if (!existing) return false
+
+  // 高性能轻量比对：只有在实质内容或属性发生真实变化时才写 DB 并更新 updatedAt
+  let hasChange = false
+  if (patch.title !== undefined && patch.title !== existing.title) hasChange = true
+  else if (patch.folderId !== undefined && patch.folderId !== existing.folderId) hasChange = true
+  else if (patch.position !== undefined && patch.position !== existing.position) hasChange = true
+  else if (patch.tags !== undefined) {
+    if ((patch.tags ?? []).length !== (existing.tags ?? []).length) hasChange = true
+    else if (JSON.stringify(patch.tags) !== JSON.stringify(existing.tags)) hasChange = true
+  }
+  else if (patch.content !== undefined) {
+    if (patch.content !== existing.content) {
+      if (JSON.stringify(patch.content) !== JSON.stringify(existing.content)) {
+        hasChange = true
+      }
+    }
+  }
+
+  if (!hasChange) return false
+
   await db.notes.update(id, {
     ...patch,
     version: existing.version + 1,
@@ -56,6 +76,7 @@ export async function updateNote(
     const removed = [...before].filter((p) => !after.has(p))
     if (removed.length) void removeImagesIfUnreferenced(removed)
   }
+  return true
 }
 
 export async function softDeleteNote(id: string): Promise<void> {

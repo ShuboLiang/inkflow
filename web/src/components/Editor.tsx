@@ -28,7 +28,7 @@ function toDoc(content: unknown): object {
 export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: EditorProps) {
   // 记录编辑器最近一次发出的内容：prop 落后于它说明有未保存的本地输入（防抖未落盘），
   // 此时绝不能用旧 prop setContent 回滚（打开浮层/切换焦点导致 blur 时会触发）。
-  const lastEmitted = useRef<string | null>(null)
+  const lastEmitted = useRef<string | null>(JSON.stringify(toDoc(content)))
   const unsaved = useRef(false)
   // handlePaste 配置先于 useEditor 创建执行，粘贴时通过 ref 拿到实例
   const editorRef = useRef<TipTapEditor | null>(null)
@@ -115,7 +115,9 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
           }
         })
       }
-      lastEmitted.current = JSON.stringify(e.getJSON())
+      const nextJson = JSON.stringify(e.getJSON())
+      if (nextJson === lastEmitted.current) return
+      lastEmitted.current = nextJson
       unsaved.current = true
       onUpdate(e.getJSON())
     },

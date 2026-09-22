@@ -488,8 +488,8 @@ export default function App() {
         try {
           const next = await migrateInlineImages(note.content)
           if (next !== note.content) {
-            await updateNote(note.id, { content: next })
-            requestPush()
+            const changed = await updateNote(note.id, { content: next })
+            if (changed) requestPush()
           }
         } catch (err) {
           console.error('migrate note images failed', note.id, err)
@@ -500,6 +500,12 @@ export default function App() {
   }, [user, notes, requestPush])
 
   const scheduleSave = (id: string, patch: { title?: string; content?: unknown }) => {
+    // 快速前置守卫：如果单改标题且内容未变，极速短路
+    if (active && active.id === id) {
+      if (patch.title !== undefined && patch.content === undefined && patch.title === active.title) {
+        return
+      }
+    }
     pendingSave.current =
       pendingSave.current && pendingSave.current.id === id
         ? { id, patch: { ...pendingSave.current.patch, ...patch } }
@@ -508,7 +514,11 @@ export default function App() {
     saveTimer.current = setTimeout(() => {
       const pending = pendingSave.current
       pendingSave.current = null
-      if (pending) void updateNote(pending.id, pending.patch).then(requestPush)
+      if (pending) {
+        void updateNote(pending.id, pending.patch).then((changed) => {
+          if (changed) requestPush()
+        })
+      }
     }, 500)
   }
 
@@ -519,7 +529,11 @@ export default function App() {
     }
     const pending = pendingSave.current
     pendingSave.current = null
-    if (pending) void updateNote(pending.id, pending.patch).then(requestPush)
+    if (pending) {
+      void updateNote(pending.id, pending.patch).then((changed) => {
+        if (changed) requestPush()
+      })
+    }
   }, [requestPush])
 
   const toggleReadingMode = useCallback(() => {
@@ -721,7 +735,9 @@ export default function App() {
   const handleDropNote = (noteId: string, folderId: string | null) => {
     const note = notes?.find((n) => n.id === noteId)
     if (!note || note.deletedAt !== null || note.folderId === folderId) return
-    void updateNote(noteId, { folderId }).then(requestPush)
+    void updateNote(noteId, { folderId }).then((changed) => {
+      if (changed) requestPush()
+    })
   }
 
   const handleToggleTag = (name: string) => {
@@ -776,7 +792,9 @@ export default function App() {
 
   const handleNoteTagsChange = (tags: string[]) => {
     if (!active) return
-    void updateNote(active.id, { tags }).then(requestPush)
+    void updateNote(active.id, { tags }).then((changed) => {
+      if (changed) requestPush()
+    })
   }
 
   const handleFileTagsChange = (tags: string[]) => {
@@ -974,7 +992,9 @@ export default function App() {
 
   const writePosition = (kind: 'note' | 'file', id: string, position: number) =>
     void (kind === 'note'
-      ? updateNote(id, { position }).then(requestPush)
+      ? updateNote(id, { position }).then((changed) => {
+          if (changed) requestPush()
+        })
       : setFilePosition(id, position).then(requestPush))
 
   // 顺序上下文 = 当前可见列表（用户看到什么顺序就排成什么顺序）
