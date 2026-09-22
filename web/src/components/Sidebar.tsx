@@ -393,7 +393,7 @@ export function Sidebar({
                     toggleCollapse(folder.id)
                   }}
                 >
-                  {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                 </button>
               ) : (
                 <span className="sidebar-tree-toggle-placeholder" aria-hidden="true" />
@@ -422,7 +422,7 @@ export function Sidebar({
                     setCreatingChildOf(folder.id)
                   }}
                 >
-                  <Plus size={12} />
+                  <Plus size={14} />
                 </button>
                 <button
                   type="button"
@@ -435,7 +435,7 @@ export function Sidebar({
                     setEditingId(folder.id)
                   }}
                 >
-                  <Pencil size={12} />
+                  <Pencil size={13} />
                 </button>
                 <button
                   type="button"
@@ -444,7 +444,7 @@ export function Sidebar({
                   aria-label={`删除 ${folder.name}`}
                   onClick={() => onDeleteFolder(folder.id)}
                 >
-                  <Trash2 size={12} />
+                  <Trash2 size={13} />
                 </button>
               </span>
               {moreButton(folderMenuItems(folder), folder.name)}
@@ -479,7 +479,7 @@ export function Sidebar({
             setCreating(true)
           }}
         >
-          <Plus size={12} />
+          <Plus size={15} />
         </button>
       </div>
       {creating && (
@@ -508,13 +508,13 @@ export function Sidebar({
           aria-expanded={!tagsCollapsed}
         >
           <span>标签</span>
-          {tagsCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+          {tagsCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
       )}
       {tags.size === 0 && <div className="sidebar-empty">暂无标签</div>}
       {!tagsCollapsed && tags.size > 0 && allTags.length > TAGS_SEARCH_THRESHOLD && (
         <div className="sidebar-tag-search">
-          <Search size={13} className="sidebar-tag-search-icon" />
+          <Search size={14} className="sidebar-tag-search-icon" />
           <input
             type="text"
             value={tagFilter}
@@ -576,7 +576,7 @@ export function Sidebar({
                       aria-label={`重命名标签 ${name}`}
                       onClick={() => setEditingTag(name)}
                     >
-                      <Pencil size={12} />
+                      <Pencil size={13} />
                     </button>
                     <button
                       type="button"
@@ -585,7 +585,7 @@ export function Sidebar({
                       aria-label={`删除标签 ${name}`}
                       onClick={() => onDeleteTag(name)}
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={13} />
                     </button>
                   </span>
                   {moreButton(tagMenuItems(name), name)}
@@ -594,7 +594,7 @@ export function Sidebar({
             )}
             {!tagQuery && matchedTags.length > TAGS_PREVIEW && (
               <button type="button" className="sidebar-tags-more" onClick={toggleTagsShowAll}>
-                {tagsShowAll ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {tagsShowAll ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 <span>{tagsShowAll ? '收起标签列表' : `显示全部 ${matchedTags.length} 个标签`}</span>
               </button>
             )}

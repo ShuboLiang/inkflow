@@ -30,7 +30,7 @@
   border: none;
   border-radius: var(--radius-s);
   background: none;
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--ink-900);
   cursor: pointer;
 }
@@ -43,12 +43,12 @@
 
 .sidebar-count {
   flex: none;
-  min-width: 18px;
+  min-width: 20px;
   padding: 0 6px;
   border-radius: 999px;
   background: var(--qing-50);
   color: var(--qing);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -74,10 +74,12 @@
 }
 
 .sidebar-section {
-  margin-top: 16px;
+  margin-top: 18px;
   padding: 0 10px;
-  font-size: 12px;
-  color: var(--ink-500);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-700);
+  letter-spacing: 0.02em;
   text-transform: none;
   display: flex;
   align-items: center;
@@ -88,13 +90,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: var(--radius-s);
   background: none;
-  color: var(--ink-500);
+  color: var(--ink-600);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 /* 「标签」标题行做成按钮：点击折叠/展开整个标签区 */
@@ -174,7 +177,7 @@
 
 .sidebar-empty {
   padding: 4px 10px;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--ink-500);
 }
 
@@ -202,7 +205,7 @@
   padding: 8px 10px;
   border: none;
   background: none;
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--ink-900);
   cursor: pointer;
   overflow: hidden;
@@ -236,8 +239,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: var(--radius-s);
   background: none;
@@ -254,7 +257,7 @@
   border: 1px solid var(--qing);
   border-radius: var(--radius-s);
   background: var(--paper);
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--ink-900);
   font-family: var(--font-ui);
   outline: none;
@@ -335,8 +338,8 @@
 .sidebar-tree-toggle,
 .sidebar-tree-toggle-placeholder {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   margin-right: 2px;
 }
 
