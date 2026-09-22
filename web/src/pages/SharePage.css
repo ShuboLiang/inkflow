@@ -237,6 +237,6 @@
 }
 
 .share-doc-body .ProseMirror mark {
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
 }

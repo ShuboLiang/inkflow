@@ -260,7 +260,7 @@
   color: var(--ink-500);
   background: var(--surface);
   border: 1px solid var(--ink-200);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
 }
 
