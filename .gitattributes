@@ -1,0 +1,2 @@
+# shell 脚本进 Docker 镜像，必须 LF（Windows 工作区 autocrlf 会把 checkout 变成 CRLF，sh 解析报 $'' ）
+*.sh text eol=lf
