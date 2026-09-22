@@ -128,7 +128,15 @@ export async function acquireFileUrl(id: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('files').download(file.storagePath)
   if (error || !data) return null
 
-  const url = URL.createObjectURL(data)
+  // Storage 下发的 content-type 不可靠（fs 驱动 xattr 元数据丢失会以 text/plain 下发，
+  // 实测如此），HTML 预览会因此只显示源码不渲染；以下发类型可疑为准，按数据库
+  // 记录的 mime_type 重建 Blob
+  const servedUnreliable = !data.type || data.type === 'text/plain' || data.type === 'application/octet-stream'
+  const blob =
+    servedUnreliable && file.mimeType && file.mimeType !== 'application/octet-stream'
+      ? new Blob([data], { type: file.mimeType })
+      : data
+  const url = URL.createObjectURL(blob)
   fileBlobUrlCache.set(id, url)
   return url
 }
