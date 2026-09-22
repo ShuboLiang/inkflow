@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   FileText,
   Folder as FolderIcon,
@@ -6,6 +6,8 @@ import {
   X,
   MoreHorizontal,
 } from 'lucide-react'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { FileEntry, Folder, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
@@ -43,19 +45,34 @@ interface NoteListProps {
   onMoveNote: (id: string, folderId: string | null) => void
   onMoveFile: (id: string, folderId: string | null) => void
   onRequestPush: () => void
-  /** 手动排序：把拖拽项移到目标项前/后（顺序上下文 = 当前可见列表，文件与笔记同轴） */
-  onReorderItem: (
-    dragged: { kind: 'note' | 'file'; id: string },
-    target: { kind: 'note' | 'file'; id: string },
-    place: 'before' | 'after',
-  ) => void
-  /** 手动排序（触屏菜单）：上移/下移一步 */
+  /** dnd-kit 拖拽进行中（App 的 DndContext 驱动）：全量渲染 + 抑制右键菜单 */
+  dragActive: boolean
+  /** 手动排序（菜单）：上移/下移一步 */
   onMoveStep: (kind: 'note' | 'file', id: string, dir: -1 | 1) => void
+  /** 手动排序（菜单）：直接移到顶部/底部 */
+  onMoveEdge: (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => void
   emptyHint?: string
 }
 
-// 只有精确指针（鼠标）设备启用卡片拖拽：触屏上 draggable 会干扰列表滚动
-const DRAG_ENABLED = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+// 可排序卡片外壳：dnd-kit sortable 挂在 .card-wrap 上。拖起时用 DragOverlay 显示
+// 跟手拖影（App 渲染），原位保留空槽（.dnd-dragging 半透明虚线框），其余卡片平滑让位
+function SortableCard({ id, kind, children }: { id: string; kind: 'note' | 'file'; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    data: { type: 'item', kind },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      className={isDragging ? 'card-wrap dnd-dragging' : 'card-wrap'}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  )
+}
 
 // 列表增量渲染的每批条数
 const RENDER_PAGE = 60
@@ -121,19 +138,13 @@ export function NoteList({
   onMoveNote,
   onMoveFile,
   onRequestPush,
-  onReorderItem,
+  dragActive,
   onMoveStep,
+  onMoveEdge,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
-  // 手动排序拖拽：被拖项 + 悬停目标与插入侧（before/after）
-  const [reorder, setReorder] = useState<{
-    draggedKind: 'note' | 'file'
-    draggedId: string
-    overId: string
-    place: 'before' | 'after'
-  } | null>(null)
   // 「移动到文件夹…」弹窗目标
   const [movingTarget, setMovingTarget] = useState<{
     kind: 'note' | 'file'
@@ -274,6 +285,8 @@ export function NoteList({
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
           { key: 'up', label: '上移', onClick: () => onMoveStep('note', m.id, -1) },
           { key: 'down', label: '下移', onClick: () => onMoveStep('note', m.id, 1) },
+          { key: 'top', label: '移到顶部', onClick: () => onMoveEdge('note', m.id, 'top') },
+          { key: 'bottom', label: '移到底部', onClick: () => onMoveEdge('note', m.id, 'bottom') },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
@@ -285,6 +298,8 @@ export function NoteList({
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
           { key: 'up', label: '上移', onClick: () => onMoveStep('file', m.id, -1) },
           { key: 'down', label: '下移', onClick: () => onMoveStep('file', m.id, 1) },
+          { key: 'top', label: '移到顶部', onClick: () => onMoveEdge('file', m.id, 'top') },
+          { key: 'bottom', label: '移到底部', onClick: () => onMoveEdge('file', m.id, 'bottom') },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
@@ -322,6 +337,7 @@ export function NoteList({
       type="button"
       className="card-more"
       aria-label={`${label} 更多操作`}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()
         const r = e.currentTarget.getBoundingClientRect()
@@ -331,44 +347,6 @@ export function NoteList({
       <MoreHorizontal size={15} />
     </button>
   )
-
-  // 拖拽排序：文件/笔记卡片共用的拖拽处理（payload 前缀区分类型；
-  // 桌面精确指针启用，触屏用菜单上移/下移）
-  const reorderProps = (kind: 'note' | 'file', id: string) => ({
-    onDragStart: (e: React.DragEvent) => {
-      e.dataTransfer.setData('text/plain', `${kind}:${id}`)
-      e.dataTransfer.effectAllowed = 'move'
-      if (DRAG_ENABLED) setReorder({ draggedKind: kind, draggedId: id, overId: '', place: 'after' })
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (!DRAG_ENABLED || !reorder || reorder.draggedId === id) return
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'move'
-      const r = e.currentTarget.getBoundingClientRect()
-      const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
-      if (reorder.overId !== id || reorder.place !== place) {
-        setReorder({ ...reorder, overId: id, place })
-      }
-    },
-    onDrop: (e: React.DragEvent) => {
-      if (!DRAG_ENABLED || !reorder) return
-      e.preventDefault()
-      e.stopPropagation()
-      if (reorder.draggedId !== id && reorder.overId === id) {
-        onReorderItem({ kind: reorder.draggedKind, id: reorder.draggedId }, { kind, id }, reorder.place)
-      }
-      setReorder(null)
-    },
-    onDragEnd: () => setReorder(null),
-  })
-
-  // 悬停插入指示线的 class
-  const indicatorClass = (id: string) =>
-    reorder?.overId === id && reorder.draggedId !== id
-      ? reorder.place === 'before'
-        ? 'reorder-before'
-        : 'reorder-after'
-      : ''
 
   // 统一列表：文件与笔记按 position 合并成同一顺序（无 position 的按创建时间兜底排后）
   const listItems = useMemo(
@@ -389,6 +367,10 @@ export function NoteList({
       ].sort((a, b) => a.position - b.position || b.createdAt - a.createdAt),
     [files, notes],
   )
+
+  // 拖拽中放开增量渲染：全部项挂上 sortable，未挂载的项没有碰撞矩形没法排
+  const effectiveLimit = dragActive ? listItems.length : renderLimit
+  const renderedItems = listItems.slice(0, effectiveLimit)
 
   return (
     <section
@@ -462,7 +444,8 @@ export function NoteList({
                 ))}
               </>
             )}
-            {listItems.slice(0, renderLimit).map((it) => {
+            <SortableContext items={renderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
+            {renderedItems.map((it) => {
               if (it.kind === 'file') {
                 const file = files.find((f) => f.id === it.id)!
                 return renamingFileId === file.id ? (
@@ -483,14 +466,19 @@ export function NoteList({
                     }}
                   />
                 ) : (
-                  <div key={file.id} className="card-wrap">
+                  <SortableCard key={file.id} id={file.id} kind="file">
                     <button
                       type="button"
-                      className={['note-card file-card', indicatorClass(file.id)].filter(Boolean).join(' ')}
-                      draggable={DRAG_ENABLED}
-                      {...reorderProps('file', file.id)}
+                      className="note-card file-card"
                       onClick={() => onSelectFile(file.id)}
-                      onContextMenu={(e) => openMenu(e, 'file', file.id)}
+                      onContextMenu={(e) => {
+                        // Android 长按启动拖拽时会带出系统菜单
+                        if (dragActive) {
+                          e.preventDefault()
+                          return
+                        }
+                        openMenu(e, 'file', file.id)
+                      }}
                     >
                       <div className="note-card-title file-card-title">
                         <FileText size={16} />
@@ -537,24 +525,23 @@ export function NoteList({
                       )}
                     </button>
                     {moreButton('file', file.id, file.filename)}
-                  </div>
+                  </SortableCard>
                 )
               }
               const note = notes.find((n) => n.id === it.id)!
               return (
-                <div key={note.id} className="card-wrap">
+                <SortableCard key={note.id} id={note.id} kind="note">
                   <button
                     type="button"
-                    className={[
-                      note.id === activeId ? 'note-card active' : 'note-card',
-                      indicatorClass(note.id),
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    draggable={DRAG_ENABLED}
-                    {...reorderProps('note', note.id)}
+                    className={note.id === activeId ? 'note-card active' : 'note-card'}
                     onClick={() => onSelect(note.id)}
-                    onContextMenu={(e) => openMenu(e, 'note', note.id)}
+                    onContextMenu={(e) => {
+                      if (dragActive) {
+                        e.preventDefault()
+                        return
+                      }
+                      openMenu(e, 'note', note.id)
+                    }}
                   >
                     <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
                     {excerptFor(note)}
@@ -594,10 +581,11 @@ export function NoteList({
                     <div className="note-card-time">{formatTime(note.updatedAt)}</div>
                   </button>
                   {moreButton('note', note.id, note.title || '无标题')}
-                </div>
+                </SortableCard>
               )
             })}
-            {files.length + notes.length > renderLimit && (
+            </SortableContext>
+            {!dragActive && files.length + notes.length > renderLimit && (
               <div ref={sentinelRef} className="note-list-more">
                 加载更多（已显示 {Math.min(renderLimit, files.length + notes.length)} / {files.length + notes.length}）
               </div>

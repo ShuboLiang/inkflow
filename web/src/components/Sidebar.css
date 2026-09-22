@@ -73,6 +73,13 @@
   box-shadow: inset 0 0 0 1px var(--qing);
 }
 
+/* dnd-kit 拖入侧栏放置区的高亮（DropZone isOver 驱动），与 drag-over 同款 */
+.sidebar-zone-item.dnd-over > .sidebar-item,
+.sidebar-folder.dnd-over {
+  background: var(--qing-50);
+  box-shadow: inset 0 0 0 1px var(--qing);
+}
+
 .sidebar-section {
   margin-top: 18px;
   padding: 0 10px;

@@ -43,13 +43,32 @@
   cursor: pointer;
 }
 
-/* 手动排序：拖拽悬停时的插入指示线（卡片上/下边缘） */
-.note-card.reorder-before {
-  box-shadow: inset 0 2px 0 0 var(--qing);
+/* dnd-kit 拖拽排序 */
+/* 被拖卡片原位空槽：半透明虚线框占位（DragOverlay 里的克隆跟手走） */
+.card-wrap.dnd-dragging {
+  opacity: 0.35;
 }
 
-.note-card.reorder-after {
-  box-shadow: inset 0 -2px 0 0 var(--qing);
+.card-wrap.dnd-dragging > .note-card {
+  border: 1px dashed color-mix(in srgb, var(--qing) 55%, transparent);
+  background: var(--qing-50);
+}
+
+/* 跟手拖影：浮在最高层的小卡片（内容为标题），投影 + 微缩放 */
+.dnd-card-ghost {
+  max-width: 280px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-900);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-900) 22%, transparent);
+  transform: scale(1.03);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: grabbing;
 }
 
 .note-list-search-icon {

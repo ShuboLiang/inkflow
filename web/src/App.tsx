@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  MeasuringStrategy,
+  MouseSensor,
+  pointerWithin,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
 import { db, type FileEntry, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
@@ -965,6 +980,100 @@ export default function App() {
     handleReorderItem({ kind, id }, { kind: target.kind, id: target.id }, dir < 0 ? 'before' : 'after')
   }
 
+  // 菜单「移到顶部/底部」：挪到首/尾邻居旁
+  const handleMoveEdge = (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => {
+    const rest = visibleOrder.filter((it) => it.id !== id)
+    if (!rest.length) return
+    if (edge === 'top') {
+      const first = rest[0]
+      handleReorderItem({ kind, id }, { kind: first.kind, id: first.id }, 'before')
+    } else {
+      const last = rest[rest.length - 1]
+      handleReorderItem({ kind, id }, { kind: last.kind, id: last.id }, 'after')
+    }
+  }
+
+  // ---------- dnd-kit 拖拽上下文 ----------
+  // 桌面：鼠标按住移动 5px 激活（不误伤单击）；手机：长按 250ms 抬起（tolerance 内仍可滚动列表）
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  )
+
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    // 优先指针直接悬停的目标（侧栏文件夹/标签/卡片）
+    const pointerCollisions = pointerWithin(args)
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions
+    }
+    // 指针在空白处时按最近中心回退
+    return closestCenter(args)
+  }, [])
+
+  const [dragInfo, setDragInfo] = useState<{
+    kind: 'note' | 'file'
+    id: string
+  } | null>(null)
+
+  // 拖近左缘自动拉开移动端抽屉（侧栏 DOM 常驻仅 translateX 隐藏，droppable 可用）
+  const handleDragMove = (e: DragMoveEvent) => {
+    if (!e.active.data.current || e.active.data.current.type !== 'item') return
+    if (e.delta.x < -40 && window.innerWidth < 1024) setSidebarOpen(true)
+  }
+
+  // 松手路由：item×item=排序；item×folder-zone=移动；item×tag-zone=加标签
+  const handleDragEnd = (e: DragEndEvent) => {
+    const info = dragInfo
+    setDragInfo(null)
+    if (!info) return
+    const overData = e.over?.data.current as { type?: string; kind?: 'note' | 'file' } | undefined
+    if (!e.over || !overData) return
+
+    if (overData.type === 'zone') {
+      const zoneId = String(e.over.id)
+      if (zoneId.startsWith('folder-zone:')) {
+        const folderId = zoneId.slice('folder-zone:'.length)
+        if (info.kind === 'note') handleDropNote(info.id, folderId)
+        else handleDropFile(info.id, folderId)
+      } else if (zoneId === 'zone:all') {
+        if (info.kind === 'note') handleDropNote(info.id, null)
+        else handleDropFile(info.id, null)
+      } else if (zoneId.startsWith('tag-zone:')) {
+        const tag = zoneId.slice('tag-zone:'.length)
+        if (info.kind === 'note') {
+          handleDropNoteToTag(info.id, tag)
+        } else {
+          const targetFile = files?.find((f) => f.id === info.id)
+          if (targetFile && !(targetFile.tags ?? []).includes(tag)) {
+            const nextTags = [...(targetFile.tags ?? []), tag]
+            void setFileTags(targetFile.id, nextTags).then(requestPush)
+          }
+        }
+      }
+      return
+    }
+
+    // item×item：同列表排序（over 是目标卡片，before/after 由原始索引关系决定）
+    if (overData.type === 'item') {
+      const overKind = (overData.kind ?? 'note') as 'note' | 'file'
+      const overId = String(e.over.id)
+      const fromIdx = visibleOrder.findIndex((it) => it.id === info.id)
+      const toIdx = visibleOrder.findIndex((it) => it.id === overId)
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
+      handleReorderItem(info, { kind: overKind, id: overId }, fromIdx < toIdx ? 'after' : 'before')
+    }
+  }
+
+  // DragOverlay 内容：被拖卡片的简化克隆（标题行），跟手显示
+  const dragOverlayItem =
+    dragInfo?.kind === 'note'
+      ? notes?.find((n) => n.id === dragInfo.id)
+      : undefined
+  const dragOverlayFile =
+    dragInfo?.kind === 'file'
+      ? files?.find((f) => f.id === dragInfo.id)
+      : undefined
+
 
   // 上传：pdf/html 存为当前文件夹的文件（原生预览）；md 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
@@ -1064,6 +1173,14 @@ export default function App() {
 
   if (!user) return <Auth />
 
+  // 近左缘自动开抽屉见 handleDragMove；拖拽开始记录被拖项（DragOverlay 用）
+  const handleDragStart = (e: DragStartEvent) => {
+    const data = e.active.data.current as { type?: string; kind?: 'note' | 'file' } | undefined
+    if (data?.type === 'item' && (data.kind === 'note' || data.kind === 'file')) {
+      setDragInfo({ kind: data.kind, id: String(e.active.id) })
+    }
+  }
+
   // 拖拽笔记/文件/文件夹（text/plain 内部载荷）悬停在没有放置处理的地方时，
   // 浏览器默认把文本当"拖放搜索"，提示「松开鼠标以搜索文本」。外壳层兜底：
   // 内部载荷一律拦截默认行为并标记不可放置；真正的放置目标（排序卡片、
@@ -1079,11 +1196,20 @@ export default function App() {
   }
 
   return (
-    <div
-      className={['app-shell', mobileView === 'editor' ? 'mobile-editor' : 'mobile-list'].join(' ')}
-      onDragOver={handleShellDragOver}
-      onDrop={handleShellDrop}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetection}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setDragInfo(null)}
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
+      <div
+        className={['app-shell', mobileView === 'editor' ? 'mobile-editor' : 'mobile-list'].join(' ')}
+        onDragOver={handleShellDragOver}
+        onDrop={handleShellDrop}
+      >
       <header className="app-topbar">
         <div className="app-topbar-left">
           <button
@@ -1268,7 +1394,10 @@ export default function App() {
         {sidebarOpen && (
           <div
             className="sidebar-backdrop"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => {
+              if (dragInfo) return
+              setSidebarOpen(false)
+            }}
             aria-label="关闭侧栏"
           />
         )}
@@ -1285,7 +1414,6 @@ export default function App() {
           activeFolderId={activeFolderId}
           activeTag={activeTag}
           onSelectFolder={handleSelectFolder}
-          onDropNote={handleDropNote}
           onCreateFolder={(name, parentId) => void handleCreateFolder(name, parentId)}
           onRenameFolder={(id, name) => void handleRenameFolder(id, name)}
           onDeleteFolder={(id) => void handleDeleteFolder(id)}
@@ -1293,8 +1421,6 @@ export default function App() {
           onToggleTag={handleToggleTag}
           onRenameTag={(oldName, newName) => void handleRenameTag(oldName, newName)}
           onDeleteTag={(name) => void handleDeleteTag(name)}
-          onDropNoteToTag={handleDropNoteToTag}
-          onDropFile={handleDropFile}
           onFilesDrop={(dropped, folderId) => {
             for (const file of dropped) void handleUpload(file, folderId)
           }}
@@ -1325,8 +1451,9 @@ export default function App() {
           onMoveNote={handleDropNote}
           onMoveFile={handleDropFile}
           onRequestPush={requestPush}
-          onReorderItem={handleReorderItem}
+          dragActive={!!dragInfo}
           onMoveStep={handleMoveStep}
+          onMoveEdge={handleMoveEdge}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
         <main
@@ -1419,8 +1546,19 @@ export default function App() {
           )}
         </main>
       </div>
+      </div>
       <DialogHost />
-    </div>
+      {/* 跟手拖影：被拖卡片的简化克隆（投影+微缩放），原位留空槽由 SortableCard 处理 */}
+      <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+        {dragOverlayItem ? (
+          <div className="dnd-card-ghost">
+            {dragOverlayItem.title || '无标题'}
+          </div>
+        ) : dragOverlayFile ? (
+          <div className="dnd-card-ghost">{dragOverlayFile.filename}</div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   )
 }
 
