@@ -54,21 +54,38 @@
   background: var(--qing-50);
 }
 
-/* 跟手拖影：浮在最高层的小卡片（内容为标题），投影 + 微缩放 */
+/* 跟手拖影：浮在最高层的卡片预览（图标+标题），投影 + 微缩放 */
 .dnd-card-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   max-width: 280px;
+  min-width: 140px;
   padding: 10px 14px;
+  border: 1px solid var(--ink-200);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink-900);
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-900) 22%, transparent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--ink-900) 25%, transparent);
   transform: scale(1.03);
+  box-sizing: border-box;
+  pointer-events: none;
+  cursor: grabbing;
+}
+
+.dnd-card-ghost svg {
+  flex-shrink: 0;
+  color: var(--qing);
+}
+
+.dnd-card-ghost-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  cursor: grabbing;
 }
 
 .note-list-search-icon {

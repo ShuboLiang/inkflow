@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } fro
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   closestCenter,
+  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
   MeasuringStrategy,
@@ -13,7 +14,9 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
+  type DropAnimation,
 } from '@dnd-kit/core'
 import { db, type FileEntry, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
@@ -65,6 +68,7 @@ import {
   Trash2,
   Edit3,
   BookOpen,
+  FileText,
 } from 'lucide-react'
 
 // 本地临时持久化 tabs 的 storage key
@@ -324,6 +328,39 @@ export default function App() {
     return new Map([...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN')))
   }, [notes, files])
 
+  // 乐观位置覆盖：拖拽或菜单调序后立即在本地渲染生效，消除 IndexedDB 异步写入造成的列表回弹与闪烁
+  const [positionOverrides, setPositionOverrides] = useState<Record<string, number>>({})
+
+  // 渲染期自清理：当 IndexedDB 已同步最新 position 后，清理对应 override（避免 effect 级联渲染）
+  let hasStaleOverride = false
+  for (const id in positionOverrides) {
+    const n = notes?.find((x) => x.id === id)
+    if (n && n.position === positionOverrides[id]) {
+      hasStaleOverride = true
+      break
+    }
+    const f = files?.find((x) => x.id === id)
+    if (f && f.position === positionOverrides[id]) {
+      hasStaleOverride = true
+      break
+    }
+  }
+  if (hasStaleOverride) {
+    const next = { ...positionOverrides }
+    for (const id in next) {
+      const n = notes?.find((x) => x.id === id)
+      if (n && n.position === next[id]) {
+        delete next[id]
+        continue
+      }
+      const f = files?.find((x) => x.id === id)
+      if (f && f.position === next[id]) {
+        delete next[id]
+      }
+    }
+    setPositionOverrides(next)
+  }
+
   const visibleNotes = useMemo(() => {
     const all = notes ?? []
     const q = search.trim().toLowerCase()
@@ -343,12 +380,14 @@ export default function App() {
     }
     // 统一列表排序：position 升序（默认=创建时间新→旧的初始化顺序，拖拽过的固定不动）；
     // 无 position 的兜底排后。文件夹/标签视图沿用同一相对顺序
-    return [...scoped].sort(
-      (a, b) =>
-        (a.position ?? Infinity) - (b.position ?? Infinity) ||
-        (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
-    )
-  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree])
+    return [...scoped]
+      .map((n) => (positionOverrides[n.id] !== undefined ? { ...n, position: positionOverrides[n.id] } : n))
+      .sort(
+        (a, b) =>
+          (a.position ?? Infinity) - (b.position ?? Infinity) ||
+          (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
+      )
+  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree, positionOverrides])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
 
@@ -882,6 +921,7 @@ export default function App() {
     if (activeTag) {
       return (files ?? [])
         .filter((f) => !f.deletedAt && (f.tags ?? []).includes(activeTag))
+        .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
         .sort(byPosition)
     }
     const inScope = (folderId: string | null) =>
@@ -895,8 +935,9 @@ export default function App() {
           f.filename.toLowerCase().includes(q) ||
           ((f.folderId ?? null) !== null && folderHitSubtree !== null && folderHitSubtree.has(f.folderId as string)),
       )
+      .map((f) => (positionOverrides[f.id] !== undefined ? { ...f, position: positionOverrides[f.id] } : f))
       .sort(byPosition)
-  }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag])
+  }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag, positionOverrides])
 
   // ---------- 统一列表手动排序（笔记与文件共用 position 数轴） ----------
   type OrderItem = { kind: 'note' | 'file'; id: string; position: number | null }
@@ -913,6 +954,12 @@ export default function App() {
 
   // 全量重整：按给定完整顺序等距重编（跨两张表），只写有变化的行
   const applyManualOrder = async (ordered: OrderItem[]) => {
+    const overrides: Record<string, number> = {}
+    for (let i = 0; i < ordered.length; i++) {
+      overrides[ordered[i].id] = (i + 1) * 1000
+    }
+    setPositionOverrides((prev) => ({ ...prev, ...overrides }))
+
     let changed = 0
     for (let i = 0; i < ordered.length; i++) {
       const want = (i + 1) * 1000
@@ -969,6 +1016,7 @@ export default function App() {
     else if (prevPos !== null) pos = prevPos + 1000 // 拖到末尾
     else if (nextPos !== null) pos = nextPos - 1000 // 拖到开头
     else pos = 0
+    setPositionOverrides((prev) => ({ ...prev, [dragged.id]: pos }))
     writePosition(dragged.kind, dragged.id, pos)
   }
 
@@ -1014,17 +1062,30 @@ export default function App() {
     kind: 'note' | 'file'
     id: string
   } | null>(null)
+  const [activeDragItem, setActiveDragItem] = useState<{
+    kind: 'note' | 'file'
+    id: string
+    title: string
+  } | null>(null)
+  const [isOverZone, setIsOverZone] = useState(false)
 
   // 拖近左缘自动拉开移动端抽屉（侧栏 DOM 常驻仅 translateX 隐藏，droppable 可用）
   const handleDragMove = (e: DragMoveEvent) => {
     if (!e.active.data.current || e.active.data.current.type !== 'item') return
     if (e.delta.x < -40 && window.innerWidth < 1024) setSidebarOpen(true)
+    setIsOverZone(e.over?.data.current?.type === 'zone')
+  }
+
+  const handleDragOver = (e: DragOverEvent) => {
+    setIsOverZone(e.over?.data.current?.type === 'zone')
   }
 
   // 松手路由：item×item=排序；item×folder-zone=移动；item×tag-zone=加标签
   const handleDragEnd = (e: DragEndEvent) => {
     const info = dragInfo
     setDragInfo(null)
+    setIsOverZone(false)
+    setTimeout(() => setActiveDragItem(null), 300)
     if (!info) return
     const overData = e.over?.data.current as { type?: string; kind?: 'note' | 'file' } | undefined
     if (!e.over || !overData) return
@@ -1064,15 +1125,20 @@ export default function App() {
     }
   }
 
-  // DragOverlay 内容：被拖卡片的简化克隆（标题行），跟手显示
-  const dragOverlayItem =
-    dragInfo?.kind === 'note'
-      ? notes?.find((n) => n.id === dragInfo.id)
-      : undefined
-  const dragOverlayFile =
-    dragInfo?.kind === 'file'
-      ? files?.find((f) => f.id === dragInfo.id)
-      : undefined
+  const dropAnimationConfig: DropAnimation = useMemo(
+    () => ({
+      duration: 180,
+      easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+      sideEffects: defaultDropAnimationSideEffects({
+        styles: {
+          active: {
+            opacity: '0',
+          },
+        },
+      }),
+    }),
+    [],
+  )
 
 
   // 上传：pdf/html 存为当前文件夹的文件（原生预览）；md 在当前文件夹新建一篇笔记（文件名作标题）。
@@ -1177,7 +1243,13 @@ export default function App() {
   const handleDragStart = (e: DragStartEvent) => {
     const data = e.active.data.current as { type?: string; kind?: 'note' | 'file' } | undefined
     if (data?.type === 'item' && (data.kind === 'note' || data.kind === 'file')) {
-      setDragInfo({ kind: data.kind, id: String(e.active.id) })
+      const id = String(e.active.id)
+      setDragInfo({ kind: data.kind, id })
+      const title =
+        data.kind === 'note'
+          ? notes?.find((n) => n.id === id)?.title || '无标题'
+          : files?.find((f) => f.id === id)?.filename || '文件'
+      setActiveDragItem({ kind: data.kind, id, title })
     }
   }
 
@@ -1201,8 +1273,13 @@ export default function App() {
       collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setDragInfo(null)}
+      onDragCancel={() => {
+        setDragInfo(null)
+        setIsOverZone(false)
+        setActiveDragItem(null)
+      }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
@@ -1549,13 +1626,12 @@ export default function App() {
       </div>
       <DialogHost />
       {/* 跟手拖影：被拖卡片的简化克隆（投影+微缩放），原位留空槽由 SortableCard 处理 */}
-      <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
-        {dragOverlayItem ? (
+      <DragOverlay dropAnimation={isOverZone ? null : dropAnimationConfig}>
+        {activeDragItem ? (
           <div className="dnd-card-ghost">
-            {dragOverlayItem.title || '无标题'}
+            <FileText size={15} />
+            <span className="dnd-card-ghost-title">{activeDragItem.title}</span>
           </div>
-        ) : dragOverlayFile ? (
-          <div className="dnd-card-ghost">{dragOverlayFile.filename}</div>
         ) : null}
       </DragOverlay>
     </DndContext>

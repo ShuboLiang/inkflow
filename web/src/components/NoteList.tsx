@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import {
   FileText,
   Folder as FolderIcon,
@@ -24,17 +24,15 @@ interface NoteListProps {
   notes: Note[]
   files: FileEntry[]
   folders: Folder[]
-  folderHits: { id: string; name: string; path: string }[]
+  folderHits: Array<{ id: string; name: string; path: string }>
   activeId: string | null
-  currentFolderId?: string | null
+  currentFolderId: string | null
   search: string
   userId: string
-  onSearch: (value: string) => void
+  onSearch: (q: string) => void
   onSelectFolderHit: (id: string) => void
-  /** 文件夹 id → 路径名（如 课程 / 数学），找不到返回 null */
   folderPathOf: (folderId: string) => string | null
-  onGotoFolder: (folderId: string) => void
-  /** 点击卡片上的标签小圆片 → 按该标签过滤列表 */
+  onGotoFolder: (id: string) => void
   onSelectTag: (tag: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
@@ -42,8 +40,8 @@ interface NoteListProps {
   onUpload: (file: File) => void
   onRenameNote: (id: string) => void
   onRenameFile: (id: string, filename: string) => void
-  onMoveNote: (id: string, folderId: string | null) => void
-  onMoveFile: (id: string, folderId: string | null) => void
+  onMoveNote: (noteId: string, folderId: string | null) => void
+  onMoveFile: (fileId: string, folderId: string | null) => void
   onRequestPush: () => void
   /** dnd-kit 拖拽进行中（App 的 DndContext 驱动）：全量渲染 + 抑制右键菜单 */
   dragActive: boolean
@@ -56,7 +54,19 @@ interface NoteListProps {
 
 // 可排序卡片外壳：dnd-kit sortable 挂在 .card-wrap 上。拖起时用 DragOverlay 显示
 // 跟手拖影（App 渲染），原位保留空槽（.dnd-dragging 半透明虚线框），其余卡片平滑让位
-function SortableCard({ id, kind, children }: { id: string; kind: 'note' | 'file'; children: ReactNode }) {
+function SortableCard({
+  id,
+  kind,
+  dragActive,
+  dragJustEndedRef,
+  children,
+}: {
+  id: string
+  kind: 'note' | 'file'
+  dragActive: boolean
+  dragJustEndedRef: RefObject<boolean>
+  children: ReactNode
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     data: { type: 'item', kind },
@@ -66,6 +76,11 @@ function SortableCard({ id, kind, children }: { id: string; kind: 'note' | 'file
       ref={setNodeRef}
       className={isDragging ? 'card-wrap dnd-dragging' : 'card-wrap'}
       style={{ transform: CSS.Translate.toString(transform), transition }}
+      onClickCapture={(e) => {
+        if (dragActive || dragJustEndedRef.current) {
+          e.stopPropagation()
+        }
+      }}
       {...attributes}
       {...listeners}
     >
@@ -175,6 +190,20 @@ export function NoteList({
     setLastSearch(search)
     setRenderLimit(RENDER_PAGE)
   }
+
+  // 拖拽刚结束标记：防止拖拽释放时误触卡片单击打开笔记
+  const prevDragActive = useRef(dragActive)
+  const dragJustEndedRef = useRef(false)
+  useEffect(() => {
+    if (prevDragActive.current && !dragActive) {
+      dragJustEndedRef.current = true
+      const timer = setTimeout(() => {
+        dragJustEndedRef.current = false
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+    prevDragActive.current = dragActive
+  }, [dragActive])
 
   // 哨兵进入视口（提前 300px）就追加下一批
   useEffect(() => {
@@ -466,11 +495,14 @@ export function NoteList({
                     }}
                   />
                 ) : (
-                  <SortableCard key={file.id} id={file.id} kind="file">
+                  <SortableCard key={file.id} id={file.id} kind="file" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
                     <button
                       type="button"
                       className="note-card file-card"
-                      onClick={() => onSelectFile(file.id)}
+                      onClick={() => {
+                        if (dragActive || dragJustEndedRef.current) return
+                        onSelectFile(file.id)
+                      }}
                       onContextMenu={(e) => {
                         // Android 长按启动拖拽时会带出系统菜单
                         if (dragActive) {
@@ -530,11 +562,14 @@ export function NoteList({
               }
               const note = notes.find((n) => n.id === it.id)!
               return (
-                <SortableCard key={note.id} id={note.id} kind="note">
+                <SortableCard key={note.id} id={note.id} kind="note" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
                   <button
                     type="button"
                     className={note.id === activeId ? 'note-card active' : 'note-card'}
-                    onClick={() => onSelect(note.id)}
+                    onClick={() => {
+                      if (dragActive || dragJustEndedRef.current) return
+                      onSelect(note.id)
+                    }}
                     onContextMenu={(e) => {
                       if (dragActive) {
                         e.preventDefault()
