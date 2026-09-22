@@ -14,6 +14,8 @@
      :root 与 [data-theme] 同挂在 <html> 上，这里的 var() 取到的就是当主题的值 */
   --ink-700: color-mix(in srgb, var(--ink-900) 65%, var(--ink-500));
   --ink-600: color-mix(in srgb, var(--ink-900) 45%, var(--ink-500));
+  --ink-100: color-mix(in srgb, var(--ink-200) 50%, var(--surface));
+  --ink-50: color-mix(in srgb, var(--ink-200) 20%, var(--surface));
   --qing-200: color-mix(in srgb, var(--qing) 40%, transparent);
   --qing-hover: color-mix(in srgb, var(--qing) 85%, #000);
 

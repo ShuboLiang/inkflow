@@ -285,12 +285,16 @@ export function VersionHistoryModal({
     >
       <div className="vhm-modal" onClick={(e) => e.stopPropagation()}>
         {/* 顶部标题栏 */}
-        <header className="vhm-header">
+        <header className={`vhm-header ${mobileShowDetail ? 'mobile-in-detail' : ''}`}>
           <div className="vhm-header-left">
             <History size={18} className="vhm-header-icon" />
             <div className="vhm-header-titles">
               <h3 id="vhm-dialog-title" className="vhm-title">
-                版本历史
+                {mobileShowDetail
+                  ? selectedVersion
+                    ? selectedVersion.name || '快照详情'
+                    : '版本详情'
+                  : '版本历史'}
               </h3>
               <span className="vhm-subtitle" title={note.title || '无标题'}>
                 {note.title || '无标题'}
@@ -307,7 +311,7 @@ export function VersionHistoryModal({
               title="为当前工作区内容创建一个命名快照"
             >
               <Bookmark size={14} />
-              <span>标记当前版本</span>
+              <span className="vhm-milestone-btn-text">标记当前版本</span>
             </button>
             <button
               type="button"

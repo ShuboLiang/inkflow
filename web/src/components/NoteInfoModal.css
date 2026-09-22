@@ -317,3 +317,38 @@
   transform: translateX(2px);
 }
 
+/* 移动端视口适配：自底向上滑出的 Sheet 抽屉 */
+@media (max-width: 767px) {
+  .note-info-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .note-info-card {
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    animation: note-info-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes note-info-slide-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .note-info-body {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .note-info-footer {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 12px));
+  }
+}
+
+
