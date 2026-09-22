@@ -198,7 +198,7 @@
 }
 
 .editor-reading-mode .ProseMirror a:hover {
-  color: var(--qing-hover, #087f5b);
+  color: var(--qing-hover);
   text-decoration-color: currentColor;
 }
 
