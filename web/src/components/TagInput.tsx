@@ -118,7 +118,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
             aria-label="关闭标签面板"
             title="关闭"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         )}
       </div>
@@ -162,7 +162,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
               inputRef.current?.focus()
             }}
           >
-            <X size={13} />
+            <X size={15} />
           </button>
         )}
       </div>
@@ -199,7 +199,7 @@ export function TagInput({ tags, suggestions, onChange, onClose }: TagInputProps
                   aria-label={`移除标签 ${tag}`}
                   onClick={() => removeAt(i)}
                 >
-                  <X size={11} />
+                  <X size={14} />
                 </button>
               </span>
             ))}

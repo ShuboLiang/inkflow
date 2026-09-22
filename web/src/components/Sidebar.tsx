@@ -529,7 +529,7 @@ export function Sidebar({
               aria-label="清空标签搜索"
               onClick={() => setTagFilter('')}
             >
-              <X size={13} />
+              <X size={15} />
             </button>
           )}
         </div>
