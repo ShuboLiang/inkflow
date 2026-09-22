@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
+import { Droplet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import './Auth.css'
 
 type Mode = 'signin' | 'signup'
 
@@ -45,32 +47,35 @@ export function Auth() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>InkFlow</h1>
-        <div style={styles.tabs}>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-brand-mark">
+            <Droplet size={26} strokeWidth={1.75} />
+          </div>
+          <h1 className="auth-title">InkFlow</h1>
+          <p className="auth-tagline">本地优先 · 云同步</p>
+        </div>
+        <div className="auth-tabs">
           {(['signin', 'signup'] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => switchMode(m)}
-              style={{
-                ...styles.tab,
-                ...(mode === m ? styles.tabActive : {}),
-              }}
+              className={`auth-tab${mode === m ? ' active' : ''}`}
             >
               {m === 'signin' ? '登录' : '注册'}
             </button>
           ))}
         </div>
-        <form onSubmit={handleSubmit} style={styles.form}>
+        <form onSubmit={handleSubmit} className="auth-form">
           <input
             type="email"
             required
             placeholder="邮箱"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={styles.input}
+            className="auth-input"
           />
           <input
             type="password"
@@ -79,74 +84,15 @@ export function Auth() {
             placeholder="密码（至少 6 位）"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
+            className="auth-input"
           />
-          {error && <p style={styles.error}>{error}</p>}
-          {notice && <p style={styles.notice}>{notice}</p>}
-          <button type="submit" disabled={loading} style={styles.submit}>
+          {error && <p className="auth-error">{error}</p>}
+          {notice && <p className="auth-notice">{notice}</p>}
+          <button type="submit" disabled={loading} className="auth-submit">
             {loading ? '请稍候…' : mode === 'signin' ? '登录' : '注册'}
           </button>
         </form>
       </div>
     </div>
   )
-}
-
-// 登录页跟随主题：内联样式里引用 CSS 变量（与主应用共用一套令牌）
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'var(--paper)',
-    color: 'var(--ink-900)',
-    fontFamily: 'var(--font-ui)',
-  },
-  card: {
-    width: 340,
-    padding: 32,
-    background: 'var(--surface)',
-    borderRadius: 'var(--radius)',
-    boxShadow: '0 4px 24px color-mix(in srgb, var(--ink-900) 8%, transparent)',
-  },
-  title: {
-    margin: '0 0 20px',
-    textAlign: 'center',
-    fontSize: 22,
-    fontFamily: 'var(--font-note)',
-  },
-  tabs: { display: 'flex', marginBottom: 20, borderBottom: '1px solid var(--ink-200)' },
-  tab: {
-    flex: 1,
-    padding: '8px 0',
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    fontSize: 14,
-    color: 'var(--ink-500)',
-    borderBottom: '2px solid transparent',
-  },
-  tabActive: { color: 'var(--ink-900)', fontWeight: 600, borderBottomColor: 'var(--qing)' },
-  form: { display: 'flex', flexDirection: 'column', gap: 12 },
-  input: {
-    padding: '10px 12px',
-    border: '1px solid var(--ink-200)',
-    borderRadius: 'var(--radius-s)',
-    background: 'var(--paper)',
-    color: 'var(--ink-900)',
-    fontSize: 14,
-  },
-  submit: {
-    padding: '10px 0',
-    border: 'none',
-    borderRadius: 'var(--radius-s)',
-    background: 'var(--qing)',
-    color: 'var(--paper)',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  error: { margin: 0, fontSize: 13, color: 'var(--danger)' },
-  notice: { margin: 0, fontSize: 13, color: 'var(--qing)' },
 }
