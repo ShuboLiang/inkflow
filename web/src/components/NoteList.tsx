@@ -602,8 +602,8 @@ export function NoteList({
             </div>
             <div className="note-card-time">
               {isTrash && file.deletedAt
-                ? `删除于 ${formatTime(file.deletedAt)}`
-                : [formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
+                ? [`删除于 ${formatTime(file.deletedAt)}`, formatSize(file.size)].filter(Boolean).join(' · ')
+                : [formatTime(file.updatedAt), formatSize(file.size)].filter(Boolean).join(' · ')}
             </div>
             {!isTrash && (file.tags ?? []).length > 0 && (
               <div className="note-card-tags">
