@@ -38,13 +38,14 @@
   background: var(--surface);
   font-size: 13px;
   color: var(--ink-900);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .note-list-search input:focus {
   outline: none;
   border-color: var(--qing);
   background: var(--paper);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qing) 20%, transparent);
 }
 
 .note-list-search-clear {

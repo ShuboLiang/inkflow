@@ -47,11 +47,13 @@
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink-900);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .dlg-input:focus-visible {
   outline: none;
   border-color: var(--qing);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qing) 20%, transparent);
 }
 
 .dlg-actions {
