@@ -107,7 +107,7 @@
   width: 20px;
   height: 20px;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-s);
   background: none;
   color: var(--ink-500);
   line-height: 1;

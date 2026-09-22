@@ -1,10 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileText, X, Plus } from 'lucide-react'
+import { FileText, Plus } from 'lucide-react'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { isHtmlFile } from '../lib/importFile'
 import type { TabItem } from '../store/prefs'
 import type { Note, FileEntry } from '../lib/db'
 import './TabBar.css'
+
+// 标准标签页关闭矢量图标（遵循原生浏览器/VS Code 紧凑精致比例，带微圆角端点）
+function CloseIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" />
+    </svg>
+  )
+}
 
 interface TabBarProps {
   tabs: TabItem[]
@@ -139,7 +158,7 @@ export function TabBar({
                     onCloseTab(tab.id)
                   }}
                 >
-                  <X size={14} />
+                  <CloseIcon size={14} />
                 </button>
               </div>
             )
