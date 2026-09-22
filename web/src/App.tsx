@@ -87,6 +87,91 @@ import {
 
 // 本地临时持久化 tabs 的 storage key
 const tabsStorageKey = (userId: string) => `inkflow:tabs:${userId}`
+const lastFolderKey = (userId: string) => `inkflow:lastFolder:${userId}`
+
+interface NavParams {
+  folder?: string | null
+  tag?: string | null
+  q?: string
+  noteId?: string | null
+  fileId?: string | null
+}
+
+function parseUrlNavState(): {
+  folder: string | null
+  tag: string | null
+  q: string
+  noteId: string | null
+  fileId: string | null
+} {
+  try {
+    const p = new URLSearchParams(window.location.search)
+    return {
+      folder: p.get('folder'),
+      tag: p.get('tag'),
+      q: p.get('q') ?? '',
+      noteId: p.get('note'),
+      fileId: p.get('file'),
+    }
+  } catch {
+    return { folder: null, tag: null, q: '', noteId: null, fileId: null }
+  }
+}
+
+function syncUrlNavState(patch: NavParams, mode: 'push' | 'replace' = 'replace') {
+  try {
+    const url = new URL(window.location.href)
+    if (patch.folder !== undefined) {
+      if (!patch.folder || patch.folder === 'all') {
+        url.searchParams.delete('folder')
+      } else {
+        url.searchParams.set('folder', patch.folder)
+      }
+    }
+    if (patch.tag !== undefined) {
+      if (patch.tag) {
+        url.searchParams.set('tag', patch.tag)
+      } else {
+        url.searchParams.delete('tag')
+      }
+    }
+    if (patch.q !== undefined) {
+      const q = patch.q.trim()
+      if (q) {
+        url.searchParams.set('q', q)
+      } else {
+        url.searchParams.delete('q')
+      }
+    }
+    if (patch.noteId !== undefined) {
+      if (patch.noteId) {
+        url.searchParams.set('note', patch.noteId)
+        url.searchParams.delete('file')
+      } else {
+        url.searchParams.delete('note')
+      }
+    }
+    if (patch.fileId !== undefined) {
+      if (patch.fileId) {
+        url.searchParams.set('file', patch.fileId)
+        url.searchParams.delete('note')
+      } else {
+        url.searchParams.delete('file')
+      }
+    }
+
+    const query = url.searchParams.toString()
+    const targetUrl = query ? `${url.pathname}?${query}${url.hash}` : `${url.pathname}${url.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (targetUrl !== currentUrl) {
+      if (mode === 'push') {
+        window.history.pushState(null, '', targetUrl)
+      } else {
+        window.history.replaceState(null, '', targetUrl)
+      }
+    }
+  } catch {}
+}
 
 const DESKTOP_SIDEBAR_KEY = 'inkflow:desktop:sidebarCollapsed'
 const DESKTOP_NOTELIST_KEY = 'inkflow:desktop:noteListCollapsed'
@@ -108,14 +193,20 @@ function folderPathNames(id: string, folders: { id: string; name: string; parent
 export default function App() {
   const { user, loading, signOut } = useAuth()
   const { status: syncStatus, requestPush } = useSync(user)
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeFileId, setActiveFileId] = useState<string | null>(null)
+  const initialNav = useMemo(() => parseUrlNavState(), [])
+  const [activeId, setActiveId] = useState<string | null>(initialNav.noteId)
+  const [activeFileId, setActiveFileId] = useState<string | null>(initialNav.fileId)
   const [tabs, setTabs] = useState<TabItem[]>([])
-  const [activeFolderId, setActiveFolderId] = useState<string>('all')
-  const [activeTag, setActiveTag] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  const [activeFolderId, setActiveFolderId] = useState<string>(() => {
+    if (initialNav.folder) return initialNav.folder
+    return 'all'
+  })
+  const [activeTag, setActiveTag] = useState<string | null>(initialNav.tag)
+  const [search, setSearch] = useState(initialNav.q)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
+  const [mobileView, setMobileView] = useState<'list' | 'editor'>(
+    initialNav.noteId || initialNav.fileId ? 'editor' : 'list',
+  )
   // 阅读模式：持久化保存在 localStorage 中，跨笔记保持
   const [readingMode, setReadingMode] = useState<boolean>(() => {
     try {
@@ -624,12 +715,14 @@ export default function App() {
 
   const handleCreate = async () => {
     flushSave()
-    const note = await createNote('', activeFolderId === 'all' ? null : activeFolderId)
+    const targetFolder = activeFolderId === 'all' || activeFolderId === 'trash' ? null : activeFolderId
+    const note = await createNote('', targetFolder)
     setTitleFocusReq({ id: note.id, n: ++titleFocusSeq.current })
     setTabs((prev) => [...prev, { kind: 'note', id: note.id }])
     setActiveFileId(null)
     setActiveId(note.id)
     setMobileView('editor')
+    syncUrlNavState({ noteId: note.id, fileId: null }, 'replace')
   }
 
   const handleSelect = (id: string) => {
@@ -641,6 +734,7 @@ export default function App() {
     setActiveFileId(null)
     setActiveId(id)
     setMobileView('editor')
+    syncUrlNavState({ noteId: id, fileId: null }, 'replace')
   }
 
   const handleSelectTab = (tab: TabItem) => {
@@ -648,9 +742,11 @@ export default function App() {
     if (tab.kind === 'note') {
       setActiveFileId(null)
       setActiveId(tab.id)
+      syncUrlNavState({ noteId: tab.id, fileId: null }, 'replace')
     } else {
       setActiveId(null)
       setActiveFileId(tab.id)
+      syncUrlNavState({ fileId: tab.id, noteId: null }, 'replace')
     }
     setMobileView('editor')
   }
@@ -668,15 +764,18 @@ export default function App() {
       if (nextTabs.length === 0) {
         setActiveId(null)
         setActiveFileId(null)
+        syncUrlNavState({ noteId: null, fileId: null }, 'replace')
       } else {
         const nextActiveIndex = Math.min(targetIndex, nextTabs.length - 1)
         const nextActive = nextTabs[nextActiveIndex]
         if (nextActive.kind === 'note') {
           setActiveFileId(null)
           setActiveId(nextActive.id)
+          syncUrlNavState({ noteId: nextActive.id, fileId: null }, 'replace')
         } else {
           setActiveId(null)
           setActiveFileId(nextActive.id)
+          syncUrlNavState({ fileId: nextActive.id, noteId: null }, 'replace')
         }
       }
     }
@@ -690,9 +789,11 @@ export default function App() {
     if (kept.kind === 'note') {
       setActiveFileId(null)
       setActiveId(kept.id)
+      syncUrlNavState({ noteId: kept.id, fileId: null }, 'replace')
     } else {
       setActiveId(null)
       setActiveFileId(kept.id)
+      syncUrlNavState({ fileId: kept.id, noteId: null }, 'replace')
     }
   }
 
@@ -701,6 +802,7 @@ export default function App() {
     setTabs([])
     setActiveId(null)
     setActiveFileId(null)
+    syncUrlNavState({ noteId: null, fileId: null }, 'replace')
   }
 
   // 右键菜单「重命名」：选中并聚焦标题输入框
@@ -729,10 +831,17 @@ export default function App() {
   const handleSelectFolder = (id: string) => {
     setActiveFolderId(id)
     setActiveTag(null)
+    setSearch('')
     setSidebarOpen(false)
     // 手机上选文件夹=切换浏览上下文：从笔记里跳回列表（与侧栏选标签的行为一致）
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
+    if (user) {
+      try {
+        localStorage.setItem(lastFolderKey(user.id), id)
+      } catch {}
+    }
+    syncUrlNavState({ folder: id, tag: null, q: '' }, 'push')
   }
 
   // 点击搜索结果里的文件夹：跳转进去并清空搜索/标签筛选
@@ -743,6 +852,12 @@ export default function App() {
     setSidebarOpen(false)
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
+    if (user) {
+      try {
+        localStorage.setItem(lastFolderKey(user.id), id)
+      } catch {}
+    }
+    syncUrlNavState({ folder: id, tag: null, q: '' }, 'push')
   }
 
   // 跳到笔记/文件所在文件夹（保留打开的内容，只切换列表上下文）
@@ -751,12 +866,29 @@ export default function App() {
     setSearch('')
     setActiveFolderId(folderId)
     setSidebarOpen(false)
+    if (user) {
+      try {
+        localStorage.setItem(lastFolderKey(user.id), folderId)
+      } catch {}
+    }
+    syncUrlNavState({ folder: folderId, tag: null, q: '' }, 'push')
   }
+
+  const handleSearch = useCallback((q: string) => {
+    setSearch(q)
+    syncUrlNavState({ q }, 'replace')
+  }, [])
 
   const handleCreateFolder = async (name: string, parentId: string | null = null) => {
     const folder = await createFolder(name, parentId)
     requestPush()
     setActiveFolderId(folder.id)
+    if (user) {
+      try {
+        localStorage.setItem(lastFolderKey(user.id), folder.id)
+      } catch {}
+    }
+    syncUrlNavState({ folder: folder.id }, 'push')
   }
 
   // 文件夹拖到另一个文件夹上 = 变成其子文件夹；拖到「全部笔记」= 移回顶层。
@@ -789,7 +921,15 @@ export default function App() {
     })
     if (!ok) return
     await deleteFolder(id)
-    if (activeFolderSubtree?.has(id)) setActiveFolderId('all')
+    if (activeFolderSubtree?.has(id) || activeFolderId === id) {
+      setActiveFolderId('all')
+      if (user) {
+        try {
+          localStorage.setItem(lastFolderKey(user.id), 'all')
+        } catch {}
+      }
+      syncUrlNavState({ folder: 'all' }, 'replace')
+    }
     requestPush()
   }
 
@@ -802,11 +942,14 @@ export default function App() {
   }
 
   const handleToggleTag = (name: string) => {
-    setActiveTag((cur) => (cur === name ? null : name))
+    const next = activeTag === name ? null : name
+    setSearch('')
+    setActiveTag(next)
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
     // 与点文件夹一致：移动端选完标签随手关抽屉（桌面端 sidebarOpen 无效果）
     setSidebarOpen(false)
+    syncUrlNavState({ tag: next, q: '' }, 'push')
   }
 
   // 卡片标签点击：搜索词优先级高于标签过滤，不清空搜索的话点了标签也看不到过滤效果
@@ -816,6 +959,7 @@ export default function App() {
     setMobileView('list')
     setDesktopNoteListCollapsed(false)
     setSidebarOpen(false)
+    syncUrlNavState({ tag: name, q: '' }, 'push')
   }
 
   const handleRenameTag = async (oldName: string, newName: string) => {
@@ -828,7 +972,10 @@ export default function App() {
     })
     if (!ok) return
     await renameTag(oldName, newName)
-    if (activeTag === oldName) setActiveTag(newName)
+    if (activeTag === oldName) {
+      setActiveTag(newName)
+      syncUrlNavState({ tag: newName }, 'replace')
+    }
     requestPush()
   }
 
@@ -841,7 +988,10 @@ export default function App() {
     })
     if (!ok) return
     await deleteTag(name)
-    if (activeTag === name) setActiveTag(null)
+    if (activeTag === name) {
+      setActiveTag(null)
+      syncUrlNavState({ tag: null }, 'replace')
+    }
     requestPush()
   }
 
@@ -937,28 +1087,52 @@ export default function App() {
         }
       }
 
+      // 优先支持从 URL (initialNav) 恢复打开指定的笔记或文件
+      const allNotes = (notes ?? []).concat(deletedNotes ?? [])
+      const allFiles = (files ?? []).concat(deletedFiles ?? [])
+
+      if (initialNav.noteId && allNotes.some((n) => n.id === initialNav.noteId)) {
+        if (!loadedTabs.some((t) => t.kind === 'note' && t.id === initialNav.noteId)) {
+          loadedTabs.push({ kind: 'note', id: initialNav.noteId })
+        }
+        loadedActiveTabId = initialNav.noteId
+      } else if (initialNav.fileId && allFiles.some((f) => f.id === initialNav.fileId)) {
+        if (!loadedTabs.some((t) => t.kind === 'file' && t.id === initialNav.fileId)) {
+          loadedTabs.push({ kind: 'file', id: initialNav.fileId })
+        }
+        loadedActiveTabId = initialNav.fileId
+      }
+
       const initialValid = loadedTabs.filter((t) => {
         if (t.kind === 'file') {
-          return files.some((x) => x.id === t.id && !x.deletedAt)
+          return files.some((x) => x.id === t.id && !x.deletedAt) || Boolean(deletedFiles?.some((x) => x.id === t.id))
         } else {
-          return notes.some((x) => x.id === t.id && x.deletedAt === null)
+          return notes.some((x) => x.id === t.id && x.deletedAt === null) || Boolean(deletedNotes?.some((x) => x.id === t.id))
         }
       })
+
+      // 恢复当前文件夹现场：优先 URL 参数，其次本设备 localStorage
+      const savedFolder = initialNav.folder || localStorage.getItem(lastFolderKey(user.id))
+      if (savedFolder) {
+        setActiveFolderId(savedFolder)
+      }
 
       if (initialValid.length > 0) {
         setTabs(initialValid)
         const activeItem = initialValid.find((t) => t.id === loadedActiveTabId) || initialValid[0]
         if (activeItem.kind === 'file') {
-          const f = files.find((x) => x.id === activeItem.id)
+          const f = allFiles.find((x) => x.id === activeItem.id)
           if (f) {
             setActiveFileId(f.id)
-            if (f.folderId) setActiveFolderId(f.folderId)
+            setActiveId(null)
+            if (!savedFolder && f.folderId) setActiveFolderId(f.folderId)
           }
         } else {
-          const n = notes.find((x) => x.id === activeItem.id)
+          const n = allNotes.find((x) => x.id === activeItem.id)
           if (n) {
             setActiveId(n.id)
-            if (n.folderId) setActiveFolderId(n.folderId)
+            setActiveFileId(null)
+            if (!savedFolder && n.folderId) setActiveFolderId(n.folderId)
           }
         }
       }
@@ -993,6 +1167,42 @@ export default function App() {
       if (savePrefsTimer.current) clearTimeout(savePrefsTimer.current)
     }
   }, [user, restored, validTabs, activeId, activeFileId, toolbarHidden, theme])
+
+  // 监听浏览器前进/后退，无缝同步导航现场
+  useEffect(() => {
+    const onPopState = () => {
+      const nav = parseUrlNavState()
+      if (nav.folder) {
+        setActiveFolderId(nav.folder)
+      } else if (user) {
+        const saved = localStorage.getItem(lastFolderKey(user.id))
+        setActiveFolderId(saved || 'all')
+      } else {
+        setActiveFolderId('all')
+      }
+      setActiveTag(nav.tag)
+      setSearch(nav.q)
+      if (nav.noteId) {
+        setActiveId(nav.noteId)
+        setActiveFileId(null)
+        setTabs((prev) => {
+          if (prev.some((t) => t.kind === 'note' && t.id === nav.noteId)) return prev
+          return [...prev, { kind: 'note', id: nav.noteId as string }]
+        })
+        setMobileView('editor')
+      } else if (nav.fileId) {
+        setActiveId(null)
+        setActiveFileId(nav.fileId)
+        setTabs((prev) => {
+          if (prev.some((t) => t.kind === 'file' && t.id === nav.fileId)) return prev
+          return [...prev, { kind: 'file', id: nav.fileId as string }]
+        })
+        setMobileView('editor')
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [user])
 
   // 当前视图里的文件。「默认」= 无文件夹的文件；文件夹视图 = 该文件夹（含子树）
   // 回收站视图 = 已删除的文件；
@@ -1261,6 +1471,7 @@ export default function App() {
       setActiveId(null)
       setActiveFileId(saved.id)
       setMobileView('editor')
+      syncUrlNavState({ fileId: saved.id, noteId: null }, 'replace')
       return
     }
     try {
@@ -1274,6 +1485,7 @@ export default function App() {
       setActiveFileId(null)
       setActiveId(note.id)
       setMobileView('editor')
+      syncUrlNavState({ noteId: note.id, fileId: null }, 'replace')
     } catch {
       await alertDialog({ title: '导入失败', message: `导入 ${file.name} 失败：无法解析内容` })
     }
@@ -1296,6 +1508,7 @@ export default function App() {
     setActiveId(null)
     setActiveFileId(id)
     setMobileView('editor')
+    syncUrlNavState({ fileId: id, noteId: null }, 'replace')
   }
 
   const handleDeleteFile = async () => {
@@ -1469,7 +1682,10 @@ export default function App() {
           <button
             type="button"
             className="app-topbar-back"
-            onClick={() => setMobileView('list')}
+            onClick={() => {
+              setMobileView('list')
+              syncUrlNavState({ noteId: null, fileId: null }, 'replace')
+            }}
           >
             <ChevronLeft size={16} />
             <span>列表</span>
@@ -1758,7 +1974,7 @@ export default function App() {
           currentFolderId={activeFolderId}
           search={search}
           userId={user.id}
-          onSearch={setSearch}
+          onSearch={handleSearch}
           onSelectFolderHit={handleSelectFolderHit}
           folderPathOf={(id) => folderPathNames(id, folders ?? [])}
           onGotoFolder={handleGotoFolder}
