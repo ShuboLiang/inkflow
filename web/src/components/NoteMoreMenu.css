@@ -94,7 +94,7 @@
 
 .note-more-item.danger .note-more-label,
 .note-more-item.danger .note-more-icon {
-  color: var(--danger, #dc2626);
+  color: var(--danger);
 }
 
 @media (hover: hover) {
@@ -107,11 +107,11 @@
   }
 
   .note-more-item.danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
 
   .note-more-item.danger:hover:not(:disabled) .note-more-icon {
-    color: var(--danger, #dc2626);
+    color: var(--danger);
   }
 }
 
@@ -121,7 +121,7 @@
   }
 
   .note-more-item.danger:active:not(:disabled) {
-    background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
   }
 }
 
