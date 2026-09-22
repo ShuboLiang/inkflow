@@ -51,6 +51,9 @@ cat summary.md | node "$SKILL_DIR/scripts/write-note.mjs" --title "会议总结"
 # 搜索笔记（标题/正文/标签命中），拿 id 用于更新
 node skills/inkflow-notes/scripts/write-note.mjs --find "关键词"
 
+# 上传图片（本地文件或网络图片，返回 InkFlow 存储后的公共 URL）
+node skills/inkflow-notes/scripts/write-note.mjs --upload-image ./chart.png
+
 # 更新已有笔记（用笔记 uuid 覆盖）
 node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础(修订)" note.md --id <uuid>
 ```
@@ -68,6 +71,20 @@ node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础(修
 3. **无合适则不打标签**：如果现有标签中没有与笔记主题契合的标签，**直接不传 `--tags` 参数，不要凭空发明新标签**；
 4. **脚本硬拦截**：`write-note.mjs` 底层已强制校验，任何不存在的新标签会被自动过滤剔除。
 
+## 图片处理规范（严格遵守）
+
+**如果写的笔记包含图片，必须先把图片上传到 InkFlow，然后使用上传后的链接放入 Markdown：**
+
+1. **先上传后引用**：写笔记前若需要插入图片（无论本地文件还是网络图片），先调用脚本上传：
+   ```bash
+   node skills/inkflow-notes/scripts/write-note.mjs --upload-image <图片本地路径或网络URL>
+   ```
+   脚本返回形如 `https://kod.liangshubo.top/storage/v1/object/public/images/{uuid}.png` 的公共链接。
+2. **在 Markdown 中使用**：获取链接后，以 `![描述](上传后的链接)` 写入 Markdown。
+3. **图片必须独占一行**：TipTap 编辑器中图片为独立块级节点，图片语法行**前后必须留有空行**，严禁混排在文字段落内部。
+4. **防盗链与防失效**：所有外部网络图片必须先转存到 InkFlow，避免外链防盗链 403 或原站删图导致笔记图片碎图。
+5. **脚本兜底**：若直接向 `write-note.mjs` 传入含本地路径或外部网络图片的 Markdown，脚本在转换阶段也会自动转存至 InkFlow Storage 并替换为公共链接。
+
 ## Markdown 支持范围
 
 脚本转换器覆盖编辑器全部常用语法：`#`/`##`/`###` 标题、`**粗体**`、`*斜体*`、`` `行内代码` ``、
@@ -78,9 +95,10 @@ node skills/inkflow-notes/scripts/write-note.mjs --title "深度学习基础(修
 - `{{重点}}` 红色文字（最常用），`{{蓝:文字}}` 指定色文字；色名：红/橙/绿/青/蓝/紫/灰
 - `==高亮==` 黄色荧光，`==红:高亮==` 指定底色；底色名：黄/红/橙/绿/青/蓝/紫
 
-图片 `![说明](路径)`：
-- `https://` 开头：原样引用
-- 本地路径：自动上传到 Storage 公共桶 `images` 并替换为公共 URL
+图片 `![说明](链接)`：
+- 推荐使用 `--upload-image` 提前上传，拿到 InkFlow 公共 URL 后写入
+- 本地路径或未上传的外链：`write-note.mjs` 会自动上传到 Storage 公共桶 `images` 并替换为公共 URL
+- 必须独占一行（前后空行），作为独立块级节点
 - 每个非空行是一个段落；列表/引用连续的行会合并为一个列表/引用块
 
 `--dry-run` 只打印转换后的 TipTap JSON、不写库（调试语法用）。

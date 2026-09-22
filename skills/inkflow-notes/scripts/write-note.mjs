@@ -33,7 +33,7 @@ function opt(name) {
   return i >= 0 ? args[i + 1] : undefined
 }
 const title = opt('title') || ''
-const VALUE_FLAGS = new Set(['--title', '--folder', '--tags', '--id'])
+const VALUE_FLAGS = new Set(['--title', '--folder', '--tags', '--id', '--upload-image', '--find'])
 const fileArg = args.find((a, i) => !a.startsWith('--') && (i === 0 || !VALUE_FLAGS.has(args[i - 1])))
 const useStdin = args.includes('--stdin')
 const dryRun = args.includes('--dry-run')
@@ -41,23 +41,25 @@ const loginOnly = args.includes('--login')
 const listTagsOnly = args.includes('--list-tags') || args.includes('--tags-list')
 const allowNewTags = args.includes('--allow-new-tags')
 const findQuery = opt('find')
+const uploadImageArg = opt('upload-image')
 const folderPath = opt('folder') // 支持 a/b 多级；undefined = 更新时保留原文件夹
 const tagsArg = opt('tags') // undefined = 更新时保留原标签；'' = 显式清空
 const tags = (tagsArg || '').split(',').map((s) => s.trim()).filter(Boolean)
 const noteId = opt('id') // 提供则更新已有笔记
 
-if (loginOnly || listTagsOnly || findQuery !== undefined) {
-  // --login / --list-tags / --find：不走写笔记主流程
+if (loginOnly || listTagsOnly || findQuery !== undefined || uploadImageArg !== undefined) {
+  // --login / --list-tags / --find / --upload-image：不走写笔记主流程
 } else if ((!fileArg && !useStdin) || (!title && !useStdin)) {
   console.error('用法: node write-note.mjs --title "标题" 笔记.md [--folder a/b] [--tags x,y] [--id uuid] [--dry-run]')
   console.error('   或: cat 笔记.md | node write-note.mjs --title "标题" --stdin [--folder a/b]')
   console.error('查看已有标签: node write-note.mjs --list-tags')
   console.error('搜索笔记: node write-note.mjs --find "关键词"   （拿 id 用于 --id 更新）')
+  console.error('上传图片: node write-note.mjs --upload-image <本地路径或网络URL>')
   console.error('首次配置认证: INKFLOW_EMAIL=x INKFLOW_PASSWORD=y node write-note.mjs --login')
   process.exit(1)
 }
 
-const mdText = loginOnly || listTagsOnly || findQuery !== undefined ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
+const mdText = loginOnly || listTagsOnly || findQuery !== undefined || uploadImageArg !== undefined ? '' : useStdin || !fileArg ? readFileSync(0, 'utf8') : readFileSync(fileArg, 'utf8')
 const mdDir = fileArg ? dirname(resolve(fileArg)) : process.cwd()
 
 
@@ -275,20 +277,59 @@ if (listTagsOnly) {
   }
 }
 
-// ---------- 图片上传（本地路径 → images 公共桶） ----------
-async function uploadImage(localPath) {
-  const abs = resolve(mdDir, localPath)
-  if (!existsSync(abs)) {
-    console.error(`警告: 图片不存在，保留原路径: ${localPath}`)
-    return localPath
-  }
-  const buf = readFileSync(abs)
-  const ext = (extname(abs).slice(1) || 'png').toLowerCase()
+// ---------- 图片上传（本地路径 / 网络 URL → images 公共桶） ----------
+async function uploadImage(inputPathOrUrl) {
   const IMG_MIME = {
     png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
     gif: 'image/gif', svg: 'image/svg+xml', bmp: 'image/bmp',
   }
-  const mime = IMG_MIME[ext] || 'image/png'
+
+  // 若已经是 InkFlow 存储的图片链接，直接返回
+  if (typeof inputPathOrUrl === 'string' && inputPathOrUrl.startsWith(`${SUPABASE_URL}/storage/v1/object/public/images/`)) {
+    return inputPathOrUrl
+  }
+
+  let buf
+  let ext = 'png'
+  let mime = 'image/png'
+
+  if (/^https?:\/\//i.test(inputPathOrUrl)) {
+    try {
+      const res = await fetch(inputPathOrUrl)
+      if (!res.ok) {
+        console.error(`网络图片下载失败 ${inputPathOrUrl}: ${res.status} ${res.statusText}`)
+        return inputPathOrUrl
+      }
+      buf = Buffer.from(await res.arrayBuffer())
+      const contentType = res.headers.get('content-type') || ''
+      let urlExt = ''
+      try {
+        urlExt = extname(new URL(inputPathOrUrl).pathname).slice(1).toLowerCase()
+      } catch {}
+      if (contentType.startsWith('image/')) {
+        mime = contentType.split(';')[0].trim()
+        const foundExt = Object.entries(IMG_MIME).find(([, m]) => m === mime)?.[0]
+        ext = foundExt || urlExt || 'png'
+      } else if (urlExt && IMG_MIME[urlExt]) {
+        ext = urlExt
+        mime = IMG_MIME[urlExt]
+      }
+    } catch (err) {
+      console.error(`网络图片下载异常 ${inputPathOrUrl}:`, err.message)
+      return inputPathOrUrl
+    }
+  } else {
+    const abs = resolve(mdDir, inputPathOrUrl)
+    if (!existsSync(abs)) {
+      console.error(`警告: 图片不存在，保留原路径: ${inputPathOrUrl}`)
+      return inputPathOrUrl
+    }
+    buf = readFileSync(abs)
+    const localExt = (extname(abs).slice(1) || 'png').toLowerCase()
+    ext = localExt === 'jpg' ? 'jpg' : localExt
+    mime = IMG_MIME[ext] || 'image/png'
+  }
+
   const name = `${randomUUID()}.${ext === 'jpg' ? 'jpg' : ext}`
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/images/${name}`, {
     method: 'POST',
@@ -296,10 +337,20 @@ async function uploadImage(localPath) {
     body: buf,
   })
   if (!res.ok) {
-    console.error(`图片上传失败 ${localPath}:`, res.status, await res.text())
+    console.error(`图片上传失败 ${inputPathOrUrl}:`, res.status, await res.text())
     process.exit(1)
   }
   return `${SUPABASE_URL}/storage/v1/object/public/images/${name}`
+}
+
+// ---------- --upload-image：独立上传单张图片（本地或网络）并输出公共 URL ----------
+if (uploadImageArg !== undefined) {
+  if (!uploadImageArg) {
+    console.error('错误: 请指定要上传的图片本地路径或网络 URL: --upload-image <path_or_url>')
+  } else {
+    const publicUrl = await uploadImage(uploadImageArg)
+    console.log(publicUrl)
+  }
 }
 
 // ---------- Markdown → TipTap JSON（常用语法子集，与编辑器 schema 一致） ----------
@@ -393,12 +444,21 @@ async function mdToDoc(md, dry = false) {
       continue
     }
 
-    // 独占一行的图片 → image 块节点（本地路径自动上传 Storage）
+    // 独占一行的图片 → image 块节点（本地路径或外部网络图片自动上传 Storage）
     const img = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(line.trim())
     if (img) {
-      let src = img[2]
-      if (!dry && !/^https?:\/\//.test(src) && !src.startsWith('data:')) src = await uploadImage(src)
-      content.push({ type: 'image', attrs: { src, alt: img[1] || null, title: null } })
+      let rawSrc = img[2].trim()
+      let src = rawSrc
+      let imgTitle = null
+      const titleMatch = /^(\S+)(?:\s+["'](.*)["'])?$/.exec(rawSrc)
+      if (titleMatch) {
+        src = titleMatch[1]
+        imgTitle = titleMatch[2] || null
+      }
+      if (!dry && !src.startsWith(`${SUPABASE_URL}/storage/v1/object/public/images/`) && !src.startsWith('data:')) {
+        src = await uploadImage(src)
+      }
+      content.push({ type: 'image', attrs: { src, alt: img[1] || null, title: imgTitle } })
       i++
       continue
     }
@@ -525,8 +585,8 @@ async function resolveFolder(path) {
 
 
 // process.exit 在 Windows 上与 libuv 清理竞态会触发断言崩溃，
-// --login/--find 分支靠这个条件让模块自然结束
-if (!loginOnly && !listTagsOnly && findQuery === undefined) {
+// --login/--find/--upload-image 分支靠这个条件让模块自然结束
+if (!loginOnly && !listTagsOnly && findQuery === undefined && uploadImageArg === undefined) {
   // ---------- 写入笔记 ----------
   const content = await mdToDoc(mdText)
   const folderId = await resolveFolder(folderPath)
