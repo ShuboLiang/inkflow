@@ -421,7 +421,7 @@
   }
 
   .note-card-tag.tag-jump:hover {
-    color: #fff;
+    color: var(--paper);
     background: var(--qing);
   }
 }

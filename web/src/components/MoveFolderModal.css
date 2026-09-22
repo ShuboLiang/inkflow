@@ -326,7 +326,7 @@
 .move-btn-confirm {
   border: 1px solid var(--qing);
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
   font-weight: 500;
 }
 

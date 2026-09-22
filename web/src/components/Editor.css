@@ -286,7 +286,7 @@
 .code-copy-btn.copied {
   opacity: 1;
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
   border-color: var(--qing);
 }
 
