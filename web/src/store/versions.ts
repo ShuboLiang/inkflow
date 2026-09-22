@@ -4,13 +4,59 @@ import { plainTextOf } from '../lib/search'
 import { createNote } from './notes'
 
 const MAX_AUTO_VERSIONS_PER_NOTE = 50
+const PENDING_DELETIONS_KEY = 'inkflow:pending_version_deletions'
+
+export function getPendingVersionDeletions(): string[] {
+  try {
+    const raw = localStorage.getItem(PENDING_DELETIONS_KEY)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+export function recordPendingVersionDeletion(id: string): void {
+  try {
+    const list = getPendingVersionDeletions()
+    if (!list.includes(id)) {
+      list.push(id)
+      localStorage.setItem(PENDING_DELETIONS_KEY, JSON.stringify(list))
+    }
+  } catch {}
+}
+
+export function clearPendingVersionDeletions(ids: string[]): void {
+  try {
+    const idSet = new Set(ids)
+    const list = getPendingVersionDeletions().filter((id) => !idSet.has(id))
+    if (list.length > 0) {
+      localStorage.setItem(PENDING_DELETIONS_KEY, JSON.stringify(list))
+    } else {
+      localStorage.removeItem(PENDING_DELETIONS_KEY)
+    }
+  } catch {}
+}
+
+export async function flushPendingVersionDeletions(): Promise<void> {
+  const pending = getPendingVersionDeletions()
+  if (pending.length === 0) return
+  try {
+    const { error } = await supabase.from('note_versions').delete().in('id', pending)
+    if (!error) {
+      clearPendingVersionDeletions(pending)
+    }
+  } catch (err) {
+    console.error('flushPendingVersionDeletions failed:', err)
+  }
+}
 
 /**
  * 获取本地存储的笔记版本列表（按时间倒序）
  */
 export async function listNoteVersions(noteId: string): Promise<NoteVersion[]> {
+  const pendingDeletes = new Set(getPendingVersionDeletions())
   const all = await db.noteVersions.where('noteId').equals(noteId).sortBy('createdAt')
-  return all.reverse()
+  return all.filter((v) => !pendingDeletes.has(v.id)).reverse()
 }
 
 /**
@@ -18,6 +64,10 @@ export async function listNoteVersions(noteId: string): Promise<NoteVersion[]> {
  */
 export async function fetchRemoteVersions(noteId: string): Promise<NoteVersion[]> {
   try {
+    // 1. 先尝试将本地待删除队列同步至云端
+    await flushPendingVersionDeletions()
+
+    // 2. 从云端拉取该笔记的最新版本记录
     const { data, error } = await supabase
       .from('note_versions')
       .select('id, note_id, title, content, version, source, name, created_at, char_count')
@@ -28,35 +78,51 @@ export async function fetchRemoteVersions(noteId: string): Promise<NoteVersion[]
       return await listNoteVersions(noteId)
     }
 
-    const remoteRows: NoteVersion[] = data.map((r: {
-      id: string
-      note_id: string
-      title?: string
-      content: unknown
-      version: number
-      source?: string
-      name?: string | null
-      created_at: string
-      char_count?: number
-    }) => {
-      const charCount = typeof r.char_count === 'number' ? r.char_count : plainTextOf(r.content).length
-      return {
-        id: r.id,
-        noteId: r.note_id,
-        title: r.title ?? '',
-        content: r.content,
-        version: r.version,
-        source: (r.source === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual',
-        name: r.name ?? undefined,
-        createdAt: new Date(r.created_at).getTime(),
-        charCount,
-        dirty: 0,
-        syncedAt: Date.now(),
-      }
-    })
+    const pendingDeletes = new Set(getPendingVersionDeletions())
 
-    // 批量写入本地（以远程为准更新已同步内容，但保留本地尚未推送的 dirty 版本）
+    const remoteRows: NoteVersion[] = data
+      .filter((r) => !pendingDeletes.has(r.id))
+      .map((r: {
+        id: string
+        note_id: string
+        title?: string
+        content: unknown
+        version: number
+        source?: string
+        name?: string | null
+        created_at: string
+        char_count?: number
+      }) => {
+        const charCount = typeof r.char_count === 'number' ? r.char_count : plainTextOf(r.content).length
+        return {
+          id: r.id,
+          noteId: r.note_id,
+          title: r.title ?? '',
+          content: r.content,
+          version: r.version,
+          source: (r.source === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual',
+          name: r.name ?? undefined,
+          createdAt: new Date(r.created_at).getTime(),
+          charCount,
+          dirty: 0,
+          syncedAt: Date.now(),
+        }
+      })
+
+    const remoteIdSet = new Set(remoteRows.map((r) => r.id))
+
+    // 批量写入本地，并双向对齐删除：
+    // 本地已同步 (dirty: 0) 但在远程已经被删除的版本，从本地数据库中清除！
     await db.transaction('rw', db.noteVersions, async () => {
+      const locals = await db.noteVersions.where('noteId').equals(noteId).toArray()
+      const toDeleteLocally = locals
+        .filter((l) => pendingDeletes.has(l.id) || (l.dirty === 0 && !remoteIdSet.has(l.id)))
+        .map((l) => l.id)
+
+      if (toDeleteLocally.length > 0) {
+        await db.noteVersions.bulkDelete(toDeleteLocally)
+      }
+
       for (const row of remoteRows) {
         const local = await db.noteVersions.get(row.id)
         if (!local || local.dirty === 0) {
@@ -162,7 +228,7 @@ async function pruneOldAutoVersions(noteId: string): Promise<void> {
       const ids = toDelete.map((v) => v.id)
       await db.noteVersions.bulkDelete(ids)
       // 云端对应清理
-      void supabase.from('note_versions').delete().in('id', ids)
+      await supabase.from('note_versions').delete().in('id', ids)
     }
   } catch {
     // 忽略清理异常
@@ -225,9 +291,20 @@ export async function renameVersion(versionId: string, name: string): Promise<vo
 }
 
 /**
- * 删除指定版本
+ * 删除指定版本（支持离线队列、真等待云端确认，杜绝刷新复活）
  */
 export async function deleteVersion(versionId: string): Promise<void> {
+  // 1. 本地立即清除，并登记待删除队列以防止远程拉取再次复活
   await db.noteVersions.delete(versionId)
-  void supabase.from('note_versions').delete().eq('id', versionId)
+  recordPendingVersionDeletion(versionId)
+
+  // 2. 发起云端删除请求并真正等待完成
+  try {
+    const { error } = await supabase.from('note_versions').delete().eq('id', versionId)
+    if (!error) {
+      clearPendingVersionDeletions([versionId])
+    }
+  } catch (err) {
+    console.error('Remote deleteVersion failed:', err)
+  }
 }

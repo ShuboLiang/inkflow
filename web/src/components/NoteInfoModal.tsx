@@ -140,9 +140,9 @@ export function NoteInfoModal({ isOpen, note, folderPath, onClose, onOpenVersion
               <span className="note-info-stat-label">字符数 (不含空格)</span>
               <span className="note-info-stat-val">{charsNoSpace.toLocaleString()}</span>
             </div>
-            <div className="note-info-stat-item">
-              <span className="note-info-stat-label">版本号</span>
-              <span className="note-info-stat-val">v{note.version}</span>
+            <div className="note-info-stat-item" title="底层同步修订轮次（每次打字落盘保存自动递增）">
+              <span className="note-info-stat-label">保存轮次</span>
+              <span className="note-info-stat-val">第 {note.version} 次</span>
             </div>
           </div>
 

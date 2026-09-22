@@ -2,6 +2,7 @@ import { db, type Folder, type Note, type FileEntry } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { dataUrlToBlob, revokeFileUrl } from '../store/files'
 import { uploadPendingImages, imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from '../store/images'
+import { flushPendingVersionDeletions } from '../store/versions'
 
 export interface SyncResult {
   pushed: number
@@ -326,7 +327,8 @@ export const syncEngine = {
       pushed++
     }
 
-    // 笔记历史版本：将本地新增或重命名的快照推送到云端
+    // 笔记历史版本：同步删除并推送新增/重命名的快照
+    await flushPendingVersionDeletions()
     const dirtyVersions = await db.noteVersions.where('dirty').equals(1).toArray()
     for (const v of dirtyVersions) {
       const { error: vErr } = await supabase.from('note_versions').upsert({
