@@ -111,7 +111,7 @@
   border-radius: 50%;
   background: none;
   color: var(--ink-500);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   opacity: 0.65;
@@ -178,7 +178,7 @@
   .tab-close-btn {
     width: 24px;
     height: 24px;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .tab-new-btn {
