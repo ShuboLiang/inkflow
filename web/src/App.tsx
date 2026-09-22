@@ -2130,7 +2130,7 @@ export default function App() {
                   <HtmlViewer src={activeFileUrl} />
                 ) : (
                   <Suspense fallback={<p className="file-view-fallback">正在加载…</p>}>
-                    <PdfViewer src={activeFileUrl} />
+                    <PdfViewer key={activeFile.id} fileId={activeFile.id} src={activeFileUrl} />
                   </Suspense>
                 )
               ) : fileLoadError ? (

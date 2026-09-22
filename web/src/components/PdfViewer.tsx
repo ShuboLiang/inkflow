@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 // PDF 查看器：iframe 嵌入 pdf.js 官方 viewer（Firefox 内置同款，静态资源在 public/pdfjs/viewer/）。
 // 替换之前的手写 canvas 渲染器——官方 viewer 自带缩放重渲染、文本层、查找、
@@ -64,7 +64,95 @@ function dataUrlToBlob(dataUrl: string): Blob {
 // src(data: URL) → blob: URL 会话级缓存，避免重复打开同一 PDF 时重复 base64 解码
 const blobUrlCache = new Map<string, string>()
 
-export function PdfViewer({ src }: { src: string }) {
+export interface PdfSavedState {
+  page: number
+  zoom: string | number
+  scrollLeft: number
+  scrollTop: number
+  rotation?: number
+}
+
+interface PDFLocation {
+  pageNumber?: number
+  scale?: number | string
+  left?: number
+  top?: number
+  rotation?: number
+}
+
+interface PDFViewerApp {
+  initializedPromise?: Promise<void>
+  pdfViewer?: {
+    pagesRotation?: number
+    _location?: PDFLocation
+  }
+  eventBus?: {
+    on: (name: string, listener: (evt: { location?: PDFLocation }) => void) => void
+    off: (name: string, listener: (evt: { location?: PDFLocation }) => void) => void
+  }
+}
+
+function getStorageKey(fileId?: string, src?: string): string | null {
+  if (fileId) return `inkflow:pdf:${fileId}`
+  if (!src) return null
+  let h = 0
+  for (let i = 0; i < Math.min(src.length, 500); i++) {
+    h = (Math.imul(31, h) + src.charCodeAt(i)) | 0
+  }
+  return `inkflow:pdf:src_${Math.abs(h)}`
+}
+
+function loadSavedState(key: string | null): PdfSavedState | null {
+  if (!key) return null
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PdfSavedState>
+    if (typeof parsed?.page === 'number' && parsed.page >= 1) {
+      return {
+        page: parsed.page,
+        zoom: parsed.zoom ?? 'page-width',
+        scrollLeft: Number(parsed.scrollLeft) || 0,
+        scrollTop: Number(parsed.scrollTop) || 0,
+        rotation: typeof parsed.rotation === 'number' ? parsed.rotation : 0,
+      }
+    }
+  } catch {
+    // 忽略解析错误
+  }
+  return null
+}
+
+function savePdfState(key: string | null, state: PdfSavedState) {
+  if (!key) return
+  try {
+    localStorage.setItem(key, JSON.stringify(state))
+  } catch {
+    // 忽略存储超限异常
+  }
+}
+
+function buildInitialHash(saved: PdfSavedState | null): string {
+  if (!saved) {
+    // 默认视角：适合页宽，不展开目录侧边栏（解决移动端/桌面端默认 page-fit 过小问题）
+    return '#zoom=page-width&pagemode=none'
+  }
+  let zoomParam = 'page-width'
+  if (saved.zoom) {
+    if (typeof saved.zoom === 'number') {
+      zoomParam = saved.zoom <= 10 ? String(Math.round(saved.zoom * 100)) : String(Math.round(saved.zoom))
+    } else if (saved.zoom === 'page-fit') {
+      zoomParam = 'Fit'
+    } else {
+      zoomParam = String(saved.zoom)
+    }
+  }
+  const x = Math.round(saved.scrollLeft || 0)
+  const y = Math.round(saved.scrollTop || 0)
+  return `#page=${saved.page}&zoom=${zoomParam},${x},${y}&pagemode=none`
+}
+
+export function PdfViewer({ src, fileId }: { src: string; fileId?: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
 
   const isData = src.startsWith('data:')
@@ -86,9 +174,94 @@ export function PdfViewer({ src }: { src: string }) {
   }, [src, isData])
 
   const fileUrl = !isData ? src : blobUrl
+
+  const storageKey = useMemo(() => getStorageKey(fileId, src), [fileId, src])
+  const savedState = useMemo(() => loadSavedState(storageKey), [storageKey])
+  const initialHash = useMemo(() => buildInitialHash(savedState), [savedState])
+
   const viewerUrl = fileUrl
-    ? `${import.meta.env.BASE_URL}pdfjs/viewer/web/viewer.html?file=${encodeURIComponent(fileUrl)}#zoom=page-width&pagemode=none`
+    ? `${import.meta.env.BASE_URL}pdfjs/viewer/web/viewer.html?file=${encodeURIComponent(fileUrl)}${initialHash}`
     : null
+
+  const latestStateRef = useRef<PdfSavedState | null>(savedState)
+  const saveTimerRef = useRef<number | null>(null)
+
+  const scheduleSave = (state: PdfSavedState) => {
+    latestStateRef.current = state
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current)
+    }
+    saveTimerRef.current = window.setTimeout(() => {
+      savePdfState(storageKey, state)
+      saveTimerRef.current = null
+    }, 400)
+  }
+
+  // 离开组件或窗口关闭时，同步冲刷当前最新阅读进度
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const win = frameRef.current?.contentWindow as (Window & { PDFViewerApplication?: PDFViewerApp }) | null
+      const loc = win?.PDFViewerApplication?.pdfViewer?._location
+      if (loc?.pageNumber && storageKey) {
+        savePdfState(storageKey, {
+          page: loc.pageNumber,
+          zoom: loc.scale ?? 'page-width',
+          scrollLeft: Math.round(loc.left ?? 0),
+          scrollTop: Math.round(loc.top ?? 0),
+          rotation: loc.rotation ?? 0,
+        })
+      } else if (latestStateRef.current && storageKey) {
+        savePdfState(storageKey, latestStateRef.current)
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      handleBeforeUnload()
+    }
+  }, [storageKey])
+
+  const handleFrameLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    const iframe = e.currentTarget
+    const doc = iframe.contentDocument
+    if (doc) void injectFontAliases(doc)
+
+    const win = iframe.contentWindow as (Window & { PDFViewerApplication?: PDFViewerApp }) | null
+    if (win?.PDFViewerApplication) {
+      const app = win.PDFViewerApplication
+      void (async () => {
+        try {
+          if (app.initializedPromise) {
+            await app.initializedPromise
+          }
+          // 恢复旋转（若有且非 0）
+          if (savedState?.rotation && app.pdfViewer && app.pdfViewer.pagesRotation !== savedState.rotation) {
+            app.pdfViewer.pagesRotation = savedState.rotation
+          }
+          const onUpdateViewarea = (evt: { location?: PDFLocation }) => {
+            const loc = evt?.location
+            if (!loc || !loc.pageNumber) return
+            scheduleSave({
+              page: loc.pageNumber,
+              zoom: loc.scale ?? 'page-width',
+              scrollLeft: Math.round(loc.left ?? 0),
+              scrollTop: Math.round(loc.top ?? 0),
+              rotation: loc.rotation ?? 0,
+            })
+          }
+          app.eventBus?.on('updateviewarea', onUpdateViewarea)
+        } catch {
+          // 容错处理
+        }
+      })()
+    }
+  }
 
   if (isData && !blobUrl) {
     return <p className="file-view-fallback">PDF 加载失败，请尝试下载后查看。</p>
@@ -102,10 +275,7 @@ export function PdfViewer({ src }: { src: string }) {
       className="file-view-frame"
       title="PDF 查看器"
       src={viewerUrl}
-      onLoad={() => {
-        const doc = frameRef.current?.contentDocument
-        if (doc) void injectFontAliases(doc)
-      }}
+      onLoad={handleFrameLoad}
     />
   )
 }

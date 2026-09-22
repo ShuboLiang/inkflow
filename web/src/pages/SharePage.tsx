@@ -83,7 +83,7 @@ export function SharePage({ token }: { token: string }) {
               <p className="share-status">正在打开…</p>
             ) : (
               <Suspense fallback={<p className="share-status">正在加载 PDF…</p>}>
-                <PdfViewer src={state.url} />
+                <PdfViewer fileId={token} src={state.url} />
               </Suspense>
             )}
           </div>
