@@ -133,7 +133,7 @@
 
 .share-doc-body .ProseMirror table {
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   margin: 0;
 }
@@ -145,6 +145,7 @@
   min-width: 3em;
   padding: 6px 10px;
   vertical-align: top;
+  overflow-wrap: break-word;
 }
 
 .share-doc-body .ProseMirror th {
@@ -221,7 +222,7 @@
 }
 
 .share-doc-body .ProseMirror ul[data-type='taskList'] li > label {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   user-select: none;
 }
 
