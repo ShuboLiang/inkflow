@@ -49,6 +49,7 @@ interface NoteListProps {
   onMoveStep: (kind: 'note' | 'file', id: string, dir: -1 | 1) => void
   /** 手动排序（菜单）：直接移到顶部/底部 */
   onMoveEdge: (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => void
+  onShowNoteInfo?: (note: Note) => void
   emptyHint?: string
 }
 
@@ -156,6 +157,7 @@ export function NoteList({
   dragActive,
   onMoveStep,
   onMoveEdge,
+  onShowNoteInfo,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
@@ -320,6 +322,9 @@ export function NoteList({
           moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
           { key: 'rename', label: '重命名', onClick: () => onRenameNote(m.id) },
+          ...(onShowNoteInfo && target
+            ? [{ key: 'info', label: '笔记信息', onClick: () => onShowNoteInfo(target as Note) }]
+            : []),
           { key: 'd1', label: '', divider: true, onClick: () => {} },
           { key: 'del', label: '删除', danger: true, onClick: () => void deleteNoteById(m.id) },
         ]

@@ -1,0 +1,235 @@
+/* 笔记信息弹窗 */
+.note-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--overlay);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: note-info-fade-in 0.2s ease;
+}
+
+@keyframes note-info-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.note-info-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--ink-900) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  animation: note-info-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes note-info-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.note-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.note-info-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-info-close {
+  padding: 4px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-s);
+  color: var(--ink-500);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.note-info-close:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+.note-info-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.note-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-info-label {
+  font-size: 12px;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+.note-info-value {
+  font-size: 14px;
+  color: var(--ink-900);
+  line-height: 1.5;
+}
+
+/* 笔记 ID 展示栏（带一键复制） */
+.note-info-id-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.note-info-id-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.note-info-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: var(--ink-500);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  transition: all 0.15s ease;
+}
+
+.note-info-copy-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+.note-info-copy-btn.copied {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+/* 统计卡片网格（字数、字符、行数等） */
+.note-info-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  padding: 10px 14px;
+}
+
+.note-info-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.note-info-stat-label {
+  font-size: 11px;
+  color: var(--ink-500);
+}
+
+.note-info-stat-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-900);
+  font-family: var(--font-mono);
+}
+
+/* 标签列表 */
+.note-info-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.note-info-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--qing-50);
+  color: var(--qing);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+}
+
+.note-info-empty-tag {
+  color: var(--ink-500);
+  font-size: 13px;
+}
+
+/* 底部操作区 */
+.note-info-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--ink-200);
+  background: var(--surface);
+}
+
+.note-info-ok-btn {
+  padding: 6px 16px;
+  background: var(--qing);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.note-info-ok-btn:hover {
+  background: var(--qing-hover);
+}

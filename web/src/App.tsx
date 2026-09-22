@@ -18,12 +18,13 @@ import {
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core'
-import { db, type FileEntry, type Folder } from './lib/db'
+import { db, type FileEntry, type Folder, type Note } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
 import { EditorBoundary } from './components/EditorBoundary'
 import { EmptyState } from './components/EmptyState'
 import { NoteList } from './components/NoteList'
+import { NoteInfoModal } from './components/NoteInfoModal'
 
 // PDF 查看器（pdf.js 体积大，懒加载：只在打开 PDF 时才下载）
 const PdfViewer = lazy(() =>
@@ -69,6 +70,7 @@ import {
   Edit3,
   BookOpen,
   FileText,
+  Info,
 } from 'lucide-react'
 
 // 本地临时持久化 tabs 的 storage key
@@ -173,6 +175,8 @@ export default function App() {
   const [toolbarHidden, setToolbarHidden] = useState(false)
   // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
   const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
+  // 笔记信息弹窗目标（null = 关闭）
+  const [noteInfoTarget, setNoteInfoTarget] = useState<Note | null>(null)
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1472,6 +1476,7 @@ export default function App() {
                 isExportingImage={isExportingImage}
                 readingMode={readingMode}
                 onToggleReadingMode={toggleReadingMode}
+                onOpenInfo={() => setNoteInfoTarget(active)}
               />
             </>
           ) : null}
@@ -1551,6 +1556,7 @@ export default function App() {
           dragActive={!!dragInfo}
           onMoveStep={handleMoveStep}
           onMoveEdge={handleMoveEdge}
+          onShowNoteInfo={(note) => setNoteInfoTarget(note)}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
         <main
@@ -1636,7 +1642,17 @@ export default function App() {
                   />
                 </EditorBoundary>
               </div>
-              <div className="editor-footer">{countWords(active.content)} 字</div>
+              <div className="editor-footer">
+                <button
+                  type="button"
+                  className="editor-footer-btn"
+                  onClick={() => setNoteInfoTarget(active)}
+                  title="查看笔记信息"
+                >
+                  <span>{countWords(active.content)} 字</span>
+                  <Info size={12} className="editor-footer-icon" />
+                </button>
+              </div>
             </>
           ) : (
             <EmptyState />
@@ -1645,6 +1661,20 @@ export default function App() {
       </div>
       </div>
       <DialogHost />
+      <NoteInfoModal
+        isOpen={!!noteInfoTarget}
+        note={
+          noteInfoTarget && active && noteInfoTarget.id === active.id
+            ? active
+            : noteInfoTarget
+        }
+        folderPath={
+          noteInfoTarget?.folderId
+            ? folderPathNames(noteInfoTarget.folderId, folders ?? [])
+            : null
+        }
+        onClose={() => setNoteInfoTarget(null)}
+      />
       {/* 跟手拖影：被拖卡片的简化克隆（投影+微缩放），原位留空槽由 SortableCard 处理 */}
       <DragOverlay dropAnimation={isOverZone ? null : dropAnimationConfig}>
         {activeDragItem ? (

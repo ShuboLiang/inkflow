@@ -497,6 +497,34 @@
   color: var(--ink-500);
 }
 
+.editor-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink-500);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-footer-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+.editor-footer-icon {
+  opacity: 0.7;
+}
+
+.editor-footer-btn:hover .editor-footer-icon {
+  opacity: 1;
+}
+
 @media (max-width: 767px) {
   .fullscreen-toggle {
     display: none;
