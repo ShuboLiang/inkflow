@@ -24,6 +24,13 @@
   --radius-xs: 3px;
   --radius-pill: 999px;
 
+  /* 弹层遮罩统一档；灯箱用更重的「暗房」档 */
+  --overlay: rgba(28, 33, 40, 0.42);
+  --overlay-strong: rgba(28, 33, 40, 0.82);
+
+  /* 手机编辑视图两行式顶栏总高（40 + 35 + 1 分隔线），弹出层贴顶偏移跟它走 */
+  --mobile-topbar-h: 76px;
+
   --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-note: 'LXGW WenKai', serif;
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
@@ -97,7 +104,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: rgba(28, 33, 40, 0.82);
+  background: var(--overlay-strong);
   cursor: zoom-out;
   animation: img-fade-in 160ms ease-out;
 }

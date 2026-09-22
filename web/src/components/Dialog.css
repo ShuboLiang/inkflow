@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(28, 33, 40, 0.42);
+  background: var(--overlay);
   animation: dlg-fade-in 160ms ease-out;
 }
 

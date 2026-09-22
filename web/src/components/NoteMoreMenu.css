@@ -129,7 +129,7 @@
 @media (max-width: 767px) {
   .note-more-dropdown {
     position: fixed;
-    top: 76px;
+    top: var(--mobile-topbar-h);
     right: 10px;
     left: auto;
     width: 210px;
