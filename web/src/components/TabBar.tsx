@@ -139,7 +139,7 @@ export function TabBar({
                     onCloseTab(tab.id)
                   }}
                 >
-                  <X size={12} />
+                  <X size={14} />
                 </button>
               </div>
             )
