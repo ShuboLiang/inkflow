@@ -1,0 +1,35 @@
+/* 编辑器崩溃兜底页（EditorBoundary）：样式从内联迁出，圆角/间距走 token */
+
+.editor-boundary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+}
+
+.editor-boundary-box {
+  text-align: center;
+}
+
+.editor-boundary-text {
+  margin: 0 0 12px;
+  color: var(--ink-900);
+}
+
+.editor-boundary-retry {
+  color: var(--qing);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-s);
+  padding: 6px 14px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.editor-boundary-retry:hover {
+  background: var(--qing-50);
+  border-color: var(--qing);
+}
