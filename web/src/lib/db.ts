@@ -50,6 +50,9 @@ export interface FileEntry {
   updatedAt: number
   syncedAt: number | null
   deletedAt: number | null
+  // 创建时间（不可变）与统一列表的手动排序位置（与 notes 同一数轴，升序）
+  createdAt: number
+  position: number | null
 }
 
 export const db = new Dexie('inkflow') as Dexie & {
@@ -117,8 +120,8 @@ db.version(5)
   )
 
 // v6: 笔记排序——createdAt/position 字段落地（云端 010 迁移的本地对应）。
-// 老行回填：createdAt 无本地来源，用 updatedAt 近似；position 按 createdAt 顺序
-// 生成间隔 1000 的序列（旧→新，与云端回填一致，之后 pull 会用服务器值覆盖）
+// 老行回填：createdAt 无本地来源，用 updatedAt 近似；position 按 updatedAt 顺序
+// 生成间隔 1000 的序列（之后 pull 会用服务器值覆盖）
 db.version(6)
   .stores({
     notes: 'id, folderId, dirty, updatedAt',
@@ -135,4 +138,34 @@ db.version(6)
         }),
       ),
     )
+  })
+
+// v7: 统一排序（云端 011 的本地对应）——
+// notes position 反转为「新→旧」编号；files 补 createdAt/position（与笔记同一数轴）
+db.version(7)
+  .stores({
+    notes: 'id, folderId, dirty, updatedAt',
+    files: 'id, folderId, dirty',
+  })
+  .upgrade(async (tx) => {
+    const notes = await tx.table('notes').toArray()
+    const liveNotes = notes
+      .filter((n) => !n.deletedAt)
+      .sort((a, b) => (b.createdAt ?? b.updatedAt ?? 0) - (a.createdAt ?? a.updatedAt ?? 0))
+    const notePos = new Map(liveNotes.map((n, i) => [n.id as string, (i + 1) * 1000]))
+    for (const n of notes) {
+      const p = notePos.get(n.id as string)
+      if (p !== undefined && n.position !== p) {
+        await tx.table('notes').update(n.id, { position: p })
+      }
+    }
+    const files = await tx.table('files').toArray()
+    const liveFiles = files.filter((f) => !f.deletedAt).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+    const filePos = new Map(liveFiles.map((f, i) => [f.id as string, (i + 1) * 1000]))
+    for (const f of files) {
+      await tx.table('files').update(f.id, {
+        createdAt: f.createdAt ?? f.updatedAt ?? Date.now(),
+        position: f.position ?? filePos.get(f.id as string) ?? null,
+      })
+    }
   })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type Folder, type Note } from './lib/db'
+import { db, type FileEntry, type Folder } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
 import { EditorBoundary } from './components/EditorBoundary'
@@ -21,8 +21,8 @@ import { useSync } from './hooks/useSync'
 import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
-import { acquireFileUrl, deleteFile, moveFile, renameFile, saveFile, setFileTags } from './store/files'
-import { loadPrefs, savePrefs, type SortMode, type TabItem } from './store/prefs'
+import { acquireFileUrl, deleteFile, moveFile, renameFile, saveFile, setFilePosition, setFileTags } from './store/files'
+import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
 import { NoteMoreMenu } from './components/NoteMoreMenu'
@@ -154,8 +154,6 @@ export default function App() {
   const [toolbarHidden, setToolbarHidden] = useState(false)
   // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
   const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
-  // 笔记列表排序模式（created=创建时间新→旧；manual=手动拖拽），存云端 prefs
-  const [sortMode, setSortMode] = useState<SortMode>('created')
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -170,7 +168,6 @@ export default function App() {
       .then((p) => {
         if (cancelled) return
         setToolbarHidden(p.toolbarHidden)
-        setSortMode(p.sortMode ?? 'created')
         // 本机没选过主题（新设备）→ 跟随账号的云端主题
         if (!storedTheme() && isValidTheme(p.theme)) {
           applyTheme(p.theme)
@@ -193,7 +190,7 @@ export default function App() {
   const toggleToolbar = () => {
     setToolbarHidden((cur) => {
       const next = !cur
-      void savePrefs({ toolbarHidden: next, theme, sortMode }).catch(() => {})
+      void savePrefs({ toolbarHidden: next, theme }).catch(() => {})
       return next
     })
   }
@@ -203,14 +200,7 @@ export default function App() {
     if (id === theme) return
     applyTheme(id)
     setTheme(id)
-    void savePrefs({ toolbarHidden, theme: id, sortMode }).catch(() => {})
-  }
-
-  // 切排序模式：云端持久化，所有设备登录后统一
-  const changeSortMode = (mode: SortMode) => {
-    if (mode === sortMode) return
-    setSortMode(mode)
-    void savePrefs({ toolbarHidden, theme, sortMode: mode }).catch(() => {})
+    void savePrefs({ toolbarHidden, theme: id }).catch(() => {})
   }
 
   const folders = useLiveQuery(async () => {
@@ -336,15 +326,14 @@ export default function App() {
           (n.folderId !== null && folderHitSubtree !== null && folderHitSubtree.has(n.folderId)),
       )
     }
-    // 排序：创建时间新→旧（createdAt 不可变，点开/编辑不会改变顺序）；
-    // 手动模式按 position 升序（无 position 的兜底排最后），文件夹/标签视图沿用同一相对顺序
-    if (sortMode === 'manual') {
-      return [...scoped].sort(
-        (a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (b.createdAt ?? 0) - (a.createdAt ?? 0),
-      )
-    }
-    return [...scoped].sort((a, b) => (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt))
-  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree, sortMode])
+    // 统一列表排序：position 升序（默认=创建时间新→旧的初始化顺序，拖拽过的固定不动）；
+    // 无 position 的兜底排后。文件夹/标签视图沿用同一相对顺序
+    return [...scoped].sort(
+      (a, b) =>
+        (a.position ?? Infinity) - (b.position ?? Infinity) ||
+        (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt),
+    )
+  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
 
@@ -681,61 +670,6 @@ export default function App() {
     void updateNote(noteId, { folderId }).then(requestPush)
   }
 
-  // ---------- 手动排序 ----------
-  // 按给定完整顺序重排 position（等距 1000），只写有变化的行
-  const applyManualOrder = async (orderedNotes: Note[]) => {
-    let changed = 0
-    for (let i = 0; i < orderedNotes.length; i++) {
-      const want = (i + 1) * 1000
-      if (orderedNotes[i].position !== want) {
-        await updateNote(orderedNotes[i].id, { position: want })
-        changed++
-      }
-    }
-    if (changed) requestPush()
-  }
-
-  // 顺序上下文 = 当前可见列表（用户看到什么顺序就排成什么顺序）
-  const handleReorderNote = (draggedId: string, targetId: string, place: 'before' | 'after') => {
-    if (draggedId === targetId) return
-    const order = visibleNotes.filter((n) => n.id !== draggedId)
-    const idx = order.findIndex((n) => n.id === targetId)
-    if (idx < 0) return
-    const insertAt = place === 'before' ? idx : idx + 1
-    const prevPos = order[insertAt - 1]?.position ?? null
-    const nextPos = order[insertAt]?.position ?? null
-
-    if (prevPos !== null && nextPos !== null && nextPos - prevPos < 1) {
-      // 中点精度耗尽：全局按现有顺序重整为等距序列，拖拽的笔记落进目标位
-      const all = [...(notes ?? [])].sort(
-        (a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (b.createdAt ?? 0) - (a.createdAt ?? 0),
-      )
-      const rest = all.filter((n) => n.id !== draggedId)
-      const fullIdx = rest.findIndex((n) => n.id === targetId)
-      const dragged = all.find((n) => n.id === draggedId)
-      if (dragged && fullIdx >= 0) {
-        const at = place === 'before' ? fullIdx : fullIdx + 1
-        void applyManualOrder([...rest.slice(0, at), dragged, ...rest.slice(at)])
-      }
-      return
-    }
-
-    let pos: number
-    if (prevPos !== null && nextPos !== null) pos = (prevPos + nextPos) / 2
-    else if (prevPos !== null) pos = prevPos + 1000 // 拖到末尾
-    else if (nextPos !== null) pos = nextPos - 1000 // 拖到开头
-    else pos = 0
-    void updateNote(draggedId, { position: pos }).then(requestPush)
-  }
-
-  // 长按菜单「上移/下移」：与相邻笔记换位
-  const handleMoveNote = (id: string, dir: -1 | 1) => {
-    const idx = visibleNotes.findIndex((n) => n.id === id)
-    const target = visibleNotes[idx + dir]
-    if (idx < 0 || !target) return
-    handleReorderNote(id, target.id, dir < 0 ? 'before' : 'after')
-  }
-
   const handleToggleTag = (name: string) => {
     setActiveTag((cur) => (cur === name ? null : name))
     setMobileView('list')
@@ -911,7 +845,6 @@ export default function App() {
       void savePrefs({
         toolbarHidden,
         theme,
-        sortMode,
         tabs: validTabs,
         activeTabId,
       }).catch(() => {})
@@ -927,10 +860,14 @@ export default function App() {
   // 标签视图 = 全库范围内挂了该标签的文件（与笔记共用标签命名空间）
   const filesInView = useMemo(() => {
     const q = search.trim().toLowerCase()
+    // 统一列表排序：position 升序（与笔记同一数轴），无 position 的按创建时间兜底排后
+    const byPosition = (a: FileEntry, b: FileEntry) =>
+      (a.position ?? Infinity) - (b.position ?? Infinity) ||
+      (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt)
     if (activeTag) {
       return (files ?? [])
         .filter((f) => !f.deletedAt && (f.tags ?? []).includes(activeTag))
-        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .sort(byPosition)
     }
     const inScope = (folderId: string | null) =>
       activeFolderSubtree === null ? folderId === null : folderId !== null && activeFolderSubtree.has(folderId)
@@ -943,8 +880,91 @@ export default function App() {
           f.filename.toLowerCase().includes(q) ||
           ((f.folderId ?? null) !== null && folderHitSubtree !== null && folderHitSubtree.has(f.folderId as string)),
       )
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .sort(byPosition)
   }, [files, activeFolderSubtree, search, folderHitSubtree, activeTag])
+
+  // ---------- 统一列表手动排序（笔记与文件共用 position 数轴） ----------
+  type OrderItem = { kind: 'note' | 'file'; id: string; position: number | null }
+
+  // 当前可见顺序：笔记与文件按 position 合并（与列表渲染一致）
+  const visibleOrder: OrderItem[] = useMemo(
+    () =>
+      [
+        ...visibleNotes.map((n) => ({ kind: 'note' as const, id: n.id, position: n.position })),
+        ...filesInView.map((f) => ({ kind: 'file' as const, id: f.id, position: f.position })),
+      ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity)),
+    [visibleNotes, filesInView],
+  )
+
+  // 全量重整：按给定完整顺序等距重编（跨两张表），只写有变化的行
+  const applyManualOrder = async (ordered: OrderItem[]) => {
+    let changed = 0
+    for (let i = 0; i < ordered.length; i++) {
+      const want = (i + 1) * 1000
+      const it = ordered[i]
+      if (it.position === want) continue
+      if (it.kind === 'note') await updateNote(it.id, { position: want })
+      else await setFilePosition(it.id, want)
+      changed++
+    }
+    if (changed) requestPush()
+  }
+
+  const writePosition = (kind: 'note' | 'file', id: string, position: number) =>
+    void (kind === 'note'
+      ? updateNote(id, { position }).then(requestPush)
+      : setFilePosition(id, position).then(requestPush))
+
+  // 顺序上下文 = 当前可见列表（用户看到什么顺序就排成什么顺序）
+  const handleReorderItem = (
+    dragged: { kind: 'note' | 'file'; id: string },
+    target: { kind: 'note' | 'file'; id: string },
+    place: 'before' | 'after',
+  ) => {
+    if (dragged.id === target.id) return
+    const order = visibleOrder.filter((it) => it.id !== dragged.id)
+    const idx = order.findIndex((it) => it.id === target.id)
+    if (idx < 0) return
+    const insertAt = place === 'before' ? idx : idx + 1
+    const prevPos = order[insertAt - 1]?.position ?? null
+    const nextPos = order[insertAt]?.position ?? null
+
+    if (prevPos !== null && nextPos !== null && nextPos - prevPos < 1) {
+      // 中点精度耗尽：全局按现有顺序重整为等距序列，拖拽项落进目标位
+      const all: OrderItem[] = [
+        ...(notes ?? [])
+          .filter((n) => n.deletedAt === null)
+          .map((n) => ({ kind: 'note' as const, id: n.id, position: n.position })),
+        ...(files ?? [])
+          .filter((f) => f.deletedAt === null)
+          .map((f) => ({ kind: 'file' as const, id: f.id, position: f.position })),
+      ].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
+      const draggedItem = all.find((it) => it.id === dragged.id)
+      const rest = all.filter((it) => it.id !== dragged.id)
+      const fullIdx = rest.findIndex((it) => it.id === target.id)
+      if (draggedItem && fullIdx >= 0) {
+        const at = place === 'before' ? fullIdx : fullIdx + 1
+        void applyManualOrder([...rest.slice(0, at), draggedItem, ...rest.slice(at)])
+      }
+      return
+    }
+
+    let pos: number
+    if (prevPos !== null && nextPos !== null) pos = (prevPos + nextPos) / 2
+    else if (prevPos !== null) pos = prevPos + 1000 // 拖到末尾
+    else if (nextPos !== null) pos = nextPos - 1000 // 拖到开头
+    else pos = 0
+    writePosition(dragged.kind, dragged.id, pos)
+  }
+
+  // 长按菜单「上移/下移」：与相邻项换位（跨类型也生效，如文件移到笔记前）
+  const handleMoveStep = (kind: 'note' | 'file', id: string, dir: -1 | 1) => {
+    const idx = visibleOrder.findIndex((it) => it.id === id)
+    const target = visibleOrder[idx + dir]
+    if (idx < 0 || !target) return
+    handleReorderItem({ kind, id }, { kind: target.kind, id: target.id }, dir < 0 ? 'before' : 'after')
+  }
+
 
   // 上传：pdf/html 存为当前文件夹的文件（原生预览）；md 在当前文件夹新建一篇笔记（文件名作标题）。
   // targetFolderId 由拖放位置决定（侧栏文件夹）；按钮上传则跟随当前视图
@@ -1044,8 +1064,26 @@ export default function App() {
 
   if (!user) return <Auth />
 
+  // 拖拽笔记/文件/文件夹（text/plain 内部载荷）悬停在没有放置处理的地方时，
+  // 浏览器默认把文本当"拖放搜索"，提示「松开鼠标以搜索文本」。外壳层兜底：
+  // 内部载荷一律拦截默认行为并标记不可放置；真正的放置目标（排序卡片、
+  // 侧栏文件夹/标签）自己 preventDefault 过的事件（defaultPrevented）不碰。
+  const handleShellDragOver = (e: React.DragEvent) => {
+    if (e.defaultPrevented || !e.dataTransfer.types.includes('text/plain')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'none'
+  }
+  const handleShellDrop = (e: React.DragEvent) => {
+    if (e.defaultPrevented || !e.dataTransfer.types.includes('text/plain')) return
+    e.preventDefault()
+  }
+
   return (
-    <div className={['app-shell', mobileView === 'editor' ? 'mobile-editor' : 'mobile-list'].join(' ')}>
+    <div
+      className={['app-shell', mobileView === 'editor' ? 'mobile-editor' : 'mobile-list'].join(' ')}
+      onDragOver={handleShellDragOver}
+      onDrop={handleShellDrop}
+    >
       <header className="app-topbar">
         <div className="app-topbar-left">
           <button
@@ -1287,10 +1325,8 @@ export default function App() {
           onMoveNote={handleDropNote}
           onMoveFile={handleDropFile}
           onRequestPush={requestPush}
-          sortMode={sortMode}
-          onSortModeChange={changeSortMode}
-          onReorderNote={handleReorderNote}
-          onMoveNoteStep={handleMoveNote}
+          onReorderItem={handleReorderItem}
+          onMoveStep={handleMoveStep}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
         <main

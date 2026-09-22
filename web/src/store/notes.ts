@@ -11,9 +11,13 @@ export async function createNote(
   folderId: string | null = null,
   content: unknown = { type: 'doc', content: [] },
 ): Promise<Note> {
-  // 手动排序里新建的排最前：取当前最小 position 再往前挪一格
-  const existing = await db.notes.filter((n) => n.deletedAt === null && n.position !== null).toArray()
-  const minPos = existing.length ? Math.min(...existing.map((n) => n.position as number)) : 0
+  // 新建排最前：position 取全列表（笔记+文件共用数轴）当前最小值再往前挪一格
+  const [noteRows, fileRows] = await Promise.all([
+    db.notes.filter((n) => n.deletedAt === null && n.position !== null).toArray(),
+    db.files.filter((f) => f.deletedAt === null && f.position !== null).toArray(),
+  ])
+  const positions = [...noteRows, ...fileRows].map((r) => r.position as number)
+  const minPos = positions.length ? Math.min(...positions) : 0
   const now = Date.now()
   const note: Note = {
     id: crypto.randomUUID(),

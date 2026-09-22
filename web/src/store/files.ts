@@ -56,6 +56,14 @@ export async function saveFile(
     }
   }
 
+  // 新文件排统一列表（笔记+文件同一数轴）最前
+  const [noteRows, fileRows] = await Promise.all([
+    db.notes.filter((n) => n.deletedAt === null && n.position !== null).toArray(),
+    db.files.filter((f) => f.deletedAt === null && f.position !== null).toArray(),
+  ])
+  const positions = [...noteRows, ...fileRows].map((r) => r.position as number)
+  const minPos = positions.length ? Math.min(...positions) : 0
+
   const entry: FileEntry = {
     id,
     folderId,
@@ -68,6 +76,8 @@ export async function saveFile(
     updatedAt: Date.now(),
     syncedAt,
     deletedAt: null,
+    createdAt: Date.now(),
+    position: minPos - 1000,
   }
   await db.files.add(entry)
   return entry
@@ -114,6 +124,13 @@ export async function setFileTags(id: string, tags: string[]): Promise<void> {
   const existing = await db.files.get(id)
   if (!existing || existing.deletedAt) return
   await db.files.update(id, { tags, dirty: 1, updatedAt: Date.now() })
+}
+
+// 统一列表手动排序：更新文件的手动位置（files 表无 version 列，靠 updatedAt 参与 LWW）
+export async function setFilePosition(id: string, position: number): Promise<void> {
+  const existing = await db.files.get(id)
+  if (!existing || existing.deletedAt) return
+  await db.files.update(id, { position, dirty: 1, updatedAt: Date.now() })
 }
 
 // 预览前按需获取文件 Blob URL：

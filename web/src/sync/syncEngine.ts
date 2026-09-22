@@ -43,6 +43,8 @@ interface FileRow {
   tags: string[] | null
   updated_at: string
   deleted_at: string | null
+  created_at?: string | null
+  position?: number | null
 }
 
 const lastSyncKey = (userId: string) => `inkflow:lastSyncAt:${userId}`
@@ -142,6 +144,9 @@ function rowToFile(row: FileRow): FileEntry {
     updatedAt: new Date(row.updated_at).getTime(),
     syncedAt: Date.now(),
     deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
+    // 011 迁移新增列：老服务器/竞态下可能缺省
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : new Date(row.updated_at).getTime(),
+    position: row.position ?? null,
   }
 }
 
@@ -157,6 +162,9 @@ function fileToRow(file: FileEntry, userId: string) {
     tags: file.tags ?? [],
     updated_at: new Date(file.updatedAt).toISOString(),
     deleted_at: file.deletedAt ? new Date(file.deletedAt).toISOString() : null,
+    // created_at 仅创建时写入；position 与笔记共用数轴（统一列表手动排序）
+    created_at: new Date(file.createdAt).toISOString(),
+    position: file.position ?? null,
   }
 }
 

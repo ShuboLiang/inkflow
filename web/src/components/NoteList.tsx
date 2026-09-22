@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileText,
   Folder as FolderIcon,
   Search,
   X,
   MoreHorizontal,
-  ArrowDownUp,
 } from 'lucide-react'
 import type { FileEntry, Folder, Note } from '../lib/db'
-import type { SortMode } from '../store/prefs'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
 import { acquireFileUrl, deleteFile } from '../store/files'
@@ -45,13 +43,14 @@ interface NoteListProps {
   onMoveNote: (id: string, folderId: string | null) => void
   onMoveFile: (id: string, folderId: string | null) => void
   onRequestPush: () => void
-  /** 笔记排序模式（created=创建时间新→旧；manual=手动拖拽） */
-  sortMode: SortMode
-  onSortModeChange: (mode: SortMode) => void
-  /** 手动排序：把 draggedId 移到 targetId 前/后（顺序上下文 = 当前可见列表） */
-  onReorderNote: (draggedId: string, targetId: string, place: 'before' | 'after') => void
+  /** 手动排序：把拖拽项移到目标项前/后（顺序上下文 = 当前可见列表，文件与笔记同轴） */
+  onReorderItem: (
+    dragged: { kind: 'note' | 'file'; id: string },
+    target: { kind: 'note' | 'file'; id: string },
+    place: 'before' | 'after',
+  ) => void
   /** 手动排序（触屏菜单）：上移/下移一步 */
-  onMoveNoteStep: (id: string, dir: -1 | 1) => void
+  onMoveStep: (kind: 'note' | 'file', id: string, dir: -1 | 1) => void
   emptyHint?: string
 }
 
@@ -122,20 +121,19 @@ export function NoteList({
   onMoveNote,
   onMoveFile,
   onRequestPush,
-  sortMode,
-  onSortModeChange,
-  onReorderNote,
-  onMoveNoteStep,
+  onReorderItem,
+  onMoveStep,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
-  // 排序方式菜单（锚在排序按钮下方）
-  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null)
-  // 手动排序拖拽：被拖笔记 + 悬停目标与插入侧（before/after）
-  const [reorder, setReorder] = useState<{ draggedId: string; overId: string; place: 'before' | 'after' } | null>(null)
-  // 手动排序拖拽只在桌面精确指针 + manual 模式启用（触屏用菜单上移/下移）
-  const canReorder = sortMode === 'manual' && DRAG_ENABLED
+  // 手动排序拖拽：被拖项 + 悬停目标与插入侧（before/after）
+  const [reorder, setReorder] = useState<{
+    draggedKind: 'note' | 'file'
+    draggedId: string
+    overId: string
+    place: 'before' | 'after'
+  } | null>(null)
   // 「移动到文件夹…」弹窗目标
   const [movingTarget, setMovingTarget] = useState<{
     kind: 'note' | 'file'
@@ -274,12 +272,8 @@ export function NoteList({
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
-          ...(sortMode === 'manual'
-            ? [
-                { key: 'up', label: '上移', onClick: () => onMoveNoteStep(m.id, -1) },
-                { key: 'down', label: '下移', onClick: () => onMoveNoteStep(m.id, 1) },
-              ]
-            : []),
+          { key: 'up', label: '上移', onClick: () => onMoveStep('note', m.id, -1) },
+          { key: 'down', label: '下移', onClick: () => onMoveStep('note', m.id, 1) },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
@@ -289,6 +283,8 @@ export function NoteList({
         ]
       : [
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
+          { key: 'up', label: '上移', onClick: () => onMoveStep('file', m.id, -1) },
+          { key: 'down', label: '下移', onClick: () => onMoveStep('file', m.id, 1) },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
@@ -336,6 +332,64 @@ export function NoteList({
     </button>
   )
 
+  // 拖拽排序：文件/笔记卡片共用的拖拽处理（payload 前缀区分类型；
+  // 桌面精确指针启用，触屏用菜单上移/下移）
+  const reorderProps = (kind: 'note' | 'file', id: string) => ({
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData('text/plain', `${kind}:${id}`)
+      e.dataTransfer.effectAllowed = 'move'
+      if (DRAG_ENABLED) setReorder({ draggedKind: kind, draggedId: id, overId: '', place: 'after' })
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!DRAG_ENABLED || !reorder || reorder.draggedId === id) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const r = e.currentTarget.getBoundingClientRect()
+      const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
+      if (reorder.overId !== id || reorder.place !== place) {
+        setReorder({ ...reorder, overId: id, place })
+      }
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!DRAG_ENABLED || !reorder) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (reorder.draggedId !== id && reorder.overId === id) {
+        onReorderItem({ kind: reorder.draggedKind, id: reorder.draggedId }, { kind, id }, reorder.place)
+      }
+      setReorder(null)
+    },
+    onDragEnd: () => setReorder(null),
+  })
+
+  // 悬停插入指示线的 class
+  const indicatorClass = (id: string) =>
+    reorder?.overId === id && reorder.draggedId !== id
+      ? reorder.place === 'before'
+        ? 'reorder-before'
+        : 'reorder-after'
+      : ''
+
+  // 统一列表：文件与笔记按 position 合并成同一顺序（无 position 的按创建时间兜底排后）
+  const listItems = useMemo(
+    () =>
+      [
+        ...files.map((f) => ({
+          kind: 'file' as const,
+          id: f.id,
+          position: f.position ?? Infinity,
+          createdAt: f.createdAt ?? f.updatedAt,
+        })),
+        ...notes.map((n) => ({
+          kind: 'note' as const,
+          id: n.id,
+          position: n.position ?? Infinity,
+          createdAt: n.createdAt ?? n.updatedAt,
+        })),
+      ].sort((a, b) => a.position - b.position || b.createdAt - a.createdAt),
+    [files, notes],
+  )
+
   return (
     <section
       className="note-list"
@@ -381,19 +435,6 @@ export function NoteList({
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className="note-list-sort"
-          title="排序方式"
-          aria-label="排序方式"
-          aria-haspopup="menu"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setSortMenu({ x: r.left, y: r.bottom + 4 })
-          }}
-        >
-          <ArrowDownUp size={15} />
-        </button>
       </div>
       <div className="note-list-items">
         {notes.length === 0 && files.length === 0 && folderHits.length === 0 ? (
@@ -421,50 +462,118 @@ export function NoteList({
                 ))}
               </>
             )}
-            {files.slice(0, renderLimit).map((file) =>
-              renamingFileId === file.id ? (
-                <input
-                  key={file.id}
-                  className="note-card file-rename-input"
-                  defaultValue={file.filename}
-                  aria-label="重命名文件"
-                  autoFocus
-                  onFocus={(e) => e.target.select()}
-                  onBlur={(e) => {
-                    setRenamingFileId(null)
-                    onRenameFile(file.id, e.target.value)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur()
-                    if (e.key === 'Escape') setRenamingFileId(null)
-                  }}
-                />
-              ) : (
-                <div key={file.id} className="card-wrap">
+            {listItems.slice(0, renderLimit).map((it) => {
+              if (it.kind === 'file') {
+                const file = files.find((f) => f.id === it.id)!
+                return renamingFileId === file.id ? (
+                  <input
+                    key={file.id}
+                    className="note-card file-rename-input"
+                    defaultValue={file.filename}
+                    aria-label="重命名文件"
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    onBlur={(e) => {
+                      setRenamingFileId(null)
+                      onRenameFile(file.id, e.target.value)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') setRenamingFileId(null)
+                    }}
+                  />
+                ) : (
+                  <div key={file.id} className="card-wrap">
+                    <button
+                      type="button"
+                      className={['note-card file-card', indicatorClass(file.id)].filter(Boolean).join(' ')}
+                      draggable={DRAG_ENABLED}
+                      {...reorderProps('file', file.id)}
+                      onClick={() => onSelectFile(file.id)}
+                      onContextMenu={(e) => openMenu(e, 'file', file.id)}
+                    >
+                      <div className="note-card-title file-card-title">
+                        <FileText size={16} />
+                        <span className="file-card-name" title={file.filename}>
+                          {file.filename}
+                        </span>
+                        <span className="file-card-badge">{isHtmlFile(file) ? 'HTML' : 'PDF'}</span>
+                      </div>
+                      <div className="note-card-time">
+                        {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
+                      </div>
+                      {(file.tags ?? []).length > 0 && (
+                        <div className="note-card-tags">
+                          {(file.tags ?? []).slice(0, 3).map((t) => (
+                            <span
+                              key={t}
+                              className="note-card-tag tag-jump"
+                              title={`按标签筛选：${t}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onSelectTag(t)
+                              }}
+                            >
+                              # {t}
+                            </span>
+                          ))}
+                          {(file.tags ?? []).length > 3 && (
+                            <span className="note-card-tag">+{(file.tags ?? []).length - 3}</span>
+                          )}
+                        </div>
+                      )}
+                      {search.trim() && file.folderId && (
+                        <span
+                          className="note-card-loc"
+                          title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onGotoFolder(file.folderId as string)
+                          }}
+                        >
+                          <FolderIcon size={12} />
+                          {folderPathOf(file.folderId)}
+                        </span>
+                      )}
+                    </button>
+                    {moreButton('file', file.id, file.filename)}
+                  </div>
+                )
+              }
+              const note = notes.find((n) => n.id === it.id)!
+              return (
+                <div key={note.id} className="card-wrap">
                   <button
                     type="button"
-                    className="note-card file-card"
+                    className={[
+                      note.id === activeId ? 'note-card active' : 'note-card',
+                      indicatorClass(note.id),
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                     draggable={DRAG_ENABLED}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/plain', `file:${file.id}`)
-                      e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onClick={() => onSelectFile(file.id)}
-                    onContextMenu={(e) => openMenu(e, 'file', file.id)}
+                    {...reorderProps('note', note.id)}
+                    onClick={() => onSelect(note.id)}
+                    onContextMenu={(e) => openMenu(e, 'note', note.id)}
                   >
-                    <div className="note-card-title file-card-title">
-                      <FileText size={16} />
-                      <span className="file-card-name" title={file.filename}>
-                        {file.filename}
+                    <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
+                    {excerptFor(note)}
+                    {search.trim() && note.folderId && (
+                      <span
+                        className="note-card-loc"
+                        title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onGotoFolder(note.folderId as string)
+                        }}
+                      >
+                        <FolderIcon size={12} />
+                        {folderPathOf(note.folderId)}
                       </span>
-                      <span className="file-card-badge">{isHtmlFile(file) ? 'HTML' : 'PDF'}</span>
-                    </div>
-                    <div className="note-card-time">
-                      {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
-                    </div>
-                    {(file.tags ?? []).length > 0 && (
+                    )}
+                    {(note.tags ?? []).length > 0 && (
                       <div className="note-card-tags">
-                        {(file.tags ?? []).slice(0, 3).map((t) => (
+                        {(note.tags ?? []).slice(0, 3).map((t) => (
                           <span
                             key={t}
                             className="note-card-tag tag-jump"
@@ -477,112 +586,17 @@ export function NoteList({
                             # {t}
                           </span>
                         ))}
-                        {(file.tags ?? []).length > 3 && (
-                          <span className="note-card-tag">+{(file.tags ?? []).length - 3}</span>
+                        {(note.tags ?? []).length > 3 && (
+                          <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
                         )}
                       </div>
                     )}
-                    {search.trim() && file.folderId && (
-                      <span
-                        className="note-card-loc"
-                        title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onGotoFolder(file.folderId as string)
-                        }}
-                      >
-                        <FolderIcon size={12} />
-                        {folderPathOf(file.folderId)}
-                      </span>
-                    )}
+                    <div className="note-card-time">{formatTime(note.updatedAt)}</div>
                   </button>
-                  {moreButton('file', file.id, file.filename)}
+                  {moreButton('note', note.id, note.title || '无标题')}
                 </div>
-              ),
-            )}
-            {notes.slice(0, renderLimit).map((note) => (
-              <div key={note.id} className="card-wrap">
-                <button
-                  type="button"
-                  className={[
-                    note.id === activeId ? 'note-card active' : 'note-card',
-                    reorder?.overId === note.id && reorder.draggedId !== note.id
-                      ? reorder.place === 'before'
-                        ? 'reorder-before'
-                        : 'reorder-after'
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  draggable={DRAG_ENABLED}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', `note:${note.id}`)
-                    e.dataTransfer.effectAllowed = 'move'
-                    if (canReorder) setReorder({ draggedId: note.id, overId: '', place: 'after' })
-                  }}
-                  onDragOver={(e) => {
-                    if (!canReorder || !reorder || reorder.draggedId === note.id) return
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                    const r = e.currentTarget.getBoundingClientRect()
-                    const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
-                    if (reorder.overId !== note.id || reorder.place !== place) {
-                      setReorder({ ...reorder, overId: note.id, place })
-                    }
-                  }}
-                  onDrop={(e) => {
-                    if (!canReorder || !reorder) return
-                    e.preventDefault()
-                    e.stopPropagation()
-                    if (reorder.draggedId !== note.id && reorder.overId === note.id) {
-                      onReorderNote(reorder.draggedId, note.id, reorder.place)
-                    }
-                    setReorder(null)
-                  }}
-                  onDragEnd={() => setReorder(null)}
-                  onClick={() => onSelect(note.id)}
-                  onContextMenu={(e) => openMenu(e, 'note', note.id)}
-                >
-                  <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
-                  {excerptFor(note)}
-                  {search.trim() && note.folderId && (
-                    <span
-                      className="note-card-loc"
-                      title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onGotoFolder(note.folderId as string)
-                      }}
-                    >
-                      <FolderIcon size={12} />
-                      {folderPathOf(note.folderId)}
-                    </span>
-                  )}
-                  {(note.tags ?? []).length > 0 && (
-                    <div className="note-card-tags">
-                      {(note.tags ?? []).slice(0, 3).map((t) => (
-                        <span
-                          key={t}
-                          className="note-card-tag tag-jump"
-                          title={`按标签筛选：${t}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onSelectTag(t)
-                          }}
-                        >
-                          # {t}
-                        </span>
-                      ))}
-                      {(note.tags ?? []).length > 3 && (
-                        <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="note-card-time">{formatTime(note.updatedAt)}</div>
-                </button>
-                {moreButton('note', note.id, note.title || '无标题')}
-              </div>
-            ))}
+              )
+            })}
             {files.length + notes.length > renderLimit && (
               <div ref={sentinelRef} className="note-list-more">
                 加载更多（已显示 {Math.min(renderLimit, files.length + notes.length)} / {files.length + notes.length}）
@@ -592,31 +606,6 @@ export function NoteList({
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
-      {sortMenu && (
-        <ContextMenu
-          x={sortMenu.x}
-          y={sortMenu.y}
-          onClose={() => setSortMenu(null)}
-          items={[
-            {
-              key: 'created',
-              label: `${sortMode === 'created' ? '✓ ' : ''}按创建时间（新→旧）`,
-              onClick: () => {
-                onSortModeChange('created')
-                setSortMenu(null)
-              },
-            },
-            {
-              key: 'manual',
-              label: `${sortMode === 'manual' ? '✓ ' : ''}手动排序（拖拽调整）`,
-              onClick: () => {
-                onSortModeChange('manual')
-                setSortMenu(null)
-              },
-            },
-          ]}
-        />
-      )}
       {movingTarget && (
         <MoveFolderModal
           isOpen={true}
