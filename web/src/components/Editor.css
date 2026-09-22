@@ -576,10 +576,11 @@
   padding: 0;
 }
 
-/* 高亮标记 */
+/* 高亮标记：默认温润淡黄（避免浏览器原生电光黄），字色默认继承正文 */
 .editor-body .ProseMirror mark {
   border-radius: var(--radius-xs);
-  padding: 0 1px;
+  padding: 1px 3px;
+  background-color: #fff3bf;
 }
 
 /* 文档大纲：编辑区右下角悬浮开关（不随正文滚动，始终可点），

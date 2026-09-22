@@ -99,6 +99,79 @@
   caret-color: var(--qing);
 }
 
+/* 巧思二：青灯夜读荧光笔——半透明发光底色 + 高对比夜读文字，温润清晰不刺眼 */
+[data-theme='dengxia'] mark {
+  background: rgba(227, 176, 95, 0.3) !important;
+  color: #fae099 !important;
+  border-radius: var(--radius-xs);
+  padding: 1px 3px;
+}
+
+[data-theme='dengxia'] mark[data-color='#fff3bf' i] {
+  background: rgba(227, 176, 95, 0.3) !important;
+  color: #fae099 !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#ffe3e3' i] {
+  background: rgba(226, 121, 95, 0.3) !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#ffe8cc' i] {
+  background: rgba(247, 120, 30, 0.3) !important;
+  color: #fdba74 !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#d3f9d8' i] {
+  background: rgba(46, 160, 67, 0.32) !important;
+  color: #8ce99a !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#c5f6fa' i] {
+  background: rgba(20, 160, 180, 0.3) !important;
+  color: #79e4f2 !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#dbe4ff' i] {
+  background: rgba(80, 120, 240, 0.32) !important;
+  color: #b0c4ff !important;
+}
+
+[data-theme='dengxia'] mark[data-color='#f3d9fa' i] {
+  background: rgba(180, 80, 220, 0.3) !important;
+  color: #f0b3ff !important;
+}
+
+/* 巧思三：荧光笔选色板夜间微调——暗底色板饱满易辨 */
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#fff3bf'] {
+  background: rgba(227, 176, 95, 0.5) !important;
+  border-color: rgba(227, 176, 95, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#ffe3e3'] {
+  background: rgba(226, 121, 95, 0.5) !important;
+  border-color: rgba(226, 121, 95, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#ffe8cc'] {
+  background: rgba(247, 120, 30, 0.5) !important;
+  border-color: rgba(247, 120, 30, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#d3f9d8'] {
+  background: rgba(46, 160, 67, 0.5) !important;
+  border-color: rgba(46, 160, 67, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#c5f6fa'] {
+  background: rgba(20, 160, 180, 0.5) !important;
+  border-color: rgba(20, 160, 180, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#dbe4ff'] {
+  background: rgba(80, 120, 240, 0.5) !important;
+  border-color: rgba(80, 120, 240, 0.8);
+}
+[data-theme='dengxia'] .palette-popover .palette-swatch[data-mark-color='#f3d9fa'] {
+  background: rgba(180, 80, 220, 0.5) !important;
+  border-color: rgba(180, 80, 220, 0.8);
+}
+
 /* ===== 牛皮纸：牛皮纸面 + 邮戳蓝 + 楷体手账 ===== */
 [data-theme='niupizhi'] {
   --paper: #d3bc90;

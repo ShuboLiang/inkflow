@@ -336,6 +336,7 @@ function ToolbarInner({ editor }: { editor: Editor }) {
               key={c.label}
               type="button"
               className="palette-swatch"
+              data-mark-color={c.value || 'none'}
               style={c.value ? { background: c.value } : undefined}
               title={c.label}
               aria-label={`高亮 ${c.label}`}
