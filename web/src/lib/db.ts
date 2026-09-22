@@ -11,6 +11,10 @@ export interface Note {
   updatedAt: number
   syncedAt: number | null
   deletedAt: number | null
+  // 创建时间（不可变，创建时写一次；排序用）
+  createdAt: number
+  // 手动排序位置（升序；null = 未参与手动排序，按 createdAt 兜底）
+  position: number | null
 }
 
 export interface Folder {
@@ -111,3 +115,24 @@ db.version(5)
         delete f.dataUrl
       }),
   )
+
+// v6: 笔记排序——createdAt/position 字段落地（云端 010 迁移的本地对应）。
+// 老行回填：createdAt 无本地来源，用 updatedAt 近似；position 按 createdAt 顺序
+// 生成间隔 1000 的序列（旧→新，与云端回填一致，之后 pull 会用服务器值覆盖）
+db.version(6)
+  .stores({
+    notes: 'id, folderId, dirty, updatedAt',
+  })
+  .upgrade(async (tx) => {
+    const rows = await tx.table('notes').toArray()
+    const sorted = [...rows].sort((a, b) => (a.updatedAt as number) - (b.updatedAt as number))
+    const positionById = new Map(sorted.map((r, i) => [r.id as string, (i + 1) * 1000]))
+    await Promise.all(
+      rows.map((r) =>
+        tx.table('notes').update(r.id, {
+          createdAt: r.updatedAt ?? Date.now(),
+          position: positionById.get(r.id) ?? null,
+        }),
+      ),
+    )
+  })

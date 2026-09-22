@@ -19,6 +19,8 @@ interface NoteRow {
   version: number
   updated_at: string
   deleted_at: string | null
+  created_at?: string | null
+  position?: number | null
 }
 
 interface FolderRow {
@@ -81,6 +83,9 @@ function rowToNote(row: NoteRow): Note {
     updatedAt: new Date(row.updated_at).getTime(),
     syncedAt: Date.now(),
     deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
+    // created_at/position 是 010 迁移后新增列：老服务器（迁移未跑）或极端竞态下可能缺省
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : new Date(row.updated_at).getTime(),
+    position: row.position ?? null,
   }
 }
 
@@ -95,6 +100,9 @@ function noteToRow(note: Note, userId: string) {
     version: note.version,
     updated_at: new Date(note.updatedAt).toISOString(),
     deleted_at: note.deletedAt ? new Date(note.deletedAt).toISOString() : null,
+    // created_at 仅创建时写入，此后不再变；position 随手动排序更新
+    created_at: new Date(note.createdAt).toISOString(),
+    position: note.position ?? null,
   }
 }
 

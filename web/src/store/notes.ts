@@ -2,7 +2,7 @@ import { db, type Note } from '../lib/db'
 import { imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from './images'
 
 export async function listNotes(): Promise<Note[]> {
-  const all = await db.notes.orderBy('updatedAt').reverse().toArray()
+  const all = await db.notes.toArray()
   return all.filter((n) => n.deletedAt === null)
 }
 
@@ -11,6 +11,10 @@ export async function createNote(
   folderId: string | null = null,
   content: unknown = { type: 'doc', content: [] },
 ): Promise<Note> {
+  // 手动排序里新建的排最前：取当前最小 position 再往前挪一格
+  const existing = await db.notes.filter((n) => n.deletedAt === null && n.position !== null).toArray()
+  const minPos = existing.length ? Math.min(...existing.map((n) => n.position as number)) : 0
+  const now = Date.now()
   const note: Note = {
     id: crypto.randomUUID(),
     title,
@@ -19,9 +23,11 @@ export async function createNote(
     tags: [],
     version: 1,
     dirty: 1,
-    updatedAt: Date.now(),
+    updatedAt: now,
     syncedAt: null,
     deletedAt: null,
+    createdAt: now,
+    position: minPos - 1000,
   }
   await db.notes.add(note)
   return note
@@ -29,7 +35,7 @@ export async function createNote(
 
 export async function updateNote(
   id: string,
-  patch: Partial<Pick<Note, 'title' | 'content' | 'folderId' | 'tags'>>,
+  patch: Partial<Pick<Note, 'title' | 'content' | 'folderId' | 'tags' | 'position'>>,
 ): Promise<void> {
   const existing = await db.notes.get(id)
   if (!existing) return

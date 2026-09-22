@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type Folder } from './lib/db'
+import { db, type Folder, type Note } from './lib/db'
 import { Auth } from './components/Auth'
 import { Editor } from './components/Editor'
 import { EditorBoundary } from './components/EditorBoundary'
@@ -22,7 +22,7 @@ import { createNote, softDeleteNote, updateNote } from './store/notes'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import { acquireFileUrl, deleteFile, moveFile, renameFile, saveFile, setFileTags } from './store/files'
-import { loadPrefs, savePrefs, type TabItem } from './store/prefs'
+import { loadPrefs, savePrefs, type SortMode, type TabItem } from './store/prefs'
 import { applyTheme, isValidTheme, storedTheme, DEFAULT_THEME } from './lib/theme'
 import { ShareMenu } from './components/ShareMenu'
 import { NoteMoreMenu } from './components/NoteMoreMenu'
@@ -154,15 +154,14 @@ export default function App() {
   const [toolbarHidden, setToolbarHidden] = useState(false)
   // 主题：本机即选即生效（localStorage），登录后若本机从未选过则采纳云端
   const [theme, setTheme] = useState(() => storedTheme() ?? DEFAULT_THEME)
+  // 笔记列表排序模式（created=创建时间新→旧；manual=手动拖拽），存云端 prefs
+  const [sortMode, setSortMode] = useState<SortMode>('created')
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingSave = useRef<{ id: string; patch: { title?: string; content?: unknown } } | null>(null)
 
-  const notes = useLiveQuery(
-    () => db.notes.orderBy('updatedAt').reverse().filter((n) => n.deletedAt === null).toArray(),
-    [],
-  )
+  const notes = useLiveQuery(() => db.notes.filter((n) => n.deletedAt === null).toArray(), [])
 
   useEffect(() => {
     if (!user) return
@@ -171,6 +170,7 @@ export default function App() {
       .then((p) => {
         if (cancelled) return
         setToolbarHidden(p.toolbarHidden)
+        setSortMode(p.sortMode ?? 'created')
         // 本机没选过主题（新设备）→ 跟随账号的云端主题
         if (!storedTheme() && isValidTheme(p.theme)) {
           applyTheme(p.theme)
@@ -193,7 +193,7 @@ export default function App() {
   const toggleToolbar = () => {
     setToolbarHidden((cur) => {
       const next = !cur
-      void savePrefs({ toolbarHidden: next, theme }).catch(() => {})
+      void savePrefs({ toolbarHidden: next, theme, sortMode }).catch(() => {})
       return next
     })
   }
@@ -203,7 +203,14 @@ export default function App() {
     if (id === theme) return
     applyTheme(id)
     setTheme(id)
-    void savePrefs({ toolbarHidden, theme: id }).catch(() => {})
+    void savePrefs({ toolbarHidden, theme: id, sortMode }).catch(() => {})
+  }
+
+  // 切排序模式：云端持久化，所有设备登录后统一
+  const changeSortMode = (mode: SortMode) => {
+    if (mode === sortMode) return
+    setSortMode(mode)
+    void savePrefs({ toolbarHidden, theme, sortMode: mode }).catch(() => {})
   }
 
   const folders = useLiveQuery(async () => {
@@ -320,15 +327,24 @@ export default function App() {
       activeFolderSubtree === null ? n.folderId === null : activeFolderSubtree.has(n.folderId ?? '')
     let scoped = q || activeTag ? all : all.filter(inScope)
     if (!q && activeTag) scoped = scoped.filter((n) => (n.tags ?? []).includes(activeTag))
-    if (!q) return scoped
-    // 标题/正文命中，或所属文件夹（含子树）名命中
-    return scoped.filter(
-      (n) =>
-        n.title.toLowerCase().includes(q) ||
-        plainTextOf(n.content).toLowerCase().includes(q) ||
-        (n.folderId !== null && folderHitSubtree !== null && folderHitSubtree.has(n.folderId)),
-    )
-  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree])
+    if (q) {
+      // 标题/正文命中，或所属文件夹（含子树）名命中
+      scoped = scoped.filter(
+        (n) =>
+          n.title.toLowerCase().includes(q) ||
+          plainTextOf(n.content).toLowerCase().includes(q) ||
+          (n.folderId !== null && folderHitSubtree !== null && folderHitSubtree.has(n.folderId)),
+      )
+    }
+    // 排序：创建时间新→旧（createdAt 不可变，点开/编辑不会改变顺序）；
+    // 手动模式按 position 升序（无 position 的兜底排最后），文件夹/标签视图沿用同一相对顺序
+    if (sortMode === 'manual') {
+      return [...scoped].sort(
+        (a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (b.createdAt ?? 0) - (a.createdAt ?? 0),
+      )
+    }
+    return [...scoped].sort((a, b) => (b.createdAt ?? b.updatedAt) - (a.createdAt ?? a.updatedAt))
+  }, [notes, search, activeFolderSubtree, activeTag, folderHitSubtree, sortMode])
 
   const active = notes?.find((n) => n.id === activeId) ?? null
 
@@ -665,6 +681,61 @@ export default function App() {
     void updateNote(noteId, { folderId }).then(requestPush)
   }
 
+  // ---------- 手动排序 ----------
+  // 按给定完整顺序重排 position（等距 1000），只写有变化的行
+  const applyManualOrder = async (orderedNotes: Note[]) => {
+    let changed = 0
+    for (let i = 0; i < orderedNotes.length; i++) {
+      const want = (i + 1) * 1000
+      if (orderedNotes[i].position !== want) {
+        await updateNote(orderedNotes[i].id, { position: want })
+        changed++
+      }
+    }
+    if (changed) requestPush()
+  }
+
+  // 顺序上下文 = 当前可见列表（用户看到什么顺序就排成什么顺序）
+  const handleReorderNote = (draggedId: string, targetId: string, place: 'before' | 'after') => {
+    if (draggedId === targetId) return
+    const order = visibleNotes.filter((n) => n.id !== draggedId)
+    const idx = order.findIndex((n) => n.id === targetId)
+    if (idx < 0) return
+    const insertAt = place === 'before' ? idx : idx + 1
+    const prevPos = order[insertAt - 1]?.position ?? null
+    const nextPos = order[insertAt]?.position ?? null
+
+    if (prevPos !== null && nextPos !== null && nextPos - prevPos < 1) {
+      // 中点精度耗尽：全局按现有顺序重整为等距序列，拖拽的笔记落进目标位
+      const all = [...(notes ?? [])].sort(
+        (a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (b.createdAt ?? 0) - (a.createdAt ?? 0),
+      )
+      const rest = all.filter((n) => n.id !== draggedId)
+      const fullIdx = rest.findIndex((n) => n.id === targetId)
+      const dragged = all.find((n) => n.id === draggedId)
+      if (dragged && fullIdx >= 0) {
+        const at = place === 'before' ? fullIdx : fullIdx + 1
+        void applyManualOrder([...rest.slice(0, at), dragged, ...rest.slice(at)])
+      }
+      return
+    }
+
+    let pos: number
+    if (prevPos !== null && nextPos !== null) pos = (prevPos + nextPos) / 2
+    else if (prevPos !== null) pos = prevPos + 1000 // 拖到末尾
+    else if (nextPos !== null) pos = nextPos - 1000 // 拖到开头
+    else pos = 0
+    void updateNote(draggedId, { position: pos }).then(requestPush)
+  }
+
+  // 长按菜单「上移/下移」：与相邻笔记换位
+  const handleMoveNote = (id: string, dir: -1 | 1) => {
+    const idx = visibleNotes.findIndex((n) => n.id === id)
+    const target = visibleNotes[idx + dir]
+    if (idx < 0 || !target) return
+    handleReorderNote(id, target.id, dir < 0 ? 'before' : 'after')
+  }
+
   const handleToggleTag = (name: string) => {
     setActiveTag((cur) => (cur === name ? null : name))
     setMobileView('list')
@@ -840,6 +911,7 @@ export default function App() {
       void savePrefs({
         toolbarHidden,
         theme,
+        sortMode,
         tabs: validTabs,
         activeTabId,
       }).catch(() => {})
@@ -1215,6 +1287,10 @@ export default function App() {
           onMoveNote={handleDropNote}
           onMoveFile={handleDropFile}
           onRequestPush={requestPush}
+          sortMode={sortMode}
+          onSortModeChange={changeSortMode}
+          onReorderNote={handleReorderNote}
+          onMoveNoteStep={handleMoveNote}
           emptyHint={activeFolderId === 'all' ? '暂无内容' : '此文件夹还没有内容'}
         />
         <main

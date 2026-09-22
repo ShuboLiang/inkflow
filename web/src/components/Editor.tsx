@@ -272,7 +272,10 @@ export function Editor({ content, onUpdate, toolbarHidden, readOnly = false }: E
       if (unsaved.current) return
       const current = JSON.stringify(editor.getJSON())
       if (current !== next && !editor.isFocused) {
-        editor.commands.setContent(toDoc(content))
+        // emitUpdate:false：setContent 默认会触发 onUpdate，旧 JSON 与 schema
+        // round-trip 不完全一致的笔记每次打开都会被"重写"一遍——版本、updatedAt
+        // 被无意义刷新，列表按更新时间排时笔记点开就跳到最前
+        editor.commands.setContent(toDoc(content), { emitUpdate: false })
       }
     }
     apply()

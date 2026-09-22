@@ -1,18 +1,22 @@
 import { supabase } from '../lib/supabase'
 
 // 用户偏好：跨设备持久化的小设置（RLS 限定本人一行，prefs 是 JSONB 按需取键）。
-// toolbarHidden——格式工具栏全局隐藏；theme——主题 id（见 lib/theme.ts）；tabs——打开的标签页列表。
+// toolbarHidden——格式工具栏全局隐藏；theme——主题 id（见 lib/theme.ts）；tabs——打开的标签页列表；
+// sortMode——笔记列表排序（created=按创建时间新→旧，manual=手动拖拽顺序）
 
 export interface TabItem {
   id: string
   kind: 'note' | 'file'
 }
 
+export type SortMode = 'created' | 'manual'
+
 export interface Prefs {
   toolbarHidden: boolean
   theme: string
   tabs?: TabItem[]
   activeTabId?: string | null
+  sortMode?: SortMode
 }
 
 export async function loadPrefs(): Promise<Prefs> {
@@ -22,12 +26,14 @@ export async function loadPrefs(): Promise<Prefs> {
     theme?: string
     tabs?: TabItem[]
     activeTabId?: string | null
+    sortMode?: SortMode
   }
   return {
     toolbarHidden: !!p.toolbarHidden,
     theme: p.theme ?? '',
     tabs: Array.isArray(p.tabs) ? p.tabs : [],
     activeTabId: p.activeTabId ?? null,
+    sortMode: p.sortMode === 'manual' ? 'manual' : 'created',
   }
 }
 

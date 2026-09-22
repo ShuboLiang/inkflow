@@ -5,8 +5,10 @@ import {
   Search,
   X,
   MoreHorizontal,
+  ArrowDownUp,
 } from 'lucide-react'
 import type { FileEntry, Folder, Note } from '../lib/db'
+import type { SortMode } from '../store/prefs'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
 import { acquireFileUrl, deleteFile } from '../store/files'
@@ -43,6 +45,13 @@ interface NoteListProps {
   onMoveNote: (id: string, folderId: string | null) => void
   onMoveFile: (id: string, folderId: string | null) => void
   onRequestPush: () => void
+  /** 笔记排序模式（created=创建时间新→旧；manual=手动拖拽） */
+  sortMode: SortMode
+  onSortModeChange: (mode: SortMode) => void
+  /** 手动排序：把 draggedId 移到 targetId 前/后（顺序上下文 = 当前可见列表） */
+  onReorderNote: (draggedId: string, targetId: string, place: 'before' | 'after') => void
+  /** 手动排序（触屏菜单）：上移/下移一步 */
+  onMoveNoteStep: (id: string, dir: -1 | 1) => void
   emptyHint?: string
 }
 
@@ -113,10 +122,20 @@ export function NoteList({
   onMoveNote,
   onMoveFile,
   onRequestPush,
+  sortMode,
+  onSortModeChange,
+  onReorderNote,
+  onMoveNoteStep,
   emptyHint,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
+  // 排序方式菜单（锚在排序按钮下方）
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null)
+  // 手动排序拖拽：被拖笔记 + 悬停目标与插入侧（before/after）
+  const [reorder, setReorder] = useState<{ draggedId: string; overId: string; place: 'before' | 'after' } | null>(null)
+  // 手动排序拖拽只在桌面精确指针 + manual 模式启用（触屏用菜单上移/下移）
+  const canReorder = sortMode === 'manual' && DRAG_ENABLED
   // 「移动到文件夹…」弹窗目标
   const [movingTarget, setMovingTarget] = useState<{
     kind: 'note' | 'file'
@@ -255,6 +274,12 @@ export function NoteList({
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
+          ...(sortMode === 'manual'
+            ? [
+                { key: 'up', label: '上移', onClick: () => onMoveNoteStep(m.id, -1) },
+                { key: 'down', label: '下移', onClick: () => onMoveNoteStep(m.id, 1) },
+              ]
+            : []),
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
@@ -356,6 +381,19 @@ export function NoteList({
             </button>
           )}
         </div>
+        <button
+          type="button"
+          className="note-list-sort"
+          title="排序方式"
+          aria-label="排序方式"
+          aria-haspopup="menu"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setSortMenu({ x: r.left, y: r.bottom + 4 })
+          }}
+        >
+          <ArrowDownUp size={15} />
+        </button>
       </div>
       <div className="note-list-items">
         {notes.length === 0 && files.length === 0 && folderHits.length === 0 ? (
@@ -466,12 +504,42 @@ export function NoteList({
               <div key={note.id} className="card-wrap">
                 <button
                   type="button"
-                  className={note.id === activeId ? 'note-card active' : 'note-card'}
+                  className={[
+                    note.id === activeId ? 'note-card active' : 'note-card',
+                    reorder?.overId === note.id && reorder.draggedId !== note.id
+                      ? reorder.place === 'before'
+                        ? 'reorder-before'
+                        : 'reorder-after'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   draggable={DRAG_ENABLED}
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/plain', `note:${note.id}`)
                     e.dataTransfer.effectAllowed = 'move'
+                    if (canReorder) setReorder({ draggedId: note.id, overId: '', place: 'after' })
                   }}
+                  onDragOver={(e) => {
+                    if (!canReorder || !reorder || reorder.draggedId === note.id) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    const r = e.currentTarget.getBoundingClientRect()
+                    const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
+                    if (reorder.overId !== note.id || reorder.place !== place) {
+                      setReorder({ ...reorder, overId: note.id, place })
+                    }
+                  }}
+                  onDrop={(e) => {
+                    if (!canReorder || !reorder) return
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (reorder.draggedId !== note.id && reorder.overId === note.id) {
+                      onReorderNote(reorder.draggedId, note.id, reorder.place)
+                    }
+                    setReorder(null)
+                  }}
+                  onDragEnd={() => setReorder(null)}
                   onClick={() => onSelect(note.id)}
                   onContextMenu={(e) => openMenu(e, 'note', note.id)}
                 >
@@ -524,6 +592,31 @@ export function NoteList({
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
+      {sortMenu && (
+        <ContextMenu
+          x={sortMenu.x}
+          y={sortMenu.y}
+          onClose={() => setSortMenu(null)}
+          items={[
+            {
+              key: 'created',
+              label: `${sortMode === 'created' ? '✓ ' : ''}按创建时间（新→旧）`,
+              onClick: () => {
+                onSortModeChange('created')
+                setSortMenu(null)
+              },
+            },
+            {
+              key: 'manual',
+              label: `${sortMode === 'manual' ? '✓ ' : ''}手动排序（拖拽调整）`,
+              onClick: () => {
+                onSortModeChange('manual')
+                setSortMenu(null)
+              },
+            },
+          ]}
+        />
+      )}
       {movingTarget && (
         <MoveFolderModal
           isOpen={true}
