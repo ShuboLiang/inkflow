@@ -10,9 +10,26 @@
   --danger: #b54534;
   --danger-50: #f9ebe8;
 
+  /* 派生档：从主题色实时混出，五套主题自动跟随。
+     :root 与 [data-theme] 同挂在 <html> 上，这里的 var() 取到的就是当主题的值 */
+  --ink-700: color-mix(in srgb, var(--ink-900) 65%, var(--ink-500));
+  --ink-600: color-mix(in srgb, var(--ink-900) 45%, var(--ink-500));
+  --qing-200: color-mix(in srgb, var(--qing) 40%, transparent);
+  --qing-hover: color-mix(in srgb, var(--qing) 85%, #000);
+
   /* 圆角分两档：控件用小档、面板/图片用大档（铅印主题整体归零成方角） */
   --radius-s: 6px;
   --radius: 8px;
+  /* 微档（徽标/命中高亮/滚动条）与药丸档（标签圆片/计数徽章），方角主题一起变方 */
+  --radius-xs: 3px;
+  --radius-pill: 999px;
+
+  /* 弹层遮罩统一档；灯箱用更重的「暗房」档 */
+  --overlay: rgba(28, 33, 40, 0.42);
+  --overlay-strong: rgba(28, 33, 40, 0.82);
+
+  /* 手机编辑视图两行式顶栏总高（40 + 35 + 1 分隔线），弹出层贴顶偏移跟它走 */
+  --mobile-topbar-h: 76px;
 
   --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-note: 'LXGW WenKai', serif;
@@ -87,7 +104,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: rgba(28, 33, 40, 0.82);
+  background: var(--overlay-strong);
   cursor: zoom-out;
   animation: img-fade-in 160ms ease-out;
 }

@@ -49,6 +49,8 @@
   --danger-50: #f5e2dd;
   --radius: 2px;
   --radius-s: 2px;
+  --radius-xs: 2px;
+  --radius-pill: 2px;
   --font-ui: Georgia, 'Songti SC', SimSun, serif;
   --font-note: 'Songti SC', SimSun, 'Noto Serif CJK SC', serif;
 }
@@ -83,6 +85,8 @@
   --qing-50: #2b2a22;
   --danger: #e2795f;
   --danger-50: #382721;
+  /* 暗色主题里 hover 提亮而不是压暗——压暗会没进夜色 */
+  --qing-hover: color-mix(in srgb, var(--qing) 80%, #fff);
 }
 
 /* 巧思：暖黄的选区与光标——夜里被灯照到的那一行 */

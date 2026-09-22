@@ -2,16 +2,16 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  animation: moveFadeIn 0.2s ease;
+  animation: move-fade-in 0.2s ease;
 }
 
-@keyframes moveFadeIn {
+@keyframes move-fade-in {
   from {
     opacity: 0;
   }
@@ -32,10 +32,10 @@
   flex-direction: column;
   overflow: hidden;
   font-family: var(--font-ui);
-  animation: moveScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: move-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes moveScaleIn {
+@keyframes move-scale-in {
   from {
     opacity: 0;
     transform: scale(0.96) translateY(8px);
@@ -91,11 +91,6 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.move-modal-close:hover {
-  background: var(--qing-50);
-  color: var(--qing);
-}
-
 /* 搜索框 */
 .move-modal-search {
   position: relative;
@@ -149,11 +144,6 @@
   border-radius: 50%;
 }
 
-.move-search-clear:hover {
-  background: var(--qing-50);
-  color: var(--qing);
-}
-
 /* 树状列表容器 */
 .move-tree-list {
   flex: 1;
@@ -186,10 +176,6 @@
   position: relative;
 }
 
-.move-tree-item:hover {
-  background: var(--qing-50);
-}
-
 .move-tree-item.selected {
   background: color-mix(in srgb, var(--qing-50) 80%, var(--paper));
   font-weight: 500;
@@ -219,11 +205,6 @@
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.move-item-toggle:hover {
-  background: color-mix(in srgb, var(--qing) 15%, transparent);
-  color: var(--qing);
-}
-
 .move-item-icon {
   display: inline-flex;
   align-items: center;
@@ -235,14 +216,13 @@
   transition: color 0.15s ease;
 }
 
-.move-tree-item.selected .move-item-icon,
-.move-tree-item:hover .move-item-icon {
+.move-tree-item.selected .move-item-icon {
   color: var(--qing);
 }
 
 .move-item-name {
   flex: 1;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink-900);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -260,7 +240,7 @@
   color: var(--ink-500);
   background: var(--surface);
   border: 1px solid var(--ink-200);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
 }
 
@@ -318,20 +298,11 @@
   color: var(--ink-600);
 }
 
-.move-btn-cancel:hover {
-  background: var(--qing-50);
-  color: var(--qing);
-}
-
 .move-btn-confirm {
   border: 1px solid var(--qing);
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
   font-weight: 500;
-}
-
-.move-btn-confirm:hover:not(:disabled) {
-  opacity: 0.9;
 }
 
 .move-btn-confirm:disabled {
@@ -340,6 +311,47 @@
   background: var(--ink-200);
   border-color: var(--ink-200);
   color: var(--ink-500);
+}
+
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停，导致点按两下才触发 */
+@media (hover: hover) {
+  .move-modal-close:hover,
+  .move-search-clear:hover,
+  .move-btn-cancel:hover {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .move-tree-item:hover {
+    background: var(--qing-50);
+  }
+
+  .move-tree-item:hover .move-item-icon {
+    color: var(--qing);
+  }
+
+  .move-item-toggle:hover {
+    background: color-mix(in srgb, var(--qing) 15%, transparent);
+    color: var(--qing);
+  }
+
+  .move-btn-confirm:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+}
+
+/* 触屏以按压态替代悬停反馈 */
+@media (hover: none) {
+  .move-modal-close:active,
+  .move-search-clear:active,
+  .move-btn-cancel:active {
+    background: var(--qing-50);
+    color: var(--qing);
+  }
+
+  .move-btn-confirm:active:not(:disabled) {
+    opacity: 0.9;
+  }
 }
 
 /* 移动端视口适配：自底向上滑出的 Sheet 抽屉 */
@@ -354,10 +366,10 @@
     max-height: 82vh;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
-    animation: moveSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: move-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @keyframes moveSlideUp {
+  @keyframes move-slide-up {
     from {
       transform: translateY(100%);
     }

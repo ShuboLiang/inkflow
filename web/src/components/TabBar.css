@@ -74,10 +74,10 @@
 }
 
 .tab-badge {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   padding: 1px 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   line-height: 1;
   letter-spacing: 0.2px;
 }
@@ -104,24 +104,37 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  /* 视觉小巧、热区达标：24×24 点击区（与侧栏各叉号 24-26px 的自家规范一致） */
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: var(--radius-s);
   background: none;
   color: var(--ink-500);
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.7;
-  margin-left: 4px;
+  opacity: 0.65;
+  margin-left: 0;
   flex-shrink: 0;
   transition: opacity 0.15s, background-color 0.15s, color 0.15s;
 }
 
-.tab-close-btn:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--ink-500) 18%, transparent);
-  color: var(--ink-900);
+/* hover 反馈仅限精确指针：iOS 触屏上 :hover 会把第一次点按吞成悬停 */
+@media (hover: hover) {
+  .tab-close-btn:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--ink-500) 18%, transparent);
+    color: var(--ink-900);
+  }
+}
+
+@media (hover: none) {
+  .tab-close-btn:active {
+    opacity: 1;
+    background: color-mix(in srgb, var(--ink-500) 18%, transparent);
+    color: var(--ink-900);
+  }
 }
 
 .tab-new-btn {
@@ -163,9 +176,9 @@
   }
 
   .tab-close-btn {
-    width: 22px;
-    height: 22px;
-    margin-left: 4px;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
   }
 
   .tab-new-btn {

@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import './EditorBoundary.css'
 
 interface Props {
   children: ReactNode
@@ -23,12 +24,12 @@ export class EditorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', fontFamily: 'var(--font-ui)' }}>
-            <p style={{ color: 'var(--ink-900)' }}>编辑器出错了，内容没有丢失。</p>
+        <div className="editor-boundary">
+          <div className="editor-boundary-box">
+            <p className="editor-boundary-text">编辑器出错了，内容没有丢失。</p>
             <button
               type="button"
-              style={{ color: 'var(--qing)', border: '1px solid var(--ink-200)', borderRadius: 6, padding: '6px 14px', background: 'none', cursor: 'pointer' }}
+              className="editor-boundary-retry"
               onClick={() => this.setState({ hasError: false })}
             >
               重新加载编辑器

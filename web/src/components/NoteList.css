@@ -38,13 +38,14 @@
   background: var(--surface);
   font-size: 13px;
   color: var(--ink-900);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .note-list-search input:focus {
   outline: none;
   border-color: var(--qing);
   background: var(--paper);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qing) 20%, transparent);
 }
 
 .note-list-search-clear {
@@ -95,7 +96,7 @@
   font-size: 11px;
   color: var(--qing);
   background: var(--qing-50);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 8px;
   line-height: 1.6;
 }
@@ -335,7 +336,7 @@
   background: var(--qing-50);
   color: var(--qing);
   font-weight: 600;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
 }
 
@@ -420,7 +421,7 @@
   }
 
   .note-card-tag.tag-jump:hover {
-    color: #fff;
+    color: var(--paper);
     background: var(--qing);
   }
 }

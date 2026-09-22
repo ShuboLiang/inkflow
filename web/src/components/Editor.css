@@ -198,7 +198,7 @@
 }
 
 .editor-reading-mode .ProseMirror a:hover {
-  color: var(--qing-hover, #087f5b);
+  color: var(--qing-hover);
   text-decoration-color: currentColor;
 }
 
@@ -286,7 +286,7 @@
 .code-copy-btn.copied {
   opacity: 1;
   background: var(--qing);
-  color: #fff;
+  color: var(--paper);
   border-color: var(--qing);
 }
 
@@ -321,7 +321,7 @@
 .editor-body .ProseMirror .tableWrapper::-webkit-scrollbar-thumb,
 .editor-body .ProseMirror .katex-display::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--qing) 40%, transparent);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 
 .editor-body .ProseMirror pre::-webkit-scrollbar-track,
@@ -474,6 +474,19 @@
   margin: 0.8em 0 0.4em;
 }
 
+/* 标题层级显式定档：不设则吃浏览器 UA 默认（h1=2em 比文档标题还大，层级倒挂） */
+.editor-body .ProseMirror h1 {
+  font-size: 1.5em;
+}
+
+.editor-body .ProseMirror h2 {
+  font-size: 1.28em;
+}
+
+.editor-body .ProseMirror h3 {
+  font-size: 1.12em;
+}
+
 .editor-footer {
   display: flex;
   justify-content: flex-end;
@@ -565,7 +578,7 @@
 
 /* 高亮标记 */
 .editor-body .ProseMirror mark {
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
 }
 

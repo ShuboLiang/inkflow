@@ -133,7 +133,7 @@
 
 .share-doc-body .ProseMirror table {
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   margin: 0;
 }
@@ -145,6 +145,7 @@
   min-width: 3em;
   padding: 6px 10px;
   vertical-align: top;
+  overflow-wrap: break-word;
 }
 
 .share-doc-body .ProseMirror th {
@@ -164,6 +165,19 @@
   font-weight: 600;
   line-height: 1.4;
   margin: 0.8em 0 0.4em;
+}
+
+/* 与编辑器同款标题层级（勿与 Editor.css 漂移） */
+.share-doc-body .ProseMirror h1 {
+  font-size: 1.5em;
+}
+
+.share-doc-body .ProseMirror h2 {
+  font-size: 1.28em;
+}
+
+.share-doc-body .ProseMirror h3 {
+  font-size: 1.12em;
 }
 
 .share-file {
@@ -221,7 +235,7 @@
 }
 
 .share-doc-body .ProseMirror ul[data-type='taskList'] li > label {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   user-select: none;
 }
 
@@ -237,6 +251,6 @@
 }
 
 .share-doc-body .ProseMirror mark {
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
 }
