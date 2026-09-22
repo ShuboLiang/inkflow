@@ -535,6 +535,7 @@ export function Sidebar({
         </div>
       )}
       {!tagsCollapsed &&
+        tags.size > 0 &&
         (matchedTags.length === 0 ? (
           <div className="sidebar-empty">{tagQuery ? '无匹配标签' : '暂无标签'}</div>
         ) : (

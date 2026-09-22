@@ -474,6 +474,19 @@
   margin: 0.8em 0 0.4em;
 }
 
+/* 标题层级显式定档：不设则吃浏览器 UA 默认（h1=2em 比文档标题还大，层级倒挂） */
+.editor-body .ProseMirror h1 {
+  font-size: 1.5em;
+}
+
+.editor-body .ProseMirror h2 {
+  font-size: 1.28em;
+}
+
+.editor-body .ProseMirror h3 {
+  font-size: 1.12em;
+}
+
 .editor-footer {
   display: flex;
   justify-content: flex-end;
