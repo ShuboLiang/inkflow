@@ -55,12 +55,27 @@ export interface FileEntry {
   position: number | null
 }
 
+export interface NoteVersion {
+  id: string
+  noteId: string
+  title: string
+  content: unknown
+  version: number
+  source: 'auto' | 'manual'
+  name?: string
+  createdAt: number
+  charCount: number
+  dirty: 0 | 1
+  syncedAt: number | null
+}
+
 export const db = new Dexie('inkflow') as Dexie & {
   notes: EntityTable<Note, 'id'>
   folders: EntityTable<Folder, 'id'>
   tags: EntityTable<Tag, 'id'>
   files: EntityTable<FileEntry, 'id'>
   images: EntityTable<ImageCache, 'path'>
+  noteVersions: EntityTable<NoteVersion, 'id'>
 }
 
 db.version(1).stores({
@@ -169,3 +184,8 @@ db.version(7)
       })
     }
   })
+
+// v8: 笔记版本控制（快照历史）
+db.version(8).stores({
+  noteVersions: 'id, noteId, createdAt, dirty',
+})

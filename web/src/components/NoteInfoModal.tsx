@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Info, Copy, Check, X } from 'lucide-react'
+import { Info, Copy, Check, X, History } from 'lucide-react'
 import type { Note } from '../lib/db'
 import { countWords, firstLine } from '../lib/wordCount'
 import { plainTextOf } from '../lib/search'
@@ -10,6 +10,7 @@ interface NoteInfoModalProps {
   note: Note | null
   folderPath?: string | null
   onClose: () => void
+  onOpenVersionHistory?: (note: Note) => void
 }
 
 function formatDateTime(ts?: number | null): string {
@@ -25,7 +26,7 @@ function formatDateTime(ts?: number | null): string {
   })
 }
 
-export function NoteInfoModal({ isOpen, note, folderPath, onClose }: NoteInfoModalProps) {
+export function NoteInfoModal({ isOpen, note, folderPath, onClose, onOpenVersionHistory }: NoteInfoModalProps) {
   const [copied, setCopied] = useState(false)
 
   // ESC 键关闭
@@ -189,6 +190,20 @@ export function NoteInfoModal({ isOpen, note, folderPath, onClose }: NoteInfoMod
         </div>
 
         <div className="note-info-footer">
+          {onOpenVersionHistory && (
+            <button
+              type="button"
+              className="note-info-history-btn"
+              onClick={() => {
+                onClose()
+                onOpenVersionHistory(note)
+              }}
+              title="查看历史版本"
+            >
+              <History size={14} />
+              <span>版本历史</span>
+            </button>
+          )}
           <button type="button" className="note-info-ok-btn" onClick={onClose}>
             完成
           </button>

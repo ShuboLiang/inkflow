@@ -213,10 +213,32 @@
 /* 底部操作区 */
 .note-info-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--ink-200);
   background: var(--surface);
+}
+
+.note-info-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--qing-50);
+  color: var(--qing);
+  border: 1px solid var(--qing);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-right: auto;
+  transition: all 0.15s ease;
+}
+
+.note-info-history-btn:hover {
+  background: color-mix(in srgb, var(--qing) 15%, transparent);
 }
 
 .note-info-ok-btn {

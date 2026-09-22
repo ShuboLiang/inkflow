@@ -25,6 +25,7 @@ import { EditorBoundary } from './components/EditorBoundary'
 import { EmptyState } from './components/EmptyState'
 import { NoteList } from './components/NoteList'
 import { NoteInfoModal } from './components/NoteInfoModal'
+import { VersionHistoryModal } from './components/VersionHistoryModal'
 import { SettingsModal } from './components/SettingsModal'
 
 // PDF 查看器（pdf.js 体积大，懒加载：只在打开 PDF 时才下载）
@@ -39,6 +40,7 @@ import { SyncIndicator } from './components/SyncIndicator'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { createNote, permanentlyDeleteNote, restoreNote, softDeleteNote, updateNote } from './store/notes'
+import { restoreVersion, maybeCreateAutoSnapshot } from './store/versions'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from './store/folders'
 import { addTagToNote, deleteTag, renameTag } from './store/tags'
 import {
@@ -83,6 +85,7 @@ import {
   BookOpen,
   FileText,
   Info,
+  History,
 } from 'lucide-react'
 
 // 本地临时持久化 tabs 的 storage key
@@ -290,6 +293,10 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 笔记信息弹窗目标（null = 关闭）
   const [noteInfoTarget, setNoteInfoTarget] = useState<Note | null>(null)
+  // 笔记版本历史弹窗目标（null = 关闭）
+  const [versionHistoryTarget, setVersionHistoryTarget] = useState<Note | null>(null)
+  // 笔记重置 key（恢复历史版本时强制重新初始化编辑器）
+  const [noteResetKey, setNoteResetKey] = useState(0)
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const titleFocusSeq = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -693,7 +700,12 @@ export default function App() {
       pendingSave.current = null
       if (pending) {
         void updateNote(pending.id, pending.patch).then((changed) => {
-          if (changed) requestPush()
+          if (changed) {
+            requestPush()
+            void db.notes.get(pending.id).then((n) => {
+              if (n) void maybeCreateAutoSnapshot(n)
+            })
+          }
         })
       }
     }, 500)
@@ -708,7 +720,12 @@ export default function App() {
     pendingSave.current = null
     if (pending) {
       void updateNote(pending.id, pending.patch).then((changed) => {
-        if (changed) requestPush()
+        if (changed) {
+          requestPush()
+          void db.notes.get(pending.id).then((n) => {
+            if (n) void maybeCreateAutoSnapshot(n)
+          })
+        }
       })
     }
   }, [requestPush])
@@ -737,6 +754,21 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [activeId, toggleReadingMode])
+
+  // Ctrl/Cmd + Shift + H 查看版本历史
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'h') {
+        if (active) {
+          e.preventDefault()
+          flushSave()
+          setVersionHistoryTarget(active)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [active, flushSave])
 
   const handleCreate = async () => {
     flushSave()
@@ -1966,6 +1998,19 @@ export default function App() {
                     Aa
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="tool-btn"
+                  title="版本历史 (Ctrl+Shift+H)"
+                  aria-label="版本历史"
+                  onClick={() => {
+                    flushSave()
+                    setVersionHistoryTarget(active)
+                  }}
+                >
+                  <History size={14} />
+                  <span>版本</span>
+                </button>
                 <TagPicker
                   tags={active.tags ?? []}
                   suggestions={[...tagCounts.keys()]}
@@ -1983,6 +2028,10 @@ export default function App() {
                   readingMode={readingMode}
                   onToggleReadingMode={toggleReadingMode}
                   onOpenInfo={() => setNoteInfoTarget(active)}
+                  onOpenVersionHistory={() => {
+                    flushSave()
+                    setVersionHistoryTarget(active)
+                  }}
                 />
               </>
             )
@@ -2160,7 +2209,7 @@ export default function App() {
                     </h1>
                   ) : (
                     <textarea
-                      key={`title-${active.id}`}
+                      key={`title-${active.id}-${noteResetKey}`}
                       ref={titleRef}
                       rows={1}
                       className="editor-title"
@@ -2188,7 +2237,7 @@ export default function App() {
                 </div>
                 <EditorBoundary>
                   <Editor
-                    key={active.id}
+                    key={`${active.id}-${noteResetKey}`}
                     content={active.content}
                     onUpdate={(content) => scheduleSave(active.id, { content })}
                     toolbarHidden={toolbarHidden}
@@ -2228,6 +2277,35 @@ export default function App() {
             : null
         }
         onClose={() => setNoteInfoTarget(null)}
+        onOpenVersionHistory={(t) => {
+          flushSave()
+          setVersionHistoryTarget(t)
+        }}
+      />
+      <VersionHistoryModal
+        isOpen={!!versionHistoryTarget}
+        note={
+          versionHistoryTarget && active && versionHistoryTarget.id === active.id
+            ? active
+            : versionHistoryTarget
+        }
+        onClose={() => setVersionHistoryTarget(null)}
+        onRestore={async (versionId) => {
+          if (!versionHistoryTarget) return
+          const res = await restoreVersion(versionHistoryTarget.id, versionId)
+          if (res.success) {
+            setNoteResetKey((k) => k + 1)
+            requestPush()
+          }
+        }}
+        onSaveAsCopy={(newNote) => {
+          setTabs((prev) => [...prev, { kind: 'note', id: newNote.id }])
+          setActiveFileId(null)
+          setActiveId(newNote.id)
+          setMobileView('editor')
+          syncUrlNavState({ noteId: newNote.id, fileId: null }, 'replace')
+          requestPush()
+        }}
       />
       <SettingsModal
         isOpen={settingsOpen}

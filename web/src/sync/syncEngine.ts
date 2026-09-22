@@ -1,4 +1,4 @@
-import { db, type FileEntry, type Folder, type Note } from '../lib/db'
+import { db, type Folder, type Note, type FileEntry } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { dataUrlToBlob, revokeFileUrl } from '../store/files'
 import { uploadPendingImages, imagePathsOf, noteImageSrcs, removeImagesIfUnreferenced } from '../store/images'
@@ -213,8 +213,11 @@ export const syncEngine = {
         if (note.id === activeEditId) {
           await supabase.from('note_versions').insert({
             note_id: server.id as string,
+            title: (server.title as string) ?? '',
             content: server.content,
             version: server.version,
+            source: 'auto',
+            name: '冲突自动备份 (云端版本)',
           })
           // 本地胜出覆盖服务器时把 updatedAt 刷新到当下：离线期间写入的旧时间戳
           // 会让其他端的增量拉取（updated_at > lastSyncAt）永远看不到这次覆盖
@@ -225,8 +228,11 @@ export const syncEngine = {
         } else {
           await supabase.from('note_versions').insert({
             note_id: note.id,
+            title: note.title ?? '',
             content: note.content,
             version: note.version,
+            source: 'auto',
+            name: '冲突自动备份 (本地版本)',
           })
           await db.notes.put({ ...rowToNote(server as NoteRow), dirty: 0, syncedAt: Date.now() })
           continue
@@ -319,6 +325,27 @@ export const syncEngine = {
       }
       pushed++
     }
+
+    // 笔记历史版本：将本地新增或重命名的快照推送到云端
+    const dirtyVersions = await db.noteVersions.where('dirty').equals(1).toArray()
+    for (const v of dirtyVersions) {
+      const { error: vErr } = await supabase.from('note_versions').upsert({
+        id: v.id,
+        note_id: v.noteId,
+        title: v.title ?? '',
+        content: v.content,
+        version: v.version,
+        source: v.source,
+        name: v.name ?? null,
+        char_count: v.charCount,
+        created_at: new Date(v.createdAt).toISOString(),
+      })
+      if (!vErr) {
+        await db.noteVersions.update(v.id, { dirty: 0, syncedAt: Date.now() })
+        pushed++
+      }
+    }
+
     return { pushed, pulled: 0, conflicts }
   },
 
