@@ -447,6 +447,17 @@
   border-radius: var(--radius-s);
 }
 
+/* 公式内汉字排版：继承笔记字体，避免默认回退到衬线宋体且行高溢出 */
+.editor-body .ProseMirror .katex .cjk_fallback {
+  font-family: var(--font-note), 'LXGW WenKai', 'Microsoft YaHei', -apple-system, sans-serif;
+  line-height: normal;
+}
+
+/* 分数内中文字符：微调字号避免 Chromium 表格行高限制导致的上下笔画裁切 */
+.editor-body .ProseMirror .katex .mfrac .cjk_fallback {
+  font-size: 0.92em;
+}
+
 /* 宽公式自身横向滚动（与代码块/表格同策略），不再把 .editor-scroll 撑宽 */
 .editor-body .ProseMirror .katex-display {
   overflow-x: auto;
