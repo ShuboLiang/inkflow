@@ -115,7 +115,12 @@ export async function permanentlyDeleteNote(id: string): Promise<void> {
   if (existing) {
     void removeImagesIfUnreferenced(imagePathsOf(noteImageSrcs(existing.content)))
   }
-  await db.notes.delete(id)
+  // 双保险：先主动解除关联的 shares 记录（兼容未更新级联约束的老库）
+  const { error: shareErr } = await supabase.from('shares').delete().eq('note_id', id)
+  if (shareErr) console.error('delete shares failed', shareErr)
+
   const { error } = await supabase.from('notes').delete().eq('id', id)
   if (error) console.error('permanently delete note from server failed', error)
+
+  await db.notes.delete(id)
 }

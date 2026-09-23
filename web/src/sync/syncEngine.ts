@@ -202,51 +202,55 @@ export const syncEngine = {
       const note = await db.notes.get(snapshot.id)
       if (!note || note.dirty === 0) continue
 
-      const { data: server, error: readErr } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('id', note.id)
-        .maybeSingle()
-      if (readErr) throw readErr
+      try {
+        const { data: server, error: readErr } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('id', note.id)
+          .maybeSingle()
+        if (readErr) throw readErr
 
-      if (server && (server.version as number) > note.version) {
-        conflicts++
-        if (note.id === activeEditId) {
-          await supabase.from('note_versions').insert({
-            note_id: server.id as string,
-            title: (server.title as string) ?? '',
-            content: server.content,
-            version: server.version,
-            source: 'auto',
-            name: '冲突自动备份 (云端版本)',
-          })
-          // 本地胜出覆盖服务器时把 updatedAt 刷新到当下：离线期间写入的旧时间戳
-          // 会让其他端的增量拉取（updated_at > lastSyncAt）永远看不到这次覆盖
-          const now = Date.now()
-          await db.notes.update(note.id, { version: server.version as number, updatedAt: now })
-          note.version = server.version as number
-          note.updatedAt = now
-        } else {
-          await supabase.from('note_versions').insert({
-            note_id: note.id,
-            title: note.title ?? '',
-            content: note.content,
-            version: note.version,
-            source: 'auto',
-            name: '冲突自动备份 (本地版本)',
-          })
-          await db.notes.put({ ...rowToNote(server as NoteRow), dirty: 0, syncedAt: Date.now() })
-          continue
+        if (server && (server.version as number) > note.version) {
+          conflicts++
+          if (note.id === activeEditId) {
+            await supabase.from('note_versions').insert({
+              note_id: server.id as string,
+              title: (server.title as string) ?? '',
+              content: server.content,
+              version: server.version,
+              source: 'auto',
+              name: '冲突自动备份 (云端版本)',
+            })
+            // 本地胜出覆盖服务器时把 updatedAt 刷新到当下：离线期间写入的旧时间戳
+            // 会让其他端的增量拉取（updated_at > lastSyncAt）永远看不到这次覆盖
+            const now = Date.now()
+            await db.notes.update(note.id, { version: server.version as number, updatedAt: now })
+            note.version = server.version as number
+            note.updatedAt = now
+          } else {
+            await supabase.from('note_versions').insert({
+              note_id: note.id,
+              title: note.title ?? '',
+              content: note.content,
+              version: note.version,
+              source: 'auto',
+              name: '冲突自动备份 (本地版本)',
+            })
+            await db.notes.put({ ...rowToNote(server as NoteRow), dirty: 0, syncedAt: Date.now() })
+            continue
+          }
         }
-      }
 
-      const { error } = await supabase.from('notes').upsert(noteToRow(note, userId))
-      if (error) throw error
-      const cur = await db.notes.get(note.id)
-      if (cur && cur.updatedAt === note.updatedAt) {
-        await db.notes.update(note.id, { dirty: 0, syncedAt: Date.now() })
+        const { error } = await supabase.from('notes').upsert(noteToRow(note, userId))
+        if (error) throw error
+        const cur = await db.notes.get(note.id)
+        if (cur && cur.updatedAt === note.updatedAt) {
+          await db.notes.update(note.id, { dirty: 0, syncedAt: Date.now() })
+        }
+        pushed++
+      } catch (err) {
+        console.error('sync push note failed', note.id, err)
       }
-      pushed++
     }
 
     const dirtyFolders = await db.folders.where('dirty').equals(1).toArray()
@@ -254,30 +258,34 @@ export const syncEngine = {
       const folder = await db.folders.get(snapshot.id)
       if (!folder || folder.dirty === 0) continue
 
-      const { data: server, error: readErr } = await supabase
-        .from('folders')
-        .select('*')
-        .eq('id', folder.id)
-        .maybeSingle()
-      if (readErr) throw readErr
+      try {
+        const { data: server, error: readErr } = await supabase
+          .from('folders')
+          .select('*')
+          .eq('id', folder.id)
+          .maybeSingle()
+        if (readErr) throw readErr
 
-      if (server && new Date((server as FolderRow).updated_at).getTime() > folder.updatedAt) {
-        // 冲突：服务器较新直接获胜（文件夹无历史版本可归档）
-        await db.folders.put({ ...rowToFolder(server as FolderRow), dirty: 0, syncedAt: Date.now() })
-        continue
+        if (server && new Date((server as FolderRow).updated_at).getTime() > folder.updatedAt) {
+          // 冲突：服务器较新直接获胜（文件夹无历史版本可归档）
+          await db.folders.put({ ...rowToFolder(server as FolderRow), dirty: 0, syncedAt: Date.now() })
+          continue
+        }
+        if (folder.deletedAt && !server) {
+          // 本地已删、服务器从未有过：无需同步，直接清掉本地记录
+          await db.folders.delete(folder.id)
+          continue
+        }
+        const { error } = await supabase.from('folders').upsert(folderToRow(folder, userId))
+        if (error) throw error
+        const cur = await db.folders.get(folder.id)
+        if (cur && cur.updatedAt === folder.updatedAt) {
+          await db.folders.update(folder.id, { dirty: 0, syncedAt: Date.now() })
+        }
+        pushed++
+      } catch (err) {
+        console.error('sync push folder failed', folder.id, err)
       }
-      if (folder.deletedAt && !server) {
-        // 本地已删、服务器从未有过：无需同步，直接清掉本地记录
-        await db.folders.delete(folder.id)
-        continue
-      }
-      const { error } = await supabase.from('folders').upsert(folderToRow(folder, userId))
-      if (error) throw error
-      const cur = await db.folders.get(folder.id)
-      if (cur && cur.updatedAt === folder.updatedAt) {
-        await db.folders.update(folder.id, { dirty: 0, syncedAt: Date.now() })
-      }
-      pushed++
     }
 
     // 文件：先按需把本地内容上传到 Storage，再同步元数据行（软删除仅同步 deleted_at 元数据，保留在回收站）
@@ -286,45 +294,49 @@ export const syncEngine = {
       const file = await db.files.get(snapshot.id)
       if (!file || file.dirty === 0) continue
 
-      if (file.dataUrl && !file.storagePath) {
-        const path = `${userId}/${file.id}`
-        const { error: upErr } = await supabase.storage
+      try {
+        if (file.dataUrl && !file.storagePath) {
+          const path = `${userId}/${file.id}`
+          const { error: upErr } = await supabase.storage
+            .from('files')
+            .upload(path, dataUrlToBlob(file.dataUrl, file.mimeType), {
+              contentType: file.mimeType ?? 'application/octet-stream',
+              upsert: true,
+            })
+          if (upErr) throw upErr
+          await db.files.update(file.id, { storagePath: path })
+          file.storagePath = path
+        }
+
+        const { data: server } = await supabase
           .from('files')
-          .upload(path, dataUrlToBlob(file.dataUrl, file.mimeType), {
-            contentType: file.mimeType ?? 'application/octet-stream',
-            upsert: true,
-          })
-        if (upErr) throw upErr
-        await db.files.update(file.id, { storagePath: path })
-        file.storagePath = path
-      }
+          .select('*')
+          .eq('id', file.id)
+          .maybeSingle()
 
-      const { data: server } = await supabase
-        .from('files')
-        .select('*')
-        .eq('id', file.id)
-        .maybeSingle()
+        if (server) {
+          file.storagePath = (server as FileRow).storage_path
+        }
+        if (
+          server &&
+          !file.storagePath &&
+          new Date((server as FileRow).updated_at).getTime() > file.updatedAt
+        ) {
+          // 本地还没上传内容、服务器元数据又更新过：以服务器为准，下轮 pull 拉详情
+          await db.files.put(rowToFile(server as FileRow))
+          continue
+        }
 
-      if (server) {
-        file.storagePath = (server as FileRow).storage_path
+        const { error } = await supabase.from('files').upsert(fileToRow(file, userId))
+        if (error) throw error
+        const cur = await db.files.get(file.id)
+        if (cur && cur.updatedAt === file.updatedAt) {
+          await db.files.update(file.id, { dirty: 0, syncedAt: Date.now() })
+        }
+        pushed++
+      } catch (err) {
+        console.error('sync push file failed', file.id, err)
       }
-      if (
-        server &&
-        !file.storagePath &&
-        new Date((server as FileRow).updated_at).getTime() > file.updatedAt
-      ) {
-        // 本地还没上传内容、服务器元数据又更新过：以服务器为准，下轮 pull 拉详情
-        await db.files.put(rowToFile(server as FileRow))
-        continue
-      }
-
-      const { error } = await supabase.from('files').upsert(fileToRow(file, userId))
-      if (error) throw error
-      const cur = await db.files.get(file.id)
-      if (cur && cur.updatedAt === file.updatedAt) {
-        await db.files.update(file.id, { dirty: 0, syncedAt: Date.now() })
-      }
-      pushed++
     }
 
     // 笔记历史版本：同步删除并推送新增/重命名的快照
@@ -370,13 +382,14 @@ export const syncEngine = {
       pulled++
     }
 
+    // 文件夹：直接拉取用户全部文件夹，确保层级结构和更名实时一致
     const { data: folderData, error: folderErr } = await supabase
       .from('folders')
       .select('*')
       .eq('user_id', userId)
-      .gt('updated_at', new Date(from).toISOString())
     if (folderErr) throw folderErr
 
+    const serverFolderIds = new Set((folderData ?? []).map((f) => f.id as string))
     for (const row of (folderData ?? []) as FolderRow[]) {
       const local = await db.folders.get(row.id)
       if (local?.dirty === 1) continue
@@ -389,6 +402,13 @@ export const syncEngine = {
       }
       await db.folders.put(rowToFolder(row))
       pulled++
+    }
+    const localFolders = await db.folders.toArray()
+    for (const lf of localFolders) {
+      if (lf.dirty === 0 && lf.syncedAt !== null && !serverFolderIds.has(lf.id)) {
+        await db.folders.delete(lf.id)
+        pulled++
+      }
     }
 
     const { data: fileData, error: fileErr } = await supabase
@@ -408,36 +428,92 @@ export const syncEngine = {
       pulled++
     }
 
-    // 孤儿文件与笔记对齐清理：解决云端已物理永久删除的历史项目在本地残留的问题
+    // 双向全量对齐与自愈清理
+    // 1. 文件对齐：清理云端已物理删除的文件 + 补齐本地漏掉的文件
     const { data: serverFiles, error: sfErr } = await supabase
       .from('files')
-      .select('id')
+      .select('id, updated_at')
       .eq('user_id', userId)
     if (!sfErr && serverFiles) {
-      const serverIds = new Set(serverFiles.map((s) => s.id as string))
+      const serverFileMap = new Map(serverFiles.map((s) => [s.id as string, s]))
       const localFiles = await db.files.toArray()
+      const localFileMap = new Map(localFiles.map((f) => [f.id, f]))
+
       for (const lf of localFiles) {
-        if (lf.dirty === 0 && lf.syncedAt !== null && !serverIds.has(lf.id)) {
+        const isLocallyDeleted = lf.deletedAt !== null
+        const isCleanSynced = lf.dirty === 0 && lf.syncedAt !== null
+        if ((isCleanSynced || isLocallyDeleted) && !serverFileMap.has(lf.id)) {
           await db.files.delete(lf.id)
           revokeFileUrl(lf.id)
           pulled++
         }
       }
+
+      const missingOrStaleFileIds = serverFiles
+        .filter((s) => {
+          const local = localFileMap.get(s.id as string)
+          if (!local) return true
+          return local.dirty === 0 && local.updatedAt < new Date(s.updated_at as string).getTime()
+        })
+        .map((s) => s.id as string)
+
+      if (missingOrStaleFileIds.length > 0) {
+        const CHUNK_SIZE = 50
+        for (let i = 0; i < missingOrStaleFileIds.length; i += CHUNK_SIZE) {
+          const chunk = missingOrStaleFileIds.slice(i, i + CHUNK_SIZE)
+          const { data: missingRows } = await supabase
+            .from('files')
+            .select('*')
+            .in('id', chunk)
+          for (const row of (missingRows ?? []) as FileRow[]) {
+            await db.files.put(rowToFile(row))
+            pulled++
+          }
+        }
+      }
     }
 
+    // 2. 笔记对齐：清理云端已物理删除的笔记 + 补齐本地漏掉或陈旧的笔记
     const { data: serverNotes, error: snErr } = await supabase
       .from('notes')
-      .select('id')
+      .select('id, version')
       .eq('user_id', userId)
     if (!snErr && serverNotes) {
-      const serverNoteIds = new Set(serverNotes.map((s) => s.id as string))
+      const serverNoteMap = new Map(serverNotes.map((s) => [s.id as string, s]))
       const localNotes = await db.notes.toArray()
+      const localNoteMap = new Map(localNotes.map((n) => [n.id, n]))
+
       for (const ln of localNotes) {
-        if (ln.dirty === 0 && ln.syncedAt !== null && !serverNoteIds.has(ln.id)) {
+        const isLocallyDeleted = ln.deletedAt !== null
+        const isCleanSynced = ln.dirty === 0 && ln.syncedAt !== null
+        if ((isCleanSynced || isLocallyDeleted) && !serverNoteMap.has(ln.id)) {
           const paths = imagePathsOf(noteImageSrcs(ln.content))
           await db.notes.delete(ln.id)
           if (paths.length) void removeImagesIfUnreferenced(paths)
           pulled++
+        }
+      }
+
+      const missingOrStaleNoteIds = serverNotes
+        .filter((s) => {
+          const local = localNoteMap.get(s.id as string)
+          if (!local) return true
+          return local.dirty === 0 && local.version < (s.version as number)
+        })
+        .map((s) => s.id as string)
+
+      if (missingOrStaleNoteIds.length > 0) {
+        const CHUNK_SIZE = 50
+        for (let i = 0; i < missingOrStaleNoteIds.length; i += CHUNK_SIZE) {
+          const chunk = missingOrStaleNoteIds.slice(i, i + CHUNK_SIZE)
+          const { data: missingRows } = await supabase
+            .from('notes')
+            .select('*')
+            .in('id', chunk)
+          for (const row of (missingRows ?? []) as NoteRow[]) {
+            await db.notes.put(rowToNote(row))
+            pulled++
+          }
         }
       }
     }
