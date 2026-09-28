@@ -9,6 +9,67 @@
   background: var(--paper);
 }
 
+/* 回收站顶部警示横幅 */
+.trash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, #e03131 8%, var(--paper));
+  border-bottom: 1px solid color-mix(in srgb, #e03131 25%, transparent);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-800);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.trash-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c92a2a;
+  font-weight: 500;
+}
+
+.trash-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trash-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--ink-200);
+  background: var(--paper);
+  color: var(--ink-800);
+}
+
+.trash-banner-btn.restore:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+  border-color: var(--qing);
+}
+
+.trash-banner-btn.delete {
+  color: #e03131;
+}
+
+.trash-banner-btn.delete:hover {
+  background: #fff5f5;
+  border-color: #ffa8a8;
+}
+
 .editor-toolbar {
   display: flex;
   align-items: center;
@@ -497,6 +558,34 @@
   color: var(--ink-500);
 }
 
+.editor-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink-500);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-footer-btn:hover {
+  background: var(--qing-50);
+  color: var(--qing);
+}
+
+.editor-footer-icon {
+  opacity: 0.7;
+}
+
+.editor-footer-btn:hover .editor-footer-icon {
+  opacity: 1;
+}
+
 @media (max-width: 767px) {
   .fullscreen-toggle {
     display: none;
@@ -576,10 +665,11 @@
   padding: 0;
 }
 
-/* 高亮标记 */
+/* 高亮标记：默认温润淡黄（避免浏览器原生电光黄），字色默认继承正文 */
 .editor-body .ProseMirror mark {
   border-radius: var(--radius-xs);
-  padding: 0 1px;
+  padding: 1px 3px;
+  background-color: #fff3bf;
 }
 
 /* 文档大纲：编辑区右下角悬浮开关（不随正文滚动，始终可点），

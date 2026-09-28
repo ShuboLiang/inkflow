@@ -9,6 +9,8 @@ import {
   Minimize2,
   Trash2,
   MoreHorizontal,
+  Info,
+  History,
 } from 'lucide-react'
 import './NoteMoreMenu.css'
 
@@ -22,6 +24,8 @@ interface NoteMoreMenuProps {
   isExportingImage?: boolean
   readingMode?: boolean
   onToggleReadingMode?: () => void
+  onOpenInfo?: () => void
+  onOpenVersionHistory?: () => void
 }
 
 export function NoteMoreMenu({
@@ -34,6 +38,8 @@ export function NoteMoreMenu({
   isExportingImage = false,
   readingMode = false,
   onToggleReadingMode,
+  onOpenInfo,
+  onOpenVersionHistory,
 }: NoteMoreMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -168,6 +174,46 @@ export function NoteMoreMenu({
               <span className="note-more-hint">Ctrl+\</span>
             </div>
           </button>
+
+          {onOpenInfo && (
+            <button
+              type="button"
+              className="note-more-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onOpenInfo()
+              }}
+            >
+              <span className="note-more-icon">
+                <Info size={16} />
+              </span>
+              <div className="note-more-text">
+                <span className="note-more-label">笔记信息</span>
+                <span className="note-more-hint">字数、创建与修改时间</span>
+              </div>
+            </button>
+          )}
+
+          {onOpenVersionHistory && (
+            <button
+              type="button"
+              className="note-more-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onOpenVersionHistory()
+              }}
+            >
+              <span className="note-more-icon">
+                <History size={16} />
+              </span>
+              <div className="note-more-text">
+                <span className="note-more-label">版本历史</span>
+                <span className="note-more-hint">快照对比与恢复 (Ctrl+Shift+H)</span>
+              </div>
+            </button>
+          )}
 
           <div className="note-more-divider" />
 

@@ -250,7 +250,9 @@
   padding: 0;
 }
 
+/* 高亮标记：默认温润淡黄，字色继承正文 */
 .share-doc-body .ProseMirror mark {
   border-radius: var(--radius-xs);
-  padding: 0 1px;
+  padding: 1px 3px;
+  background-color: #fff3bf;
 }

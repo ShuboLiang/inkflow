@@ -9,14 +9,38 @@ import {
   MoreHorizontal,
   LogOut,
   X,
+  Settings,
 } from 'lucide-react'
+import { useDroppable } from '@dnd-kit/core'
 import type { Folder } from '../lib/db'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { ThemePicker } from './ThemePicker'
 import './Sidebar.css'
 
-// 文件夹拖拽移动仅在精确指针设备启用
+// 文件夹 HTML5 拖拽（嵌套移动）仅在精确指针设备启用
 const DRAG_FINE = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+
+// dnd-kit 放置区外壳：卡片拖到侧栏文件夹/「默认」/标签行时高亮。
+// over-highlight 由 isOver 驱动，与 HTML5 拖放的 drag-over 样式共用
+export function DropZone({
+  dndId,
+  accept,
+  className,
+  children,
+  ...rest
+}: {
+  dndId: string
+  accept: ('item' | 'folder-item')[]
+  className?: string
+  children: ReactNode
+} & React.HTMLAttributes<HTMLDivElement>) {
+  const { setNodeRef, isOver } = useDroppable({ id: dndId, data: { type: 'zone', accept } })
+  return (
+    <div ref={setNodeRef} className={isOver ? `${className ?? ''} dnd-over`.trim() : className} {...rest}>
+      {children}
+    </div>
+  )
+}
 
 // 标签收纳：默认只显示前 N 个（数量优先排序下的常用标签），
 // 总数超过阈值再出现搜索框；两个开关状态都记在 localStorage
@@ -35,7 +59,6 @@ interface SidebarProps {
   activeFolderId: string // 'all' 表示全部，否则为文件夹 id
   activeTag: string | null
   onSelectFolder: (id: string) => void
-  onDropNote: (noteId: string, folderId: string | null) => void
   onCreateFolder: (name: string, parentId: string | null) => void
   onRenameFolder: (id: string, name: string) => void
   onDeleteFolder: (id: string) => void
@@ -43,12 +66,12 @@ interface SidebarProps {
   onToggleTag: (name: string) => void
   onRenameTag: (oldName: string, newName: string) => void
   onDeleteTag: (name: string) => void
-  onDropNoteToTag: (noteId: string, tag: string) => void
-  onDropFile: (fileId: string, folderId: string | null) => void
   onFilesDrop: (files: File[], folderId: string | null) => void
   theme: string
   onThemeChange: (id: string) => void
   onSignOut: () => void
+  onOpenSettings?: () => void
+  trashCount?: number
 }
 
 // 行内输入框：Enter 提交、Esc 取消、失焦提交；提交时空白视为取消。
@@ -107,7 +130,6 @@ export function Sidebar({
   activeFolderId,
   activeTag,
   onSelectFolder,
-  onDropNote,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -115,12 +137,12 @@ export function Sidebar({
   onToggleTag,
   onRenameTag,
   onDeleteTag,
-  onDropNoteToTag,
-  onDropFile,
   onFilesDrop,
   theme,
   onThemeChange,
   onSignOut,
+  onOpenSettings,
+  trashCount = 0,
 }: SidebarProps) {
   const [creating, setCreating] = useState(false)
   const [creatingChildOf, setCreatingChildOf] = useState<string | null>(null)
@@ -214,12 +236,13 @@ export function Sidebar({
     }
   }
 
-  // 列表拖来的放置负载：'note:<id>' / 'file:<id>' / 'dir:<id>'（文件夹移动），
-  // 文件夹与「全部笔记」两者都收；外部拖入的 Files 直接上传到该文件夹
+  // HTML5 拖放只保留两类：外部 OS 文件拖入（上传到该文件夹）与文件夹行拖拽（dir:，嵌套移动）。
+  // 卡片（note:/file:）的拖放已迁移到 dnd-kit（DropZone 外壳），鼠标和触屏都能拖
   const dropHandlers = (target: string, folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
       const hasFiles = e.dataTransfer.types.includes('Files')
-      if (!hasFiles && !e.dataTransfer.types.includes('text/plain')) return
+      const hasDir = !hasFiles && e.dataTransfer.types.includes('text/plain')
+      if (!hasFiles && !hasDir) return
       e.preventDefault()
       e.dataTransfer.dropEffect = hasFiles ? 'copy' : 'move'
       setDropTarget(target)
@@ -237,9 +260,7 @@ export function Sidebar({
         return
       }
       const payload = e.dataTransfer.getData('text/plain')
-      if (payload.startsWith('note:')) onDropNote(payload.slice(5), folderId)
-      else if (payload.startsWith('file:')) onDropFile(payload.slice(5), folderId)
-      else if (payload.startsWith('dir:')) onDropFolder(payload.slice(4), folderId)
+      if (payload.startsWith('dir:')) onDropFolder(payload.slice(4), folderId)
     },
   })
 
@@ -260,27 +281,6 @@ export function Sidebar({
     ]
       .filter(Boolean)
       .join(' ')
-
-  // 拖到标签上 = 给笔记加该标签（不动文件夹归属）
-  const tagDropHandlers = (tag: string) => ({
-    onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes('text/plain')) return
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'link'
-      setDropTarget(`tag:${tag}`)
-    },
-    onDragLeave: (e: React.DragEvent) => {
-      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) {
-        setDropTarget((cur) => (cur === `tag:${tag}` ? null : cur))
-      }
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault()
-      setDropTarget(null)
-      const payload = e.dataTransfer.getData('text/plain')
-      if (payload.startsWith('note:')) onDropNoteToTag(payload.slice(5), tag)
-    },
-  })
 
   const tagClass = (name: string) =>
     [
@@ -370,7 +370,9 @@ export function Sidebar({
               onCancel={() => setCreatingChildOf(null)}
             />
           ) : (
-            <div
+            <DropZone
+              dndId={`folder-zone:${folder.id}`}
+              accept={['item']}
               className={folderClass(folder.id, folder.id === activeFolderId)}
               style={{ paddingLeft: 10 + Math.min(depth, 3) * 16 }}
               {...dropHandlers(folder.id, folder.id)}
@@ -448,7 +450,7 @@ export function Sidebar({
                 </button>
               </span>
               {moreButton(folderMenuItems(folder), folder.name)}
-            </div>
+            </DropZone>
           )}
           {!isCollapsed && renderFolderTree(folder.id, depth + 1)}
         </div>
@@ -458,15 +460,17 @@ export function Sidebar({
   return (
     <nav className={collapsed ? 'sidebar collapsed' : 'sidebar'} aria-label="侧栏">
       <div className="sidebar-brand">InkFlow</div>
-      <button
-        type="button"
-        className={itemClass('all', activeFolderId === 'all')}
-        onClick={() => onSelectFolder('all')}
-        {...dropHandlers('all', null)}
-      >
-        <span>默认</span>
-        <span className="sidebar-count">{allCount}</span>
-      </button>
+      <DropZone dndId="zone:all" accept={['item']} className="sidebar-zone-item">
+        <button
+          type="button"
+          className={itemClass('all', activeFolderId === 'all')}
+          onClick={() => onSelectFolder('all')}
+          {...dropHandlers('all', null)}
+        >
+          <span>默认</span>
+          <span className="sidebar-count">{allCount}</span>
+        </button>
+      </DropZone>
       <div className="sidebar-section">
         <span>文件夹</span>
         <button
@@ -553,10 +557,11 @@ export function Sidebar({
                   onCancel={() => setEditingTag(null)}
                 />
               ) : (
-                <div
+                <DropZone
                   key={`tag-${name}`}
+                  dndId={`tag-zone:${name}`}
+                  accept={['item']}
                   className={tagClass(name)}
-                  {...tagDropHandlers(name)}
                   onContextMenu={(e) => openMenu(e, tagMenuItems(name))}
                 >
                   <button
@@ -590,7 +595,7 @@ export function Sidebar({
                     </button>
                   </span>
                   {moreButton(tagMenuItems(name), name)}
-                </div>
+                </DropZone>
               ),
             )}
             {!tagQuery && matchedTags.length > TAGS_PREVIEW && (
@@ -601,11 +606,32 @@ export function Sidebar({
             )}
           </>
         ))}
+      <div className="sidebar-trash-wrap">
+        <DropZone dndId="zone:trash" accept={['item']} className="sidebar-zone-trash">
+          <button
+            type="button"
+            className={`sidebar-item sidebar-trash ${activeFolderId === 'trash' ? 'active' : ''}`}
+            onClick={() => onSelectFolder('trash')}
+          >
+            <span className="sidebar-trash-inner">
+              <Trash2 size={15} />
+              <span>回收站</span>
+            </span>
+            {trashCount > 0 && <span className="sidebar-count">{trashCount}</span>}
+          </button>
+        </DropZone>
+      </div>
       <div className="sidebar-footer">
         <ThemePicker theme={theme} onChange={onThemeChange} />
         <span className="sidebar-email" title={email}>
           {email}
         </span>
+        {onOpenSettings && (
+          <button type="button" className="sidebar-signout" onClick={onOpenSettings}>
+            <Settings size={13} />
+            <span>偏好设置</span>
+          </button>
+        )}
         <button type="button" className="sidebar-signout" onClick={onSignOut}>
           <LogOut size={13} />
           <span>退出登录</span>

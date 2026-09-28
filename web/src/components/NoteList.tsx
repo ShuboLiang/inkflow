@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import {
   FileText,
   Folder as FolderIcon,
   Search,
   X,
   MoreHorizontal,
+  RotateCcw,
+  Trash2,
+  ChevronRight,
 } from 'lucide-react'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { FileEntry, Folder, Note } from '../lib/db'
 import { firstLine } from '../lib/wordCount'
 import { softDeleteNote } from '../store/notes'
@@ -13,6 +18,7 @@ import { acquireFileUrl, deleteFile } from '../store/files'
 import { createFileShare, createNoteShare, shareUrl } from '../store/shares'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { MoveFolderModal } from './MoveFolderModal'
+import { DropZone } from './Sidebar'
 import { confirmDialog } from '../lib/dialog'
 import { matchSnippet } from '../lib/search'
 import { fileDownloadName, isHtmlFile } from '../lib/importFile'
@@ -22,17 +28,16 @@ interface NoteListProps {
   notes: Note[]
   files: FileEntry[]
   folders: Folder[]
-  folderHits: { id: string; name: string; path: string }[]
+  folderHits: Array<{ id: string; name: string; path: string }>
   activeId: string | null
-  currentFolderId?: string | null
+  currentFolderId: string | null
+  isGrouped?: boolean
   search: string
   userId: string
-  onSearch: (value: string) => void
+  onSearch: (q: string) => void
   onSelectFolderHit: (id: string) => void
-  /** 文件夹 id → 路径名（如 课程 / 数学），找不到返回 null */
   folderPathOf: (folderId: string) => string | null
-  onGotoFolder: (folderId: string) => void
-  /** 点击卡片上的标签小圆片 → 按该标签过滤列表 */
+  onGotoFolder: (id: string) => void
   onSelectTag: (tag: string) => void
   onSelect: (id: string) => void
   onCreate: () => void
@@ -40,14 +45,61 @@ interface NoteListProps {
   onUpload: (file: File) => void
   onRenameNote: (id: string) => void
   onRenameFile: (id: string, filename: string) => void
-  onMoveNote: (id: string, folderId: string | null) => void
-  onMoveFile: (id: string, folderId: string | null) => void
+  onMoveNote: (noteId: string, folderId: string | null) => void
+  onMoveFile: (fileId: string, folderId: string | null) => void
   onRequestPush: () => void
+  /** dnd-kit 拖拽进行中（App 的 DndContext 驱动）：全量渲染 + 抑制右键菜单 */
+  dragActive: boolean
+  /** 手动排序（菜单）：上移/下移一步 */
+  onMoveStep: (kind: 'note' | 'file', id: string, dir: -1 | 1) => void
+  /** 手动排序（菜单）：直接移到顶部/底部 */
+  onMoveEdge: (kind: 'note' | 'file', id: string, edge: 'top' | 'bottom') => void
+  onShowNoteInfo?: (note: Note) => void
   emptyHint?: string
+  isTrash?: boolean
+  onRestoreNote?: (id: string) => void
+  onPermanentlyDeleteNote?: (id: string) => void
+  onRestoreFile?: (id: string) => void
+  onPermanentlyDeleteFile?: (id: string) => void
+  onEmptyTrash?: () => void
 }
 
-// 只有精确指针（鼠标）设备启用卡片拖拽：触屏上 draggable 会干扰列表滚动
-const DRAG_ENABLED = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+// 可排序卡片外壳：dnd-kit sortable 挂在 .card-wrap 上。拖起时用 DragOverlay 显示
+// 跟手拖影（App 渲染），原位保留空槽（.dnd-dragging 半透明虚线框），其余卡片平滑让位
+function SortableCard({
+  id,
+  kind,
+  dragActive,
+  dragJustEndedRef,
+  children,
+}: {
+  id: string
+  kind: 'note' | 'file'
+  dragActive: boolean
+  dragJustEndedRef: RefObject<boolean>
+  children: ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    data: { type: 'item', kind },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      className={isDragging ? 'card-wrap dnd-dragging' : 'card-wrap'}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      onClickCapture={(e) => {
+        if (dragActive || dragJustEndedRef.current) {
+          e.stopPropagation()
+        }
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  )
+}
 
 // 列表增量渲染的每批条数
 const RENDER_PAGE = 60
@@ -77,6 +129,7 @@ function excerptOf(content: unknown): string {
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric',
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -97,6 +150,7 @@ export function NoteList({
   folderHits,
   activeId,
   currentFolderId,
+  isGrouped = false,
   search,
   userId,
   onSearch,
@@ -113,7 +167,17 @@ export function NoteList({
   onMoveNote,
   onMoveFile,
   onRequestPush,
+  dragActive,
+  onMoveStep,
+  onMoveEdge,
+  onShowNoteInfo,
   emptyHint,
+  isTrash,
+  onRestoreNote,
+  onPermanentlyDeleteNote,
+  onRestoreFile,
+  onPermanentlyDeleteFile,
+  onEmptyTrash,
 }: NoteListProps) {
   const uploadRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'note' | 'file'; id: string } | null>(null)
@@ -147,6 +211,20 @@ export function NoteList({
     setLastSearch(search)
     setRenderLimit(RENDER_PAGE)
   }
+
+  // 拖拽刚结束标记：防止拖拽释放时误触卡片单击打开笔记
+  const prevDragActive = useRef(dragActive)
+  const dragJustEndedRef = useRef(false)
+  useEffect(() => {
+    if (prevDragActive.current && !dragActive) {
+      dragJustEndedRef.current = true
+      const timer = setTimeout(() => {
+        dragJustEndedRef.current = false
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+    prevDragActive.current = dragActive
+  }, [dragActive])
 
   // 哨兵进入视口（提前 300px）就追加下一批
   useEffect(() => {
@@ -252,18 +330,50 @@ export function NoteList({
       },
     }
 
+    if (isTrash) {
+      if (m.kind === 'note') {
+        return [
+          { key: 'open', label: '查看', onClick: () => onSelect(m.id) },
+          { key: 'restore', label: '恢复', onClick: () => onRestoreNote?.(m.id) },
+          ...(onShowNoteInfo && target
+            ? [{ key: 'info', label: '笔记信息', onClick: () => onShowNoteInfo(target as Note) }]
+            : []),
+          { key: 'd1', label: '', divider: true, onClick: () => {} },
+          { key: 'del', label: '彻底删除', danger: true, onClick: () => onPermanentlyDeleteNote?.(m.id) },
+        ]
+      }
+      return [
+        { key: 'open', label: '查看', onClick: () => onSelectFile(m.id) },
+        { key: 'dl', label: '下载', onClick: () => void downloadFile(m.id) },
+        { key: 'restore', label: '恢复', onClick: () => onRestoreFile?.(m.id) },
+        { key: 'd1', label: '', divider: true, onClick: () => {} },
+        { key: 'del', label: '彻底删除', danger: true, onClick: () => onPermanentlyDeleteFile?.(m.id) },
+      ]
+    }
+
     return m.kind === 'note'
       ? [
           { key: 'open', label: '打开', onClick: () => onSelect(m.id) },
+          { key: 'up', label: '上移', onClick: () => onMoveStep('note', m.id, -1) },
+          { key: 'down', label: '下移', onClick: () => onMoveStep('note', m.id, 1) },
+          { key: 'top', label: '移到顶部', onClick: () => onMoveEdge('note', m.id, 'top') },
+          { key: 'bottom', label: '移到底部', onClick: () => onMoveEdge('note', m.id, 'bottom') },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'share', label: '复制分享链接', onClick: () => void copyShareLink('note', m.id) },
           { key: 'rename', label: '重命名', onClick: () => onRenameNote(m.id) },
+          ...(onShowNoteInfo && target
+            ? [{ key: 'info', label: '笔记信息', onClick: () => onShowNoteInfo(target as Note) }]
+            : []),
           { key: 'd1', label: '', divider: true, onClick: () => {} },
           { key: 'del', label: '删除', danger: true, onClick: () => void deleteNoteById(m.id) },
         ]
       : [
           { key: 'open', label: '打开', onClick: () => onSelectFile(m.id) },
+          { key: 'up', label: '上移', onClick: () => onMoveStep('file', m.id, -1) },
+          { key: 'down', label: '下移', onClick: () => onMoveStep('file', m.id, 1) },
+          { key: 'top', label: '移到顶部', onClick: () => onMoveEdge('file', m.id, 'top') },
+          { key: 'bottom', label: '移到底部', onClick: () => onMoveEdge('file', m.id, 'bottom') },
           ...(gotoFolderItem ? [gotoFolderItem] : []),
           moveItem,
           { key: 'rename', label: '重命名', onClick: () => setRenamingFileId(m.id) },
@@ -301,6 +411,7 @@ export function NoteList({
       type="button"
       className="card-more"
       aria-label={`${label} 更多操作`}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()
         const r = e.currentTarget.getBoundingClientRect()
@@ -311,39 +422,450 @@ export function NoteList({
     </button>
   )
 
+  // 当处于分组模式时，计算文件夹呈现排位：当前文件夹居首(0)，后代按深度优先遍历各占一段(1, 2, 3...)
+  const folderGroupRanks = useMemo(() => {
+    if (!isGrouped || !currentFolderId || currentFolderId === 'all') return null
+    const ranks = new Map<string, number>()
+    ranks.set(currentFolderId, 0)
+    let seq = 0
+    const childMap = new Map<string | null, Folder[]>()
+    for (const f of folders) {
+      const p = f.parentId ?? null
+      const list = childMap.get(p) ?? []
+      list.push(f)
+      childMap.set(p, list)
+    }
+    for (const list of childMap.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+    }
+    const walk = (id: string) => {
+      for (const ch of childMap.get(id) ?? []) {
+        ranks.set(ch.id, ++seq)
+        walk(ch.id)
+      }
+    }
+    walk(currentFolderId)
+    return ranks
+  }, [isGrouped, currentFolderId, folders])
+
+  // 统一列表：文件与笔记合并排序
+  // 在回收站按删除时间倒序排列；分组视图优先按文件夹呈现排位，组内按 position 顺序（无 position 的按创建时间兜底排后）
+  const listItems = useMemo(
+    () =>
+      [
+        ...files.map((f) => ({
+          kind: 'file' as const,
+          id: f.id,
+          folderId: f.folderId ?? null,
+          position: f.position ?? Infinity,
+          createdAt: f.createdAt ?? f.updatedAt,
+          deletedAt: f.deletedAt ?? 0,
+        })),
+        ...notes.map((n) => ({
+          kind: 'note' as const,
+          id: n.id,
+          folderId: n.folderId ?? null,
+          position: n.position ?? Infinity,
+          createdAt: n.createdAt ?? n.updatedAt,
+          deletedAt: n.deletedAt ?? 0,
+        })),
+      ].sort((a, b) => {
+        if (isTrash) return b.deletedAt - a.deletedAt
+        if (isGrouped && folderGroupRanks) {
+          const rankA = folderGroupRanks.get(a.folderId ?? '') ?? 999999
+          const rankB = folderGroupRanks.get(b.folderId ?? '') ?? 999999
+          if (rankA !== rankB) return rankA - rankB
+        }
+        return a.position - b.position || b.createdAt - a.createdAt
+      }),
+    [files, notes, isTrash, isGrouped, folderGroupRanks],
+  )
+
+  // 文件夹相对路径（从当前激活的根文件夹算起）
+  const relativeFolderPath = (folderId: string, baseFolderId: string, folderList: Folder[]): string => {
+    const names: string[] = []
+    let curr: string | null = folderId
+    while (curr && curr !== baseFolderId) {
+      const f = folderList.find((x) => x.id === curr)
+      if (!f) break
+      names.unshift(f.name)
+      curr = f.parentId ?? null
+    }
+    return names.join(' / ') || '子文件夹'
+  }
+
+  // 拖拽中放开增量渲染：全部项挂上 sortable，未挂载的项没有碰撞矩形没法排
+  const effectiveLimit = dragActive ? listItems.length : renderLimit
+  const renderedItems = listItems.slice(0, effectiveLimit)
+
+  // 组织分组数据：仅当开启分组且包含子文件夹项目时生效
+  const folderGroups = useMemo(() => {
+    if (!isGrouped || !currentFolderId || currentFolderId === 'all') return null
+
+    // 检查是否有来自子文件夹的项目
+    const hasSubfolderItems = listItems.some(
+      (it) => it.folderId !== null && it.folderId !== currentFolderId,
+    )
+    if (!hasSubfolderItems) return null
+
+    type Group = {
+      folderId: string
+      name: string
+      isDirect: boolean
+      items: typeof renderedItems
+    }
+
+    const groups: Group[] = []
+
+    // 1. 直属内容
+    const directItems = renderedItems.filter((it) => (it.folderId ?? null) === currentFolderId)
+    if (directItems.length > 0) {
+      groups.push({
+        folderId: currentFolderId,
+        name: '直属内容',
+        isDirect: true,
+        items: directItems,
+      })
+    }
+
+    // 2. 子孙文件夹分组（按已排序的 folderGroupRanks 顺序收集）
+    const subfolderIds = Array.from(
+      new Set(
+        renderedItems
+          .map((it) => it.folderId)
+          .filter((fid): fid is string => Boolean(fid && fid !== currentFolderId)),
+      ),
+    ).sort((a, b) => (folderGroupRanks?.get(a) ?? 999999) - (folderGroupRanks?.get(b) ?? 999999))
+
+    for (const sfId of subfolderIds) {
+      const items = renderedItems.filter((it) => it.folderId === sfId)
+      if (items.length > 0) {
+        groups.push({
+          folderId: sfId,
+          name: relativeFolderPath(sfId, currentFolderId, folders),
+          isDirect: false,
+          items,
+        })
+      }
+    }
+
+    return groups.length > 0 ? groups : null
+  }, [isGrouped, currentFolderId, listItems, renderedItems, folders, folderGroupRanks])
+
+  const renderItemCard = (it: (typeof listItems)[number]) => {
+    if (it.kind === 'file') {
+      const file = files.find((f) => f.id === it.id)
+      if (!file) return null
+      const cardContent = renamingFileId === file.id ? (
+        <input
+          key={file.id}
+          className="note-card file-rename-input"
+          defaultValue={file.filename}
+          aria-label="重命名文件"
+          autoFocus
+          onFocus={(e) => e.target.select()}
+          onBlur={(e) => {
+            setRenamingFileId(null)
+            onRenameFile(file.id, e.target.value)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Escape') setRenamingFileId(null)
+          }}
+        />
+      ) : (
+        <>
+          <button
+            type="button"
+            className="note-card file-card"
+            onClick={() => {
+              if (dragActive || dragJustEndedRef.current) return
+              onSelectFile(file.id)
+            }}
+            onContextMenu={(e) => {
+              // Android 长按启动拖拽时会带出系统菜单
+              if (dragActive) {
+                e.preventDefault()
+                return
+              }
+              openMenu(e, 'file', file.id)
+            }}
+          >
+            <div className="note-card-title file-card-title">
+              <FileText size={16} />
+              <span className="file-card-name" title={file.filename}>
+                {file.filename}
+              </span>
+              <span className={isTrash ? 'trash-type-badge' : 'file-card-badge'}>
+                {isHtmlFile(file) ? 'HTML' : 'PDF'}
+              </span>
+            </div>
+            <div className="note-card-time">
+              {isTrash && file.deletedAt
+                ? [`删除于 ${formatTime(file.deletedAt)}`, formatSize(file.size)].filter(Boolean).join(' · ')
+                : [formatTime(file.updatedAt), formatSize(file.size)].filter(Boolean).join(' · ')}
+            </div>
+            {!isTrash && (file.tags ?? []).length > 0 && (
+              <div className="note-card-tags">
+                {(file.tags ?? []).slice(0, 3).map((t) => (
+                  <span
+                    key={t}
+                    className="note-card-tag tag-jump"
+                    title={`按标签筛选：${t}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectTag(t)
+                    }}
+                  >
+                    # {t}
+                  </span>
+                ))}
+                {(file.tags ?? []).length > 3 && (
+                  <span className="note-card-tag">+{(file.tags ?? []).length - 3}</span>
+                )}
+              </div>
+            )}
+            {!isTrash &&
+              !folderGroups &&
+              (search.trim() ||
+                (currentFolderId && currentFolderId !== 'all' && file.folderId !== currentFolderId)) &&
+              file.folderId && (
+              <span
+                className="note-card-loc"
+                title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onGotoFolder(file.folderId as string)
+                }}
+              >
+                <FolderIcon size={12} />
+                {folderPathOf(file.folderId)}
+              </span>
+            )}
+            {isTrash && (
+              <div className="trash-card-footer">
+                <span
+                  className="trash-orig-loc"
+                  title={file.folderId ? `原位置：${folderPathOf(file.folderId) ?? ''}` : '原位置：根目录'}
+                >
+                  <FolderIcon size={11} />
+                  <span>{file.folderId ? (folderPathOf(file.folderId) ?? '未知文件夹') : '根目录'}</span>
+                </span>
+                <div className="trash-card-actions">
+                  <button
+                    type="button"
+                    className="trash-card-action-btn"
+                    title="恢复"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRestoreFile?.(file.id)
+                    }}
+                  >
+                    <RotateCcw size={11} />
+                    <span>恢复</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="trash-card-action-btn danger"
+                    title="彻底删除"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onPermanentlyDeleteFile?.(file.id)
+                    }}
+                  >
+                    <Trash2 size={11} />
+                    <span>彻底删除</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </button>
+          {moreButton('file', file.id, file.filename)}
+        </>
+      )
+
+      return isTrash ? (
+        <div key={file.id} className="card-wrap">
+          {cardContent}
+        </div>
+      ) : (
+        <SortableCard key={file.id} id={file.id} kind="file" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+          {cardContent}
+        </SortableCard>
+      )
+    }
+
+    const note = notes.find((n) => n.id === it.id)
+    if (!note) return null
+    const noteCardContent = (
+      <>
+        <button
+          type="button"
+          className={note.id === activeId ? 'note-card active' : 'note-card'}
+          onClick={() => {
+            if (dragActive || dragJustEndedRef.current) return
+            onSelect(note.id)
+          }}
+          onContextMenu={(e) => {
+            if (dragActive) {
+              e.preventDefault()
+              return
+            }
+            openMenu(e, 'note', note.id)
+          }}
+        >
+          <div className="note-card-title">
+            <span>{note.title || firstLine(note.content) || '无标题'}</span>
+            {isTrash && <span className="trash-type-badge">笔记</span>}
+          </div>
+          {excerptFor(note)}
+          {!isTrash &&
+            !folderGroups &&
+            (search.trim() ||
+              (currentFolderId && currentFolderId !== 'all' && note.folderId !== currentFolderId)) &&
+            note.folderId && (
+            <span
+              className="note-card-loc"
+              title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onGotoFolder(note.folderId as string)
+              }}
+            >
+              <FolderIcon size={12} />
+              {folderPathOf(note.folderId)}
+            </span>
+          )}
+          {!isTrash && (note.tags ?? []).length > 0 && (
+            <div className="note-card-tags">
+              {(note.tags ?? []).slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="note-card-tag tag-jump"
+                  title={`按标签筛选：${t}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSelectTag(t)
+                  }}
+                >
+                  # {t}
+                </span>
+              ))}
+              {(note.tags ?? []).length > 3 && (
+                <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
+              )}
+            </div>
+          )}
+          <div className="note-card-time">
+            {isTrash && note.deletedAt
+              ? `删除于 ${formatTime(note.deletedAt)}`
+              : formatTime(note.updatedAt)}
+          </div>
+          {isTrash && (
+            <div className="trash-card-footer">
+              <span
+                className="trash-orig-loc"
+                title={note.folderId ? `原位置：${folderPathOf(note.folderId) ?? ''}` : '原位置：根目录'}
+              >
+                <FolderIcon size={11} />
+                <span>{note.folderId ? (folderPathOf(note.folderId) ?? '未知文件夹') : '根目录'}</span>
+              </span>
+              <div className="trash-card-actions">
+                <button
+                  type="button"
+                  className="trash-card-action-btn"
+                  title="恢复"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRestoreNote?.(note.id)
+                  }}
+                >
+                  <RotateCcw size={11} />
+                  <span>恢复</span>
+                </button>
+                <button
+                  type="button"
+                  className="trash-card-action-btn danger"
+                  title="彻底删除"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onPermanentlyDeleteNote?.(note.id)
+                  }}
+                >
+                  <Trash2 size={11} />
+                  <span>彻底删除</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </button>
+        {moreButton('note', note.id, note.title || '无标题')}
+      </>
+    )
+
+    return isTrash ? (
+      <div key={note.id} className="card-wrap">
+        {noteCardContent}
+      </div>
+    ) : (
+      <SortableCard key={note.id} id={note.id} kind="note" dragActive={dragActive} dragJustEndedRef={dragJustEndedRef}>
+        {noteCardContent}
+      </SortableCard>
+    )
+  }
+
   return (
     <section
       className="note-list"
-      aria-label="文件夹内容"
+      aria-label={isTrash ? '回收站' : '文件夹内容'}
       onDragEnter={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         e.preventDefault()
         setFileDragDepth((d) => d + 1)
       }}
       onDragOver={(e) => {
-        if (isFileDrag(e)) e.preventDefault()
+        if (isFileDrag(e) && !isTrash) e.preventDefault()
       }}
       onDragLeave={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         setFileDragDepth((d) => Math.max(0, d - 1))
       }}
       onDrop={(e) => {
-        if (!isFileDrag(e)) return
+        if (!isFileDrag(e) || isTrash) return
         e.preventDefault()
         setFileDragDepth(0)
         for (const file of Array.from(e.dataTransfer.files)) onUpload(file)
       }}
     >
+      {isTrash && (
+        <div className="trash-header">
+          <div className="trash-header-info">
+            <span className="trash-header-title">回收站</span>
+            <span className="trash-header-count">{notes.length + files.length} 个项目</span>
+          </div>
+          {notes.length + files.length > 0 && onEmptyTrash && (
+            <button
+              type="button"
+              className="trash-empty-btn"
+              onClick={onEmptyTrash}
+              title="清空回收站中所有项目"
+            >
+              <Trash2 size={13} />
+              <span>清空回收站</span>
+            </button>
+          )}
+        </div>
+      )}
       <div className="note-list-search">
         <div className="note-list-search-inner">
           <Search size={14} className="note-list-search-icon" aria-hidden="true" />
           <input
             id="note-search"
             type="search"
-            placeholder="搜索全部笔记"
+            placeholder={isTrash ? '搜索回收站' : '搜索全部笔记'}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            aria-label="搜索笔记"
+            aria-label={isTrash ? '搜索回收站' : '搜索笔记'}
           />
           {search && (
             <button
@@ -383,139 +905,48 @@ export function NoteList({
                 ))}
               </>
             )}
-            {files.slice(0, renderLimit).map((file) =>
-              renamingFileId === file.id ? (
-                <input
-                  key={file.id}
-                  className="note-card file-rename-input"
-                  defaultValue={file.filename}
-                  aria-label="重命名文件"
-                  autoFocus
-                  onFocus={(e) => e.target.select()}
-                  onBlur={(e) => {
-                    setRenamingFileId(null)
-                    onRenameFile(file.id, e.target.value)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur()
-                    if (e.key === 'Escape') setRenamingFileId(null)
-                  }}
-                />
-              ) : (
-                <div key={file.id} className="card-wrap">
-                  <button
-                    type="button"
-                    className="note-card file-card"
-                    draggable={DRAG_ENABLED}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/plain', `file:${file.id}`)
-                      e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onClick={() => onSelectFile(file.id)}
-                    onContextMenu={(e) => openMenu(e, 'file', file.id)}
-                  >
-                    <div className="note-card-title file-card-title">
-                      <FileText size={16} />
-                      <span className="file-card-name" title={file.filename}>
-                        {file.filename}
-                      </span>
-                      <span className="file-card-badge">{isHtmlFile(file) ? 'HTML' : 'PDF'}</span>
-                    </div>
-                    <div className="note-card-time">
-                      {[formatSize(file.size), formatTime(file.updatedAt)].filter(Boolean).join(' · ')}
-                    </div>
-                    {(file.tags ?? []).length > 0 && (
-                      <div className="note-card-tags">
-                        {(file.tags ?? []).slice(0, 3).map((t) => (
-                          <span
-                            key={t}
-                            className="note-card-tag tag-jump"
-                            title={`按标签筛选：${t}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onSelectTag(t)
-                            }}
-                          >
-                            # {t}
-                          </span>
-                        ))}
-                        {(file.tags ?? []).length > 3 && (
-                          <span className="note-card-tag">+{(file.tags ?? []).length - 3}</span>
-                        )}
-                      </div>
-                    )}
-                    {search.trim() && file.folderId && (
-                      <span
-                        className="note-card-loc"
-                        title={`跳到文件夹：${folderPathOf(file.folderId) ?? ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onGotoFolder(file.folderId as string)
-                        }}
-                      >
-                        <FolderIcon size={12} />
-                        {folderPathOf(file.folderId)}
-                      </span>
-                    )}
-                  </button>
-                  {moreButton('file', file.id, file.filename)}
-                </div>
-              ),
-            )}
-            {notes.slice(0, renderLimit).map((note) => (
-              <div key={note.id} className="card-wrap">
-                <button
-                  type="button"
-                  className={note.id === activeId ? 'note-card active' : 'note-card'}
-                  draggable={DRAG_ENABLED}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', `note:${note.id}`)
-                    e.dataTransfer.effectAllowed = 'move'
-                  }}
-                  onClick={() => onSelect(note.id)}
-                  onContextMenu={(e) => openMenu(e, 'note', note.id)}
-                >
-                  <div className="note-card-title">{note.title || firstLine(note.content) || '无标题'}</div>
-                  {excerptFor(note)}
-                  {search.trim() && note.folderId && (
-                    <span
-                      className="note-card-loc"
-                      title={`跳到文件夹：${folderPathOf(note.folderId) ?? ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onGotoFolder(note.folderId as string)
+            <SortableContext items={isTrash ? [] : renderedItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
+              {folderGroups ? (
+                folderGroups.map((group) => (
+                  <div key={group.folderId} className="note-list-folder-group">
+                    <DropZone
+                      dndId={`folder-zone:${group.folderId}`}
+                      accept={['item']}
+                      className={`note-list-folder-group-header ${group.isDirect ? 'is-direct' : ''}`}
+                      onClick={() => {
+                        if (!group.isDirect) onGotoFolder(group.folderId)
                       }}
                     >
-                      <FolderIcon size={12} />
-                      {folderPathOf(note.folderId)}
-                    </span>
-                  )}
-                  {(note.tags ?? []).length > 0 && (
-                    <div className="note-card-tags">
-                      {(note.tags ?? []).slice(0, 3).map((t) => (
-                        <span
-                          key={t}
-                          className="note-card-tag tag-jump"
-                          title={`按标签筛选：${t}`}
+                      <div className="note-list-group-header-left">
+                        <FolderIcon size={14} className="note-list-group-icon" />
+                        <span className="note-list-group-title">{group.name}</span>
+                        <span className="note-list-group-count">{group.items.length}</span>
+                      </div>
+                      {!group.isDirect && (
+                        <button
+                          type="button"
+                          className="note-list-group-jump-btn"
+                          title={`进入文件夹「${group.name}」`}
                           onClick={(e) => {
                             e.stopPropagation()
-                            onSelectTag(t)
+                            onGotoFolder(group.folderId)
                           }}
                         >
-                          # {t}
-                        </span>
-                      ))}
-                      {(note.tags ?? []).length > 3 && (
-                        <span className="note-card-tag">+{(note.tags ?? []).length - 3}</span>
+                          <span>进入</span>
+                          <ChevronRight size={12} />
+                        </button>
                       )}
+                    </DropZone>
+                    <div className="note-list-group-cards">
+                      {group.items.map(renderItemCard)}
                     </div>
-                  )}
-                  <div className="note-card-time">{formatTime(note.updatedAt)}</div>
-                </button>
-                {moreButton('note', note.id, note.title || '无标题')}
-              </div>
-            ))}
-            {files.length + notes.length > renderLimit && (
+                  </div>
+                ))
+              ) : (
+                renderedItems.map(renderItemCard)
+              )}
+            </SortableContext>
+            {!dragActive && files.length + notes.length > renderLimit && (
               <div ref={sentinelRef} className="note-list-more">
                 加载更多（已显示 {Math.min(renderLimit, files.length + notes.length)} / {files.length + notes.length}）
               </div>
@@ -549,30 +980,32 @@ export function NoteList({
           {toast}
         </div>
       )}
-      <div className="note-list-footer">
-        <button type="button" className="note-list-new" onClick={onCreate}>
-          新建笔记
-        </button>
-        <button
-          type="button"
-          className="note-list-upload"
-          title="上传文件到当前文件夹（md/html 新建笔记，pdf 存为文件）"
-          onClick={() => uploadRef.current?.click()}
-        >
-          上传文件
-        </button>
-        <input
-          ref={uploadRef}
-          type="file"
-          hidden
-          accept=".md,.markdown,.html,.htm,.pdf"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            e.target.value = ''
-            if (file) onUpload(file)
-          }}
-        />
-      </div>
+      {!isTrash && (
+        <div className="note-list-footer">
+          <button type="button" className="note-list-new" onClick={onCreate}>
+            新建笔记
+          </button>
+          <button
+            type="button"
+            className="note-list-upload"
+            title="上传文件到当前文件夹（md/html 新建笔记，pdf 存为文件）"
+            onClick={() => uploadRef.current?.click()}
+          >
+            上传文件
+          </button>
+          <input
+            ref={uploadRef}
+            type="file"
+            hidden
+            accept=".md,.markdown,.html,.htm,.pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) onUpload(file)
+            }}
+          />
+        </div>
+      )}
     </section>
   )
 }

@@ -56,6 +56,14 @@ export async function saveFile(
     }
   }
 
+  // 新文件排统一列表（笔记+文件同一数轴）最前
+  const [noteRows, fileRows] = await Promise.all([
+    db.notes.filter((n) => n.deletedAt === null && n.position !== null).toArray(),
+    db.files.filter((f) => f.deletedAt === null && f.position !== null).toArray(),
+  ])
+  const positions = [...noteRows, ...fileRows].map((r) => r.position as number)
+  const minPos = positions.length ? Math.min(...positions) : 0
+
   const entry: FileEntry = {
     id,
     folderId,
@@ -68,6 +76,8 @@ export async function saveFile(
     updatedAt: Date.now(),
     syncedAt,
     deletedAt: null,
+    createdAt: Date.now(),
+    position: minPos - 1000,
   }
   await db.files.add(entry)
   return entry
@@ -94,6 +104,54 @@ export async function deleteFile(id: string): Promise<void> {
   })
 }
 
+// 从回收站恢复文件
+export async function restoreFile(id: string): Promise<void> {
+  const existing = await db.files.get(id)
+  if (!existing) return
+  let folderId = existing.folderId
+  if (folderId) {
+    const f = await db.folders.get(folderId)
+    if (!f || f.deletedAt) folderId = null
+  }
+  await db.files.update(id, {
+    deletedAt: null,
+    folderId,
+    dirty: 1,
+    updatedAt: Date.now(),
+  })
+}
+
+// 从回收站永久删除文件（物理清理本地、云端文件对象及元数据）
+export async function permanentlyDeleteFile(id: string): Promise<void> {
+  const file = await db.files.get(id)
+  if (!file) return
+
+  revokeFileUrl(id)
+
+  if (file.storagePath) {
+    const { error: rmErr } = await supabase.storage.from('files').remove([file.storagePath])
+    if (rmErr) console.error('remove storage object failed', rmErr)
+  }
+
+  // 清理引用此文件的分享（公共桶对象 + shares 行）
+  const { data: shares, error: shareErr } = await supabase
+    .from('shares')
+    .select('token')
+    .eq('file_id', file.id)
+  if (shareErr) console.error('select shares failed', shareErr)
+  const tokens = (shares ?? []).map((s) => s.token as string)
+  if (tokens.length) {
+    const { error: rmShareErr } = await supabase.storage.from('shares').remove(tokens)
+    if (rmShareErr) console.error('remove share objects failed', rmShareErr)
+    const { error: delShareErr } = await supabase.from('shares').delete().eq('file_id', file.id)
+    if (delShareErr) console.error('delete shares failed', delShareErr)
+  }
+
+  await db.files.delete(id)
+  const { error } = await supabase.from('files').delete().eq('id', id)
+  if (error) console.error('permanently delete file from server failed', error)
+}
+
 export async function moveFile(id: string, folderId: string | null): Promise<void> {
   const existing = await db.files.get(id)
   if (!existing || existing.deletedAt) return
@@ -116,6 +174,13 @@ export async function setFileTags(id: string, tags: string[]): Promise<void> {
   await db.files.update(id, { tags, dirty: 1, updatedAt: Date.now() })
 }
 
+// 统一列表手动排序：更新文件的手动位置（files 表无 version 列，靠 updatedAt 参与 LWW）
+export async function setFilePosition(id: string, position: number): Promise<void> {
+  const existing = await db.files.get(id)
+  if (!existing || existing.deletedAt) return
+  await db.files.update(id, { position, dirty: 1, updatedAt: Date.now() })
+}
+
 // 预览前按需获取文件 Blob URL：
 // 优先使用内存缓存；未命中时从 Storage 下载并创建临时 Object URL（不写入本地数据库）
 export async function acquireFileUrl(id: string): Promise<string | null> {
@@ -128,7 +193,15 @@ export async function acquireFileUrl(id: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('files').download(file.storagePath)
   if (error || !data) return null
 
-  const url = URL.createObjectURL(data)
+  // Storage 下发的 content-type 不可靠（fs 驱动 xattr 元数据丢失会以 text/plain 下发，
+  // 实测如此），HTML 预览会因此只显示源码不渲染；以下发类型可疑为准，按数据库
+  // 记录的 mime_type 重建 Blob
+  const servedUnreliable = !data.type || data.type === 'text/plain' || data.type === 'application/octet-stream'
+  const blob =
+    servedUnreliable && file.mimeType && file.mimeType !== 'application/octet-stream'
+      ? new Blob([data], { type: file.mimeType })
+      : data
+  const url = URL.createObjectURL(blob)
   fileBlobUrlCache.set(id, url)
   return url
 }
